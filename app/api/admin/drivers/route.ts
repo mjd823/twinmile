@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import crypto from "crypto";
 
 import { requireRole } from "@/lib/auth/session";
 import { createUser } from "@/lib/auth/users";
@@ -9,9 +10,18 @@ import { getClientIp, getUserAgent } from "@/lib/security/request";
 import { rateLimit } from "@/lib/security/rate-limit";
 
 const CreateDriverSchema = z.object({
+  firstName: z.string().min(1).max(80),
+  lastName: z.string().min(1).max(80),
   email: z.string().email(),
-  tempPassword: z.string().min(12).max(200),
+  tempPassword: z.string().min(1).max(200).optional(),
 });
+
+function generateTempPassword() {
+  // Intentionally shorter/less strict for now per admin UX request.
+  // Admin should still communicate this securely and driver must change password on first login.
+  const raw = crypto.randomBytes(12).toString("base64url");
+  return `TM-${raw}`;
+}
 
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) {
@@ -54,9 +64,12 @@ export async function POST(req: Request) {
   }
 
   try {
+    const tempPassword = parsed.data.tempPassword ?? generateTempPassword();
     const driver = await createUser({
       email: parsed.data.email,
-      password: parsed.data.tempPassword,
+      password: tempPassword,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName,
       role: "driver",
       mustChangePassword: true,
     });
@@ -69,11 +82,23 @@ export async function POST(req: Request) {
       actorUserId: String(admin._id),
       actorRole: String(admin.role),
       subjectUserId: String(driver._id),
-      meta: { email: driver.email },
+      meta: {
+        email: driver.email,
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        createdTempPassword: !parsed.data.tempPassword,
+      },
     });
 
     return NextResponse.json(
-      { ok: true, driverId: String(driver._id), email: driver.email },
+      {
+        ok: true,
+        driverId: String(driver._id),
+        email: driver.email,
+        firstName: parsed.data.firstName,
+        lastName: parsed.data.lastName,
+        tempPassword: parsed.data.tempPassword ? undefined : tempPassword,
+      },
       { status: 200 }
     );
   } catch (e) {

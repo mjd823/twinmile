@@ -3,6 +3,9 @@ export type UserRole = "admin" | "driver";
 export type AuthUser = {
   _id: unknown;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  isOwnerOperator?: boolean;
   role: UserRole;
   mustChangePassword?: boolean;
 };

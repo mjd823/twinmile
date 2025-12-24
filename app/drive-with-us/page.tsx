@@ -21,6 +21,39 @@ export const metadata: Metadata = {
 export default function DriveWithUsPage() {
   const baseUrl = "https://twinmile.com";
 
+  const faqs = [
+    {
+      question: "How does the application work?",
+      answer:
+        "Submit the short application, then our team reviews it and reaches out for a quick call/text to confirm availability, equipment, and lanes. If it’s a fit, we’ll guide you through onboarding and dispatch." ,
+    },
+    {
+      question: "How fast will you respond to an application?",
+      answer:
+        "Most applicants hear back within 1 business day. During high volume, it may take a bit longer — but we review every submission.",
+    },
+    {
+      question: "Do you hire owner-operators with their own trucks?",
+      answer:
+        "Yes. We work with owner-operators and small fleets with their own equipment for time-critical freight nationwide.",
+    },
+    {
+      question: "What routes do you run?",
+      answer:
+        "We operate nationwide, with strong coverage across Texas, Louisiana, California, and beyond. We’ll match lanes based on your availability and equipment.",
+    },
+    {
+      question: "What do you need from me to get started?",
+      answer:
+        "At minimum: basic contact info, your equipment type, and your availability. If we move forward, we’ll request standard onboarding documents and insurance details (owner-operators).",
+    },
+    {
+      question: "Is this a W-2 role or 1099/owner-operator?",
+      answer:
+        "We support owner-operators and contractors. If you’re applying as a company driver, mention it in the notes and we’ll confirm options based on current openings.",
+    },
+  ];
+
   return (
     <main>
       <JsonLd
@@ -31,26 +64,7 @@ export default function DriveWithUsPage() {
             { name: "Home", url: `${baseUrl}/` },
             { name: "Drive With Us", url: `${baseUrl}/drive-with-us` },
           ]),
-          faqSchema(
-            [
-              {
-                question: "Do you hire owner-operators with their own trucks?",
-                answer:
-                  "Yes. Twin Mile LLC is actively looking for reliable owner-operators with their own equipment to support time-critical freight nationwide.",
-              },
-              {
-                question: "What routes do you run?",
-                answer:
-                  "We operate nationwide, with strong coverage across Texas, Louisiana, California, and beyond.",
-              },
-              {
-                question: "How fast will you respond to an application?",
-                answer:
-                  "We aim to respond quickly. Submit the application and we’ll reach out as soon as possible.",
-              },
-            ],
-            `${baseUrl}/drive-with-us`
-          ),
+          faqSchema(faqs, `${baseUrl}/drive-with-us`),
         ]}
       />
 
@@ -67,8 +81,8 @@ export default function DriveWithUsPage() {
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-5xl">Drive With Us</h1>
             <p className="mt-4 text-muted-foreground">
-              We’re looking for reliable drivers and owner-operators with their own trucks.
-              Move fast. Stay professional. Get paid.
+              Apply in minutes. We’ll review and reach out with next steps.
+              Owner-operators and professional drivers — nationwide lanes.
             </p>
           </div>
         </div>
@@ -96,7 +110,27 @@ export default function DriveWithUsPage() {
 
           <div className="grid gap-10 md:grid-cols-2">
             <div>
-              <h2 className="text-xl font-semibold tracking-tight">Why Twin Mile</h2>
+              <h2 className="text-xl font-semibold tracking-tight">How it works</h2>
+              <div className="mt-4 grid gap-3">
+                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-xs font-semibold text-foreground/80">01 · Apply</div>
+                  <div className="mt-1">Submit the short form with your contact info, equipment, and availability.</div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-xs font-semibold text-foreground/80">02 · Review</div>
+                  <div className="mt-1">We review your application and match it against current lanes and freight needs.</div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-xs font-semibold text-foreground/80">03 · Confirm</div>
+                  <div className="mt-1">Quick call/text to confirm equipment, routes, and expectations.</div>
+                </div>
+                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-xs font-semibold text-foreground/80">04 · Onboard</div>
+                  <div className="mt-1">If it’s a fit, we’ll guide you through onboarding and get you dispatched.</div>
+                </div>
+              </div>
+
+              <h2 className="mt-10 text-xl font-semibold tracking-tight">Why Twin Mile</h2>
               <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
                 <div>Clear communication.</div>
                 <div>Time-critical freight opportunities.</div>
@@ -111,12 +145,19 @@ export default function DriveWithUsPage() {
                 <div>Safety-first mindset.</div>
               </div>
 
+              <h2 className="mt-10 text-xl font-semibold tracking-tight">Before you apply</h2>
+              <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+                <div>Have your equipment type and availability ready.</div>
+                <div>Be specific about preferred lanes and start date (ASAP is fine).</div>
+                <div>If you’re an owner-operator, mention your insurance and operating authority in notes (optional).</div>
+              </div>
+
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild className="shadow-lg shadow-primary/20">
                   <Link href="#apply">Apply now</Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href="/driver/login">Driver login</Link>
+                  <Link href="/contact">Contact us</Link>
                 </Button>
               </div>
             </div>
@@ -128,10 +169,31 @@ export default function DriveWithUsPage() {
               <div className="mb-4">
                 <div className="text-sm font-medium">Application</div>
                 <div className="mt-1 text-sm text-muted-foreground">
-                  Apply in under 2 minutes — we’ll reach out as soon as possible.
+                  Apply in under 2 minutes. Most applicants hear back within 1 business day.
                 </div>
               </div>
               <DriverApplicationForm />
+            </div>
+          </div>
+
+          <div className="mt-14 rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
+            <h2 className="text-xl font-semibold tracking-tight">FAQ</h2>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {faqs.map((f) => (
+                <div key={f.question} className="rounded-lg border border-border/60 bg-background/20 p-4">
+                  <div className="text-sm font-semibold tracking-tight">{f.question}</div>
+                  <div className="mt-2 text-sm text-muted-foreground">{f.answer}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                Prefer to talk first? Reach out and we’ll point you in the right direction.
+              </div>
+              <Button asChild variant="outline">
+                <Link href="/contact">Contact us</Link>
+              </Button>
             </div>
           </div>
         </div>

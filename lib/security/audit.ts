@@ -8,7 +8,10 @@ export type AuditEventName =
   | "auth.password.change.success"
   | "auth.password.change.failure"
   | "admin.driver.create"
-  | "admin.driver.reset_password";
+  | "admin.driver.reset_password"
+  | "admin.driver.delete"
+  | "admin.driver.update"
+  | "driver.profile.update";
 
 export type AuditEvent = {
   name: AuditEventName;

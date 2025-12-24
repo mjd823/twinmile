@@ -10,7 +10,7 @@ import { getClientIp, getUserAgent } from "@/lib/security/request";
 import { rateLimit } from "@/lib/security/rate-limit";
 
 const Schema = z.object({
-  newPassword: z.string().min(12).max(200).optional(),
+  newPassword: z.string().min(1).max(200).optional(),
 });
 
 export async function POST(

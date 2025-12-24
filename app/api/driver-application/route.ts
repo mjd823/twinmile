@@ -42,6 +42,12 @@ export async function POST(req: Request) {
   await db.collection("leads_drivers").insertOne({
     ...parsed.data,
     hp: undefined,
+    status: "new",
+    notes: [],
+    nextFollowUpAt: null,
+    ownerUserId: null,
+    convertedAt: null,
+    conversion: null,
     createdAt: new Date(),
     source: "web",
   });

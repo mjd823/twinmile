@@ -7,6 +7,9 @@ import type { UserRole } from "@/lib/auth/types";
 export type UserDoc = {
   _id: ObjectId;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  isOwnerOperator?: boolean;
   role: UserRole;
   passwordSaltBase64: string;
   passwordHashBase64: string;
@@ -35,6 +38,8 @@ export async function findUserById(id: unknown) {
 export async function createUser(input: {
   email: string;
   password: string;
+  firstName?: string;
+  lastName?: string;
   role: UserRole;
   mustChangePassword?: boolean;
 }) {
@@ -50,6 +55,8 @@ export async function createUser(input: {
 
   const doc = {
     email,
+    firstName: input.firstName ? String(input.firstName).trim() : undefined,
+    lastName: input.lastName ? String(input.lastName).trim() : undefined,
     role: input.role,
     passwordSaltBase64: saltBase64,
     passwordHashBase64: hashBase64,
@@ -87,6 +94,30 @@ export async function setMustChangePassword(userId: ObjectId, value: boolean) {
   await db
     .collection<UserDoc>("users")
     .updateOne({ _id: userId }, { $set: { mustChangePassword: value } });
+}
+
+export async function updateDriverProfile(
+  userId: ObjectId,
+  input: { firstName?: string; lastName?: string; isOwnerOperator?: boolean }
+) {
+  if (!clientPromise) throw new Error("Database not configured");
+  const client = await clientPromise;
+  const db = client.db();
+
+  const $set: Record<string, any> = {};
+  if (input.firstName !== undefined) {
+    const v = String(input.firstName).trim();
+    $set.firstName = v ? v : undefined;
+  }
+  if (input.lastName !== undefined) {
+    const v = String(input.lastName).trim();
+    $set.lastName = v ? v : undefined;
+  }
+  if (input.isOwnerOperator !== undefined) {
+    $set.isOwnerOperator = Boolean(input.isOwnerOperator);
+  }
+
+  await db.collection<UserDoc>("users").updateOne({ _id: userId }, { $set });
 }
 
 export function verifyUserPassword(user: UserDoc, password: string) {

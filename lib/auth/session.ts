@@ -141,7 +141,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     .collection("users")
     .findOne(
       { _id: new ObjectId(session.userId) },
-      { projection: { email: 1, role: 1, mustChangePassword: 1 } }
+      { projection: { email: 1, firstName: 1, lastName: 1, isOwnerOperator: 1, role: 1, mustChangePassword: 1 } }
     );
 
   if (!user) return null;
@@ -149,6 +149,9 @@ export async function getAuthUser(): Promise<AuthUser | null> {
   return {
     _id: user._id,
     email: String(user.email),
+    firstName: (user as any).firstName ? String((user as any).firstName) : undefined,
+    lastName: (user as any).lastName ? String((user as any).lastName) : undefined,
+    isOwnerOperator: Boolean((user as any).isOwnerOperator),
     role: user.role as UserRole,
     mustChangePassword: Boolean((user as any).mustChangePassword),
   };

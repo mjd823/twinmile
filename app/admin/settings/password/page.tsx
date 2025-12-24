@@ -15,10 +15,10 @@ export default async function AdminChangePasswordPage() {
   return (
     <main>
       <section className="border-b border-border/60">
-        <div className="mx-auto w-full max-w-6xl px-5 py-10">
+        <div className="w-full py-6">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
+              <h1 className="text-xl font-semibold tracking-tight md:text-2xl">
                 Change Password
               </h1>
               <div className="mt-2 text-sm text-muted-foreground">
@@ -33,7 +33,7 @@ export default async function AdminChangePasswordPage() {
       </section>
 
       <section>
-        <div className="mx-auto w-full max-w-2xl px-5 py-10">
+        <div className="w-full max-w-2xl py-6">
           <div className="rounded-lg border border-border/60 bg-card p-6">
             <ChangePasswordForm />
           </div>

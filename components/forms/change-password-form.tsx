@@ -73,7 +73,6 @@ export function ChangePasswordForm() {
           autoComplete="new-password"
           required
         />
-        <div className="text-xs text-muted-foreground">Minimum 12 characters.</div>
       </div>
 
       <Button type="submit" disabled={status.state === "submitting"}>
