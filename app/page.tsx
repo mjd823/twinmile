@@ -1,142 +1,155 @@
-import Image from "next/image";
-import logo from "@/assets/logo.svg";
-import logoDark from "@/assets/logo-dark.svg";
-import vercelLogotypeLight from "@/assets/vercel-logotype-light.svg";
-import vercelLogotypeDark from "@/assets/vercel-logotype-dark.svg";
 import Link from "next/link";
-import { ArrowRight, FileText, LogIn } from "lucide-react";
-import { dbConnectionStatus } from "@/db/connection-status";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-
-const DATA = {
-  title: "Next.js with MongoDB",
-  description:
-    "A minimal template for building full-stack React applications using Next.js, Vercel, and MongoDB.",
-  button: {
-    text: "Deploy to Vercel",
-    href: "https://vercel.com/new/clone?repository-name=mongodb-nextjs&repository-url=https%3A%2F%2Fgithub.com%2Fmongodb-developer%2Fvercel-template-mongodb&project-name=mongodb-nextjs&demo-title=MongoDB%20%26%20Next.js%20Starter%20Template&demo-description=A%20minimal%20template%20for%20building%20full-stack%20React%20applications%20using%20Next.js%2C%20Vercel%2C%20and%20MongoDB.&demo-url=https%3A%2F%2Fnextjs.mongodb.com%2F&demo-image=https%3A%2F%2Fnextjs.mongodb.com%2Fog.png&integration-ids=oac_jnzmjqM10gllKmSrG0SGrHOH&from=templates",
-  },
-  link: {
-    text: "View on GitHub",
-    href: "https://github.com/mongodb-developer/nextjs-template-mongodb",
-  },
-  footerLinks: [
-    {
-      text: "Docs",
-      href: "https://www.mongodb.com/docs/?utm_campaign=devrel&utm_source=third-party-content&utm_medium=cta&utm_content=template-nextjs-mongodb&utm_term=jesse.hall",
-      icon: "FileText",
-    },
-    {
-      text: "MongoDB Atlas Login",
-      href: "https://account.mongodb.com/account/login/?utm_campaign=devrel&utm_source=third-party-content&utm_medium=cta&utm_content=template-nextjs-mongodb&utm_term=jesse.hall",
-      icon: "LogIn",
-    },
-  ],
-};
 
 export default async function Home() {
-  const result = await dbConnectionStatus();
   return (
-    <div className="flex min-h-screen flex-col">
-      <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-5 md:max-w-lg md:px-0 lg:max-w-xl">
-          <main className="flex flex-1 flex-col justify-center">
-            <div className="flex gap-6 lg:gap-8 items-center mb-6 md:mb-7">
-              <Image
-                className="lg:h-8 lg:w-auto dark:hidden"
-                src={logo}
-                alt="MongoDB logo"
-                width={88}
-                height={24}
-                priority
-              />
-              <Image
-                className="hidden lg:h-8 lg:w-auto dark:block"
-                src={logoDark}
-                alt="MongoDB logo"
-                width={88}
-                height={24}
-                priority
-              />
-              <Image
-                className="lg:h-6 lg:w-auto dark:hidden"
-                src={vercelLogotypeLight}
-                alt="MongoDB logo"
-                width={88}
-                height={24}
-                priority
-              />
-              <Image
-                className="hidden lg:h-6 lg:w-auto dark:block"
-                src={vercelLogotypeDark}
-                alt="MongoDB logo"
-                width={88}
-                height={24}
-                priority
-              />
+    <main>
+      <section className="relative overflow-hidden border-b border-border/60">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-32 left-1/2 h-[520px] w-[980px] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />
+          <div className="absolute -bottom-40 left-1/3 h-[520px] w-[780px] -translate-x-1/2 rounded-full bg-white/5 blur-3xl" />
+        </div>
+        <div className="relative mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
+          <div className="grid items-center gap-10 md:grid-cols-12">
+            <div className="md:col-span-7">
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/40 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                Nationwide logistics • HQ: Houston, TX
+              </div>
+              <h1 className="mt-5 text-4xl font-semibold leading-[1.02] tracking-tight md:text-6xl">
+                Fast. Tough. Reliable.
+                <span className="block text-muted-foreground">Logistics built for the urgent.</span>
+              </h1>
+              <p className="mt-5 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
+                Time‑critical freight and last‑mile delivery with clear communication and tight execution.
+                Nationwide coverage with Houston roots.
+              </p>
+
+              <div className="mt-8 flex flex-wrap items-center gap-3">
+                <Button asChild className="shadow-lg shadow-primary/20">
+                  <Link href="/get-a-quote">Get a Quote</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/services">Explore Services</Link>
+                </Button>
+                <Button asChild variant="ghost">
+                  <Link href="/drive-with-us">Drive With Us</Link>
+                </Button>
+              </div>
+
+              <div className="mt-10 grid max-w-xl grid-cols-2 gap-4 text-sm md:grid-cols-3">
+                <div className="rounded-lg border border-border/60 bg-card/30 p-4 backdrop-blur">
+                  <div className="text-foreground">Expedited</div>
+                  <div className="mt-1 text-muted-foreground">Same‑day / next‑day options</div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-4 backdrop-blur">
+                  <div className="text-foreground">Dedicated</div>
+                  <div className="mt-1 text-muted-foreground">Routes that don’t slip</div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-4 backdrop-blur">
+                  <div className="text-foreground">Clear Comms</div>
+                  <div className="mt-1 text-muted-foreground">Pickup → delivery visibility</div>
+                </div>
+              </div>
             </div>
-            <h1 className="text-3xl font-semibold leading-none tracking-tighter md:text-4xl md:leading-none lg:text-5xl lg:leading-none">
-              {DATA.title}
-            </h1>
-            <p className="mt-3.5 max-w-lg text-base leading-snug tracking-tight text-[#61646B] md:text-lg md:leading-snug lg:text-xl lg:leading-snug dark:text-[#94979E]">
-              {DATA.description}
-            </p>
-            <div className="mt-8 flex flex-wrap items-center gap-5 md:mt-9 lg:mt-10">
-              <Button
-                asChild
-                className="rounded-full bg-[#00ED64] px-5 py-2.5 font-semibold tracking-tight text-[#001E2B] transition-colors duration-200 hover:bg-[#00684A] hover:text-[#FFFFFF] lg:px-7 lg:py-3"
-              >
-                <Link href={DATA.button.href} target="_blank">
-                  {DATA.button.text}
-                </Link>
-              </Button>
-              <Button
-                variant="ghost"
-                asChild
-                className="group flex items-center gap-2 leading-none tracking-tight"
-              >
-                <Link href={DATA.link.href} target="_blank">
-                  {DATA.link.text}
-                  <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1 dark:text-white" />
-                </Link>
-              </Button>
-            </div>
-          </main>
-          <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-[#023430] py-5 sm:gap-2 sm:gap-6 md:pb-12 md:pt-10 dark:border-[#023430]">
-            <ul className="flex items-center">
-              {DATA.footerLinks.map((link) => {
-                const icons = {
-                  FileText: FileText,
-                  LogIn: LogIn,
-                };
-                const Icon = icons[link.icon as keyof typeof icons];
-                return (
-                  <Button
-                    key={link.text}
-                    variant="ghost"
-                    asChild
-                    className="flex items-center gap-2 opacity-70 transition-opacity duration-200 hover:opacity-100 h-auto"
-                  >
-                    <Link href={link.href} target="_blank">
-                      <Icon className="h-4 w-4 dark:text-white" />
-                      <span className="text-sm tracking-tight">{link.text}</span>
-                    </Link>
+
+            <div className="md:col-span-5">
+              <div className="animate-in fade-in zoom-in-95 duration-700 rounded-xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur">
+                <h2 className="text-lg font-semibold tracking-tight">Built for businesses that can’t wait.</h2>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Freight transportation, hotshot, courier & expedited, last‑mile delivery, dispatching, warehousing & 3PL.
+                </p>
+                <div className="mt-6 grid gap-3 text-sm text-muted-foreground">
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                    <div>Freight (Local • Regional • Long‑Haul)</div>
+                    <div className="text-primary">24/7</div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                    <div>Hotshot & Time‑Critical Loads</div>
+                    <div className="text-primary">Fast</div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                    <div>Last‑Mile Delivery</div>
+                    <div className="text-primary">Precise</div>
+                  </div>
+                </div>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Button asChild className="shadow-lg shadow-primary/20">
+                    <Link href="/get-a-quote">Request Quote</Link>
                   </Button>
-                );
-              })}
-            </ul>
-            <Badge
-              variant={result === "Database connected" ? "default" : "destructive"}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${
-                result === "Database connected"
-                  ? "border-[#00ED64]/20 bg-[#00ED64]/10 text-[#00684A] dark:bg-[#00ED64]/10 dark:text-[#00ED64]"
-                  : "border-red-500/20 bg-red-500/10 text-red-500 dark:text-red-500"
-              }`}
-            >
-              {result}
-            </Badge>
-          </footer>
-      </div>
-    </div>
+                  <Button asChild variant="outline">
+                    <Link href="/contact">Contact</Link>
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
+          <div className="grid gap-10 md:grid-cols-2">
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight md:text-3xl">
+                What We Do
+              </h2>
+              <p className="mt-3 text-muted-foreground">
+                Built for businesses that can’t afford delays. We move with precision, operate
+                with strength, and keep your supply chain running.
+              </p>
+              <div className="mt-6 grid gap-3">
+                <div className="rounded-lg border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-foreground">Freight Transportation</div>
+                  <div className="mt-1">Local • Regional • Long‑Haul</div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-foreground">Hotshot & Time‑Critical</div>
+                  <div className="mt-1">Fast response when the clock is tight</div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-foreground">Last‑Mile Delivery</div>
+                  <div className="mt-1">Clean handoffs and clear communication</div>
+                </div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                  <div className="text-foreground">Dispatching • Warehousing • 3PL</div>
+                  <div className="mt-1">Coordination + staging that keeps freight moving</div>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur">
+              <h3 className="text-lg font-semibold tracking-tight">Time‑Critical Shipments</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Same‑day, next‑day, dedicated routes, and high‑priority freight — with clear
+                communication from pickup to delivery.
+              </p>
+              <div className="mt-5 grid gap-3 text-sm text-muted-foreground">
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                  <div>Fast response</div>
+                  <div className="text-primary">Minutes</div>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                  <div>Coverage</div>
+                  <div className="text-primary">Nationwide</div>
+                </div>
+                <div className="flex items-center justify-between gap-3 rounded-md border border-border/60 bg-background/40 px-3 py-2">
+                  <div>Communication</div>
+                  <div className="text-primary">Clear</div>
+                </div>
+              </div>
+              <div className="mt-6 flex flex-wrap gap-3">
+                <Button asChild className="shadow-lg shadow-primary/20">
+                  <Link href="/get-a-quote">Request Quote</Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link href="/contact">Contact</Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   );
 }

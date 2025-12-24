@@ -1,8 +1,10 @@
 import { MongoClient, MongoClientOptions } from 'mongodb';
 
+import { ensureIndexes } from "@/lib/security/indexes";
+
 const uri = process.env.MONGODB_URI;
 const options: MongoClientOptions = {
-  appName: "devrel.nextjs.starter",
+  appName: "twinmile-web",
 };
 
 let client: MongoClient;
@@ -28,6 +30,14 @@ if (uri) {
   }
 }
 
+if (clientPromise) {
+  clientPromise
+    .then((c) => ensureIndexes(c.db()))
+    .catch(() => {
+      // ignore
+    });
+}
+
 // Export a module-scoped MongoClient promise. By doing this in a
 // separate module, the client can be shared across functions.
-export default clientPromise; 
+export default clientPromise;

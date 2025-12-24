@@ -1,28 +1,36 @@
 {
-  "name": "nextjs-template-mongodb",
+  "name": "twinmile",
   "version": "0.1.0",
   "private": true,
-  "description": "A Next.js template for building applications with MongoDB, featuring TypeScript and shadcn/ui / Tailwind CSS integration",
+  "description": "Twin Mile LLC — nationwide logistics website and lead capture",
   "author": {
-    "name": "Jesse Hall",
-    "url": "https://github.com/codeSTACKr"
+    "name": "Twin Mile LLC",
+    "url": "https://twinmile.com"
   },
-  "homepage": "https://github.com/mongodb-developer/nextjs-template-mongodb#readme",
+  "homepage": "https://twinmile.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mongodb-developer/nextjs-template-mongodb.git"
+    "url": "git+https://github.com/mjd823/twinmile.git"
   },
   "bugs": {
-    "url": "https://github.com/mongodb-developer/nextjs-template-mongodb/issues"
+    "url": "https://github.com/mjd823/twinmile/issues"
   },
   "keywords": [
-    "nextjs",
-    "mongodb",
-    "typescript",
-    "tailwindcss",
-    "vercel",
-    "template",
-    "shadcn"
+    "twin mile",
+    "twin mile llc",
+    "logistics",
+    "freight",
+    "freight transportation",
+    "hotshot trucking",
+    "last-mile delivery",
+    "dispatching",
+    "3pl",
+    "warehousing",
+    "owner-operator",
+    "truck driver jobs",
+    "houston",
+    "texas",
+    "nationwide"
   ],
   "scripts": {
     "dev": "next dev --turbopack",
@@ -31,26 +39,35 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@radix-ui/react-slot": "^1.2.2",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@tailwindcss/typography": "^0.5.19",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.510.0",
-    "mongodb": "^6.3.0",
-    "next": "^15.1.9",
-    "react": "^19.0.1",
-    "react-dom": "^19.0.1",
-    "tailwind-merge": "^3.3.0",
-    "tailwindcss-animate": "^1.0.7"
+    "lucide-react": "^0.562.0",
+    "mongodb": "^7.0.0",
+    "next": "^16.1.1",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwind-merge": "^3.4.0",
+    "tailwindcss-animate": "^1.0.7",
+    "zod": "^4.2.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
-    "@types/node": "^20",
+    "@tailwindcss/postcss": "^4.1.18",
+    "@types/node": "^25",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.1.6",
+    "eslint-config-next": "^16.1.1",
     "postcss": "^8",
-    "tailwindcss": "^3.4.1",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@eslint/plugin-kit": "^0.4.1",
+    "glob": "^10.5.0",
+    "brace-expansion": "^2.0.2",
+    "js-yaml": "^4.1.1"
   }
 }
