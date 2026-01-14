@@ -4,6 +4,7 @@ import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { logoutAction, meAction } from "@/app/actions/auth";
 
 type MeResponse = {
   loggedIn: boolean;
@@ -18,18 +19,21 @@ export function SiteHeader() {
     portalHref: null,
   });
 
+  const [mobileOpen, setMobileOpen] = React.useState(false);
+  const [accountOpen, setAccountOpen] = React.useState(false);
+  const [signInOpen, setSignInOpen] = React.useState(false);
+
+  const mobileRef = React.useRef<HTMLDivElement | null>(null);
+  const accountRef = React.useRef<HTMLDivElement | null>(null);
+  const signInRef = React.useRef<HTMLDivElement | null>(null);
+
   React.useEffect(() => {
     const ac = new AbortController();
 
     async function load() {
       try {
-        const res = await fetch("/api/auth/me", {
-          method: "GET",
-          cache: "no-store",
-          signal: ac.signal,
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as MeResponse;
+        if (ac.signal.aborted) return;
+        const data = (await meAction()) as MeResponse;
         setMe({
           loggedIn: Boolean(data?.loggedIn && data?.portalHref),
           role: data?.role ?? null,
@@ -47,10 +51,42 @@ export function SiteHeader() {
   const portalHref = me.loggedIn ? me.portalHref : null;
   const accountSettingsHref =
     me.role === "admin"
-      ? "/admin/settings/password"
+      ? "/admin/settings"
       : me.role === "driver"
         ? "/driver/settings/password"
         : null;
+
+  React.useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setMobileOpen(false);
+      setAccountOpen(false);
+      setSignInOpen(false);
+    }
+
+    function onPointerDown(e: MouseEvent | TouchEvent) {
+      const target = e.target as Node | null;
+      if (!target) return;
+
+      if (mobileRef.current && mobileRef.current.contains(target)) return;
+      if (accountRef.current && accountRef.current.contains(target)) return;
+      if (signInRef.current && signInRef.current.contains(target)) return;
+
+      setMobileOpen(false);
+      setAccountOpen(false);
+      setSignInOpen(false);
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("mousedown", onPointerDown);
+    window.addEventListener("touchstart", onPointerDown);
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("mousedown", onPointerDown);
+      window.removeEventListener("touchstart", onPointerDown);
+    };
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/60 bg-background/70 backdrop-blur supports-[backdrop-filter]:bg-background/55">
@@ -62,6 +98,7 @@ export function SiteHeader() {
             width={220}
             height={48}
             priority
+            className="h-auto w-36 sm:w-44 md:w-[220px]"
           />
           <span className="sr-only">Twin Mile Logistics</span>
         </Link>
@@ -88,9 +125,18 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
-          <details className="relative md:hidden">
-            <summary className="inline-flex h-9 w-9 cursor-pointer list-none items-center justify-center rounded-md border border-border/60 bg-background/60 text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-              <span className="sr-only">Open menu</span>
+          <div ref={mobileRef} className="relative md:hidden">
+            <button
+              type="button"
+              className="inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-md border border-border/60 bg-background/60 text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              aria-expanded={mobileOpen}
+              aria-label="Open menu"
+              onClick={() => {
+                setMobileOpen((v) => !v);
+                setAccountOpen(false);
+                setSignInOpen(false);
+              }}
+            >
               <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
                 <path
                   d="M4 7h16M4 12h16M4 17h16"
@@ -99,118 +145,180 @@ export function SiteHeader() {
                   strokeLinecap="round"
                 />
               </svg>
-            </summary>
-            <div className="absolute right-0 mt-3 w-[min(92vw,360px)] overflow-hidden rounded-lg border border-border/60 bg-popover shadow-xl">
-              <div className="grid gap-1 p-2 text-sm">
-                <Link className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" href="/services">
-                  Services
-                </Link>
-                <Link className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" href="/service-areas">
-                  Areas
-                </Link>
-                <Link className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" href="/industries">
-                  Industries
-                </Link>
-                <Link className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" href="/blog">
-                  Blog
-                </Link>
-                <Link className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" href="/about">
-                  About
-                </Link>
-                <Link className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" href="/contact">
-                  Contact
-                </Link>
-              </div>
-              <div className="border-t border-border/60 p-2">
-                <Button asChild className="w-full">
-                  <Link href="/get-a-quote">Get a Quote</Link>
-                </Button>
-                <Button asChild variant="outline" className="mt-2 w-full">
-                  <Link href="/drive-with-us">Drive With Us</Link>
-                </Button>
-                {!portalHref ? (
-                  <Button asChild variant="outline" className="mt-2 w-full">
-                    <Link href="/driver/login">Sign in</Link>
+            </button>
+            {mobileOpen ? (
+              <div className="absolute right-0 mt-3 max-h-[75vh] w-[min(92vw,360px)] overflow-auto rounded-lg border border-border/60 bg-popover shadow-xl">
+                <div className="grid gap-1 p-2 text-sm">
+                  <Link
+                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    href="/services"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Services
+                  </Link>
+                  <Link
+                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    href="/service-areas"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Areas
+                  </Link>
+                  <Link
+                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    href="/industries"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Industries
+                  </Link>
+                  <Link
+                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    href="/blog"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Blog
+                  </Link>
+                  <Link
+                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    href="/about"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    About
+                  </Link>
+                  <Link
+                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    href="/contact"
+                    onClick={() => setMobileOpen(false)}
+                  >
+                    Contact
+                  </Link>
+                </div>
+                <div className="border-t border-border/60 p-2">
+                  <Button asChild className="w-full">
+                    <Link href="/get-a-quote" onClick={() => setMobileOpen(false)}>
+                      Get a Quote
+                    </Link>
                   </Button>
-                ) : null}
-                {portalHref ? (
-                  <div className="mt-2 grid gap-2">
-                    <Button asChild variant="outline" className="w-full">
-                      <Link href={portalHref}>Dashboard</Link>
+                  <Button asChild variant="outline" className="mt-2 w-full">
+                    <Link href="/drive-with-us" onClick={() => setMobileOpen(false)}>
+                      Drive With Us
+                    </Link>
+                  </Button>
+                  {!portalHref ? (
+                    <Button asChild variant="outline" className="mt-2 w-full">
+                      <Link href="/driver/login" onClick={() => setMobileOpen(false)}>
+                        Sign in
+                      </Link>
                     </Button>
-                    {accountSettingsHref ? (
+                  ) : null}
+                  {portalHref ? (
+                    <div className="mt-2 grid gap-2">
                       <Button asChild variant="outline" className="w-full">
-                        <Link href={accountSettingsHref}>Account settings</Link>
+                        <Link href={portalHref} onClick={() => setMobileOpen(false)}>
+                          Dashboard
+                        </Link>
                       </Button>
+                      {accountSettingsHref ? (
+                        <Button asChild variant="outline" className="w-full">
+                          <Link href={accountSettingsHref} onClick={() => setMobileOpen(false)}>
+                            Account settings
+                          </Link>
+                        </Button>
+                      ) : null}
+                      <form action={logoutAction}>
+                        <Button variant="outline" className="w-full" type="submit">
+                          Sign out
+                        </Button>
+                      </form>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+          {portalHref ? (
+            <div ref={accountRef} className="relative hidden sm:block">
+              <button
+                type="button"
+                className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md border border-border/60 bg-background/60 px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                aria-expanded={accountOpen}
+                onClick={() => {
+                  setAccountOpen((v) => !v);
+                  setSignInOpen(false);
+                  setMobileOpen(false);
+                }}
+              >
+                Account
+              </button>
+              {accountOpen ? (
+                <div className="absolute right-0 mt-2 max-h-[75vh] w-56 overflow-auto rounded-lg border border-border/60 bg-popover shadow-xl">
+                  <div className="grid gap-1 p-2 text-sm">
+                    <Link
+                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      href={portalHref}
+                      onClick={() => setAccountOpen(false)}
+                    >
+                      Dashboard
+                    </Link>
+                    {accountSettingsHref ? (
+                      <Link
+                        className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        href={accountSettingsHref}
+                        onClick={() => setAccountOpen(false)}
+                      >
+                        Account settings
+                      </Link>
                     ) : null}
-                    <form action="/api/auth/logout" method="post">
+                  </div>
+                  <div className="border-t border-border/60 p-2">
+                    <form action={logoutAction}>
                       <Button variant="outline" className="w-full" type="submit">
                         Sign out
                       </Button>
                     </form>
                   </div>
-                ) : null}
-              </div>
+                </div>
+              ) : null}
             </div>
-          </details>
-          {portalHref ? (
-            <details className="relative hidden sm:block">
-              <summary className="inline-flex h-9 cursor-pointer list-none items-center justify-center rounded-md border border-border/60 bg-background/60 px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
-                Account
-              </summary>
-              <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-lg border border-border/60 bg-popover shadow-xl">
-                <div className="grid gap-1 p-2 text-sm">
-                  <Link
-                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    href={portalHref}
-                  >
-                    Dashboard
-                  </Link>
-                  {accountSettingsHref ? (
-                    <Link
-                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      href={accountSettingsHref}
-                    >
-                      Account settings
-                    </Link>
-                  ) : null}
-                </div>
-                <div className="border-t border-border/60 p-2">
-                  <form action="/api/auth/logout" method="post">
-                    <Button variant="outline" className="w-full" type="submit">
-                      Sign out
-                    </Button>
-                  </form>
-                </div>
-              </div>
-            </details>
           ) : (
             <Button asChild variant="ghost" className="hidden sm:inline-flex">
               <Link href="/drive-with-us">Drive With Us</Link>
             </Button>
           )}
           {!portalHref ? (
-            <details className="relative hidden sm:block">
-              <summary className="inline-flex h-9 cursor-pointer list-none items-center justify-center rounded-md border border-border/60 bg-background/60 px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring">
+            <div ref={signInRef} className="relative hidden sm:block">
+              <button
+                type="button"
+                className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md border border-border/60 bg-background/60 px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                aria-expanded={signInOpen}
+                onClick={() => {
+                  setSignInOpen((v) => !v);
+                  setAccountOpen(false);
+                  setMobileOpen(false);
+                }}
+              >
                 Sign in
-              </summary>
-              <div className="absolute right-0 mt-2 w-44 overflow-hidden rounded-lg border border-border/60 bg-popover shadow-xl">
-                <div className="grid gap-1 p-2 text-sm">
-                  <Link
-                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    href="/driver/login"
-                  >
-                    Driver Sign In
-                  </Link>
-                  <Link
-                    className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    href="/admin/login"
-                  >
-                    Admin Sign In
-                  </Link>
+              </button>
+              {signInOpen ? (
+                <div className="absolute right-0 mt-2 max-h-[75vh] w-44 overflow-auto rounded-lg border border-border/60 bg-popover shadow-xl">
+                  <div className="grid gap-1 p-2 text-sm">
+                    <Link
+                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      href="/driver/login"
+                      onClick={() => setSignInOpen(false)}
+                    >
+                      Driver Sign In
+                    </Link>
+                    <Link
+                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      href="/admin/login"
+                      onClick={() => setSignInOpen(false)}
+                    >
+                      Admin Sign In
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </details>
+              ) : null}
+            </div>
           ) : null}
           {!portalHref ? (
             <Button asChild>

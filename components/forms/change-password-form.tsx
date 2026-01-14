@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { changePasswordAction } from "@/app/actions/auth";
 
 type Status =
   | { state: "idle" }
@@ -25,21 +26,9 @@ export function ChangePasswordForm() {
 
     setStatus({ state: "submitting" });
 
-    const res = await fetch("/api/auth/change-password", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      let message = "Unable to change password.";
-      try {
-        const data = (await res.json()) as { error?: string };
-        if (data?.error) message = data.error;
-      } catch {
-        // ignore
-      }
-      setStatus({ state: "error", message });
+    const result = await changePasswordAction(payload);
+    if (!result.ok) {
+      setStatus({ state: "error", message: result.error || "Unable to change password." });
       return;
     }
 

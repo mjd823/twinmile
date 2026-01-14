@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { createDriverUserAction, resetDriverPasswordAction } from "@/app/actions/admin";
 
 type DriverRow = {
   id: string;
@@ -34,15 +35,9 @@ export function AdminDriversForm({ drivers }: { drivers: DriverRow[] }) {
       tempPassword: String(formData.get("tempPassword") ?? ""),
     };
 
-    const res = await fetch("/api/admin/drivers", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    const data = (await res.json().catch(() => null)) as any;
-    if (!res.ok) {
-      setCreateStatus(data?.error ?? "Unable to create driver.");
+    const data = await createDriverUserAction(payload);
+    if (!data.ok) {
+      setCreateStatus(data.error ?? "Unable to create driver.");
       return;
     }
 
@@ -53,15 +48,9 @@ export function AdminDriversForm({ drivers }: { drivers: DriverRow[] }) {
   async function resetPassword(driverId: string, email: string) {
     setResetStatus(null);
 
-    const res = await fetch(`/api/admin/drivers/${driverId}/reset-password`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({}),
-    });
-
-    const data = (await res.json().catch(() => null)) as any;
-    if (!res.ok) {
-      setResetStatus(data?.error ?? "Unable to reset password.");
+    const data = await resetDriverPasswordAction(driverId, {});
+    if (!data.ok) {
+      setResetStatus(data.error ?? "Unable to reset password.");
       return;
     }
 

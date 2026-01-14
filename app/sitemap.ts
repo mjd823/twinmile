@@ -1,8 +1,20 @@
 import type { MetadataRoute } from "next";
 
+import { BLOG_POSTS } from "@/lib/blog";
+
 export default function sitemap(): MetadataRoute.Sitemap {
   const baseUrl = "https://twinmile.com";
   const now = new Date();
+
+  const industrySlugs = [
+    "construction",
+    "ecommerce",
+    "manufacturing",
+    "medical",
+    "distribution",
+  ];
+
+  const serviceAreaSlugs = ["texas", "louisiana", "california", "nationwide"];
 
   return [
     {
@@ -53,24 +65,24 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "monthly",
       priority: 0.7,
     },
+    ...industrySlugs.map((slug) => ({
+      url: `${baseUrl}/industries/${slug}`,
+      lastModified: now,
+      changeFrequency: "monthly" as const,
+      priority: 0.55,
+    })),
     {
       url: `${baseUrl}/blog`,
       lastModified: now,
       changeFrequency: "weekly",
       priority: 0.7,
     },
-    {
-      url: `${baseUrl}/blog/time-critical-shipping-checklist`,
-      lastModified: now,
-      changeFrequency: "yearly",
+    ...BLOG_POSTS.map((post) => ({
+      url: `${baseUrl}/blog/${post.slug}`,
+      lastModified: new Date(post.publishedAt),
+      changeFrequency: "yearly" as const,
       priority: 0.5,
-    },
-    {
-      url: `${baseUrl}/blog/hotshot-vs-traditional-freight`,
-      lastModified: now,
-      changeFrequency: "yearly",
-      priority: 0.5,
-    },
+    })),
     {
       url: `${baseUrl}/get-a-quote`,
       lastModified: now,
@@ -95,5 +107,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "yearly",
       priority: 0.6,
     },
+    ...serviceAreaSlugs.map((slug) => ({
+      url: `${baseUrl}/service-areas/${slug}`,
+      lastModified: now,
+      changeFrequency: "monthly" as const,
+      priority: 0.6,
+    })),
   ];
 }

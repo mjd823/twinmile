@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 
+import { JsonLd } from "@/components/seo/json-ld";
 import { QuoteForm } from "@/components/forms/quote-form";
+
+import { breadcrumbSchema, localBusinessSchema, orgSchema, serviceSchema, webSiteSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "Get a Quote",
@@ -10,8 +13,28 @@ export const metadata: Metadata = {
 };
 
 export default function GetAQuotePage() {
+  const baseUrl = "https://twinmile.com";
+
   return (
     <main>
+      <JsonLd
+        data={[
+          orgSchema(),
+          webSiteSchema(),
+          localBusinessSchema(),
+          breadcrumbSchema([
+            { name: "Home", url: `${baseUrl}/` },
+            { name: "Get a Quote", url: `${baseUrl}/get-a-quote` },
+          ]),
+          serviceSchema({
+            name: "Freight Quote Request",
+            description:
+              "Request a freight quote for time-critical, local, regional, or long-haul shipments nationwide.",
+            url: `${baseUrl}/get-a-quote`,
+          }),
+        ]}
+      />
+
       <section className="relative overflow-hidden border-b border-border/60">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-32 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />

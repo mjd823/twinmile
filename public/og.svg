@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#020617" />
+      <stop offset="100%" stop-color="#0b1220" />
+    </linearGradient>
+    <radialGradient id="glow" cx="50%" cy="-10%" r="70%">
+      <stop offset="0%" stop-color="#3b82f6" stop-opacity="0.35" />
+      <stop offset="100%" stop-color="#3b82f6" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect width="1200" height="630" fill="url(#glow)" />
+
+  <g fill="none" stroke="#334155" stroke-opacity="0.45" stroke-width="1">
+    <path d="M120 520 C 260 420, 420 420, 560 520" />
+    <path d="M260 520 C 400 360, 560 360, 700 520" />
+    <path d="M400 520 C 540 420, 700 420, 840 520" />
+  </g>
+
+  <g font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial" fill="#e2e8f0">
+    <text x="90" y="210" font-size="54" font-weight="700">Twin Mile LLC</text>
+    <text x="90" y="278" font-size="40" font-weight="600" fill="#94a3b8">Fast. Tough. Reliable.</text>
+    <text x="90" y="340" font-size="26" fill="#cbd5e1">Nationwide logistics • Houston, TX</text>
+
+    <g transform="translate(90, 410)">
+      <rect x="0" y="0" width="330" height="44" rx="12" fill="#0f172a" stroke="#334155" />
+      <text x="18" y="30" font-size="20" fill="#e2e8f0">Freight • Hotshot • Last‑Mile</text>
+    </g>
+    <g transform="translate(440, 410)">
+      <rect x="0" y="0" width="300" height="44" rx="12" fill="#0f172a" stroke="#334155" />
+      <text x="18" y="30" font-size="20" fill="#e2e8f0">Dispatch • Warehousing • 3PL</text>
+    </g>
+  </g>
+</svg>

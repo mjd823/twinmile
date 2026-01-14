@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getDriverOpsAction } from "@/app/actions/driver";
 
 type DriverOpsResponse = {
   ok: boolean;
@@ -34,15 +35,10 @@ export function DriverDashboard() {
 
     async function load() {
       try {
-        const res = await fetch("/api/driver/ops", {
-          method: "GET",
-          cache: "no-store",
-          signal: ac.signal,
-        });
-        if (!res.ok) return;
-        const json = (await res.json()) as DriverOpsResponse;
-        if (!json?.ok) return;
-        setData(json);
+        if (ac.signal.aborted) return;
+        const result = await getDriverOpsAction();
+        if (!result.ok) return;
+        setData(result as any);
       } catch {
         // ignore
       }
@@ -69,11 +65,16 @@ export function DriverDashboard() {
               {who ? who : ""}
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Badge variant={Number.isFinite(fuelPct) && fuelPct < 15 ? "destructive" : "outline"}>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center sm:justify-end">
+            <Badge
+              className="w-full justify-center"
+              variant={Number.isFinite(fuelPct) && fuelPct < 15 ? "destructive" : "outline"}
+            >
               Fuel {Number.isFinite(fuelPct) ? fuelPct : 0}%
             </Badge>
-            <Badge variant="outline">{ownerOp ? "Owner-op" : "Company"}</Badge>
+            <Badge className="w-full justify-center" variant="outline">
+              {ownerOp ? "Owner-op" : "Company"}
+            </Badge>
             <Button asChild variant="outline" size="sm">
               <a href="/driver/settings/profile">Profile</a>
             </Button>

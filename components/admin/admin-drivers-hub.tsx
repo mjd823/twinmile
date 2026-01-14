@@ -6,6 +6,13 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  createDriverUserAction,
+  deleteDriverUserAction,
+  getDriverOverviewAction,
+  resetDriverPasswordAction,
+  updateDriverUserAction,
+} from "@/app/actions/admin";
 
 type DriverListItem = {
   id: string;
@@ -74,20 +81,17 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
 
   React.useEffect(() => {
     if (!selectedId) return;
+    const id = selectedId;
     const ac = new AbortController();
 
     async function load() {
       setStatus(null);
       setOverview(null);
       try {
-        const res = await fetch(`/api/admin/drivers/${selectedId}/overview`, {
-          method: "GET",
-          cache: "no-store",
-          signal: ac.signal,
-        });
-        const data = (await res.json().catch(() => null)) as any;
-        if (!res.ok) {
-          setStatus(data?.error ?? "Unable to load driver.");
+        if (ac.signal.aborted) return;
+        const data = await getDriverOverviewAction(id);
+        if (!data.ok) {
+          setStatus(data.error ?? "Unable to load driver.");
           return;
         }
         setOverview(data as Overview);
@@ -126,18 +130,13 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
     setBusy(true);
     setSaveStatus(null);
     try {
-      const res = await fetch(`/api/admin/drivers/${selectedId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          firstName: editDraft.firstName,
-          lastName: editDraft.lastName,
-          isOwnerOperator: editDraft.isOwnerOperator,
-        }),
+      const result = await updateDriverUserAction(selectedId, {
+        firstName: editDraft.firstName,
+        lastName: editDraft.lastName,
+        isOwnerOperator: editDraft.isOwnerOperator,
       });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setSaveStatus(data?.error ?? "Unable to save driver profile.");
+      if (!result.ok) {
+        setSaveStatus(result.error ?? "Unable to save driver profile.");
         return;
       }
       setSaveStatus("Saved.");
@@ -157,9 +156,8 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
 
       router.refresh();
 
-      const o = await fetch(`/api/admin/drivers/${selectedId}/overview`, { method: "GET", cache: "no-store" });
-      const odata = (await o.json().catch(() => null)) as any;
-      if (o.ok) setOverview(odata as Overview);
+      const odata = await getDriverOverviewAction(selectedId);
+      if (odata.ok) setOverview(odata as Overview);
     } catch {
       setSaveStatus("Unable to save driver profile.");
     } finally {
@@ -182,14 +180,9 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
     };
 
     try {
-      const res = await fetch("/api/admin/drivers", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setCreateStatus(data?.error ?? "Unable to create driver.");
+      const data = await createDriverUserAction(payload);
+      if (!data.ok) {
+        setCreateStatus(data.error ?? "Unable to create driver.");
         return;
       }
       if (data?.tempPassword) {
@@ -227,14 +220,9 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
     setBusy(true);
     setStatus(null);
     try {
-      const res = await fetch(`/api/admin/drivers/${selectedId}/reset-password`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({}),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setStatus(data?.error ?? "Unable to reset password.");
+      const data = await resetDriverPasswordAction(selectedId, {});
+      if (!data.ok) {
+        setStatus(data.error ?? "Unable to reset password.");
         return;
       }
       setStatus(`Temporary password: ${data.tempPassword} (copy + send)`);
@@ -250,10 +238,9 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
     setBusy(true);
     setStatus(null);
     try {
-      const res = await fetch(`/api/admin/drivers/${selectedId}`, { method: "DELETE" });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setStatus(data?.error ?? "Unable to delete driver.");
+      const data = await deleteDriverUserAction(selectedId);
+      if (!data.ok) {
+        setStatus(data.error ?? "Unable to delete driver.");
         return;
       }
       setStatus("Driver deleted. Reload the page to see list updates.");
@@ -279,8 +266,7 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm font-semibold tracking-tight">Drivers</div>
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant="outline"

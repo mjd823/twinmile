@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
+
+import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
   title: "About",
@@ -11,8 +14,22 @@ export const metadata: Metadata = {
 };
 
 export default function AboutPage() {
+  const baseUrl = "https://twinmile.com";
+
   return (
     <main>
+      <JsonLd
+        data={[
+          orgSchema(),
+          webSiteSchema(),
+          localBusinessSchema(),
+          breadcrumbSchema([
+            { name: "Home", url: `${baseUrl}/` },
+            { name: "About", url: `${baseUrl}/about` },
+          ]),
+        ]}
+      />
+
       <section className="relative overflow-hidden border-b border-border/60">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-32 left-1/2 h-[420px] w-[820px] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />

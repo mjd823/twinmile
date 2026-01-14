@@ -6,6 +6,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
+        disallow: ["/admin", "/driver", "/api"],
       },
     ],
     sitemap: "https://twinmile.com/sitemap.xml",

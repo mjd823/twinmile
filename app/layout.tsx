@@ -29,12 +29,21 @@ export const metadata: Metadata = {
     title: "Twin Mile LLC",
     description:
       "Fast. Tough. Reliable. Logistics built for the urgent — nationwide freight, hotshot, last‑mile, dispatching, warehousing, and 3PL.",
+    images: [
+      {
+        url: "/og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Twin Mile LLC — Fast. Tough. Reliable.",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Twin Mile LLC",
     description:
       "Fast, reliable, rugged logistics solutions nationwide. Get a quote or drive with us.",
+    images: ["/og.svg"],
   },
   robots: {
     index: true,

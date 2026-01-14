@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-import { breadcrumbSchema, localBusinessSchema, orgSchema } from "@/lib/seo";
+import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
 
 const INDUSTRIES = {
   construction: {
@@ -73,6 +73,7 @@ export default async function IndustryDetailPage({
       <JsonLd
         data={[
           orgSchema(),
+          webSiteSchema(),
           localBusinessSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },

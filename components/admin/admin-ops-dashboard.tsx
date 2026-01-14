@@ -5,6 +5,7 @@ import * as React from "react";
 import { AdminOpsMap, type OpsLoad, type OpsTruck } from "@/components/admin/admin-ops-map";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getAdminOpsAction } from "@/app/actions/admin";
 
 function shortId(id: string) {
   const s = String(id ?? "");
@@ -176,13 +177,8 @@ export function AdminOpsDashboard({
 
     async function loadOps() {
       try {
-        const res = await fetch("/api/admin/ops", {
-          method: "GET",
-          cache: "no-store",
-          signal: ac.signal,
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as OpsApiResponse;
+        if (ac.signal.aborted) return;
+        const data = (await getAdminOpsAction()) as OpsApiResponse;
         if (!data?.ok) return;
 
         const nextTrucks = Array.isArray(data.trucks)
@@ -229,9 +225,26 @@ export function AdminOpsDashboard({
     };
   }, [loads, trucks]);
 
+  const selectedTruck = React.useMemo(() => {
+    if (!selectedTruckId) return null;
+    return trucks.find((t) => t.id === selectedTruckId) ?? null;
+  }, [selectedTruckId, trucks]);
+
+  const selectedLoad = React.useMemo(() => {
+    const loadId = selectedTruck?.currentLoadId ? String(selectedTruck.currentLoadId) : "";
+    if (!loadId) return null;
+    return loads.find((l) => l.id === loadId) ?? null;
+  }, [loads, selectedTruck?.currentLoadId]);
+
+  const loadById = React.useMemo(() => {
+    const m = new Map<string, OpsLoad>();
+    for (const l of loads) m.set(l.id, l);
+    return m;
+  }, [loads]);
+
   return (
     <div className="grid gap-6">
-      <div className="grid gap-3 md:grid-cols-6">
+      <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-6">
         <div className="rounded-lg border border-border/60 bg-card p-4 md:col-span-2">
           <div className="text-xs font-semibold text-muted-foreground">Active Loads</div>
           <div className="mt-2 flex items-end justify-between gap-3">
@@ -283,75 +296,42 @@ export function AdminOpsDashboard({
                 <a href="/admin/drivers">Drivers</a>
               </Button>
             </div>
-            <div className="mt-4 grid gap-2">
-              {trucks.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setSelectedTruckId(t.id)}
-                  className={
-                    "flex w-full items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/40 " +
-                    (t.id === selectedTruckId ? "bg-accent/35" : "bg-background/20")
-                  }
-                >
-                  <div className="grid">
-                    <div className="font-medium">{t.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {driverLabel(t)}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={
-                        t.status === "maintenance" || t.fuelPct < 15
-                          ? "destructive"
-                          : t.status === "active"
-                            ? "default"
-                            : "outline"
-                      }
-                    >
-                      {t.status}
-                    </Badge>
-                    <Badge variant={t.fuelPct < 15 ? "destructive" : "outline"}>
-                      {t.fuelPct}%
-                    </Badge>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
+            <div className="mt-4 grid max-h-[52vh] gap-2 overflow-auto pr-1 lg:max-h-none">
+              {trucks.map((t) => {
+                const isSelected = t.id === selectedTruckId;
 
-          <div className="rounded-lg border border-border/60 bg-card p-4">
-            <div className="text-sm font-semibold tracking-tight">Loads</div>
-            <div className="mt-4 grid gap-2">
-              {loads.map((l) => (
-                <div
-                  key={l.id}
-                  className="rounded-md border border-border/60 bg-background/20 px-3 py-2"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="text-sm font-medium">
-                      {l.pickup} → {l.dropoff}
-                    </div>
-                    <Badge
-                      variant={
-                        l.status === "delayed"
-                          ? "destructive"
-                          : l.status === "in_transit"
-                            ? "default"
-                            : l.status === "planned"
-                              ? "secondary"
-                              : "outline"
+                return (
+                  <div key={t.id} className="grid gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedTruckId(t.id)}
+                      className={
+                        "flex w-full items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/40 " +
+                        (isSelected ? "bg-accent/35" : "bg-background/20")
                       }
                     >
-                      {l.status.replace("_", " ")}
-                    </Badge>
+                      <div className="grid">
+                        <div className="font-medium">{t.name}</div>
+                        <div className="text-xs text-muted-foreground">{driverLabel(t)}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={
+                            t.status === "maintenance" || t.fuelPct < 15
+                              ? "destructive"
+                              : t.status === "active"
+                                ? "default"
+                                : "outline"
+                          }
+                        >
+                          {t.status}
+                        </Badge>
+                        <Badge variant={t.fuelPct < 15 ? "destructive" : "outline"}>{t.fuelPct}%</Badge>
+                      </div>
+                    </button>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    ETA {l.etaHours}h · {money(l.revenueUsd)}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

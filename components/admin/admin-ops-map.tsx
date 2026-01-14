@@ -86,7 +86,7 @@ export function AdminOpsMap({
       </div>
 
       <div className="relative overflow-hidden rounded-lg border border-border/60 bg-card">
-        <div className="h-[360px] w-full bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.6)_1px,transparent_0)] [background-size:24px_24px]">
+        <div className="h-[260px] w-full bg-[radial-gradient(circle_at_1px_1px,hsl(var(--border)/0.6)_1px,transparent_0)] [background-size:24px_24px] sm:h-[320px] lg:h-[360px]">
           <div className="absolute inset-0 bg-gradient-to-br from-background/10 via-background/0 to-background/15" />
           <div className="absolute left-4 top-4 z-10 rounded-md border border-border/60 bg-background/70 px-3 py-2 text-xs text-muted-foreground backdrop-blur">
             Map placeholder (Phase A). Phase C will sync GPS + routes.

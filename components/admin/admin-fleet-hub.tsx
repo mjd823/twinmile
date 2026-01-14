@@ -7,6 +7,17 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  assignDriverToTruckAction,
+  createFuelLogAction,
+  createLoadAction,
+  createMaintenanceLogAction,
+  createRouteEventAction,
+  createTruckAction,
+  deleteTruckAction,
+  getTruckOverviewAction,
+  updateTruckAction,
+} from "@/app/actions/admin";
 
 type DriverOption = { id: string; email: string; firstName?: string; lastName?: string };
 
@@ -57,10 +68,10 @@ function statusBadge(status: string) {
   const label = s ? s.charAt(0).toUpperCase() + s.slice(1) : "—";
   const cls =
     s === "active"
-      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-200"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200"
       : s === "maintenance"
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-        : "border-slate-500/30 bg-slate-500/10 text-slate-200";
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200"
+        : "border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-200";
   return (
     <Badge variant="outline" className={cls}>
       {label}
@@ -72,10 +83,10 @@ function fuelBadge(fuelPct: number) {
   const v = Number(fuelPct ?? 0);
   const cls =
     Number.isFinite(v) && v < 15
-      ? "border-rose-500/30 bg-rose-500/10 text-rose-200"
+      ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200"
       : Number.isFinite(v) && v < 30
-        ? "border-amber-500/30 bg-amber-500/10 text-amber-200"
-        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-200";
+        ? "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-200"
+        : "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200";
   return (
     <Badge variant="outline" className={cls}>
       {Number.isFinite(v) ? `${v}%` : "0%"}
@@ -110,6 +121,8 @@ export function AdminFleetHub({
     lat: "",
     lng: "",
   });
+  const [statusPickerOpen, setStatusPickerOpen] = React.useState(false);
+  const [driverDraftId, setDriverDraftId] = React.useState<string>("");
   const [deleteConfirm, setDeleteConfirm] = React.useState(false);
 
   const [fuelOpen, setFuelOpen] = React.useState(false);
@@ -154,20 +167,17 @@ export function AdminFleetHub({
 
   React.useEffect(() => {
     if (!selectedId) return;
+    const id = selectedId;
     const ac = new AbortController();
 
     async function load() {
       setStatus(null);
       setOverview(null);
       try {
-        const res = await fetch(`/api/admin/trucks/${selectedId}/overview`, {
-          method: "GET",
-          cache: "no-store",
-          signal: ac.signal,
-        });
-        const data = (await res.json().catch(() => null)) as any;
-        if (!res.ok) {
-          setStatus(data?.error ?? "Unable to load truck.");
+        if (ac.signal.aborted) return;
+        const data = await getTruckOverviewAction(id);
+        if (!data.ok) {
+          setStatus(data.error ?? "Unable to load truck.");
           return;
         }
         setOverview(data as Overview);
@@ -201,6 +211,7 @@ export function AdminFleetHub({
       lat: overview.truck.lat == null ? "" : String(overview.truck.lat),
       lng: overview.truck.lng == null ? "" : String(overview.truck.lng),
     });
+    setDriverDraftId(overview.truck.driverUserId ? String(overview.truck.driverUserId) : "");
   }, [overview?.truck]);
 
   async function saveTruckEdits(e: React.FormEvent<HTMLFormElement>) {
@@ -219,14 +230,9 @@ export function AdminFleetHub({
       payload.lat = editDraft.lat.trim() === "" ? null : Number(editDraft.lat);
       payload.lng = editDraft.lng.trim() === "" ? null : Number(editDraft.lng);
 
-      const res = await fetch(`/api/admin/trucks/${selectedId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setStatus(data?.error ?? "Unable to update truck.");
+      const result = await updateTruckAction(selectedId, payload);
+      if (!result.ok) {
+        setStatus(result.error ?? "Unable to update truck.");
         return;
       }
       showNotice("Truck updated.");
@@ -248,14 +254,18 @@ export function AdminFleetHub({
 
       router.refresh();
 
-      const o = await fetch(`/api/admin/trucks/${selectedId}/overview`, { method: "GET", cache: "no-store" });
-      const odata = (await o.json().catch(() => null)) as any;
-      if (o.ok) setOverview(odata as Overview);
+      const odata = await getTruckOverviewAction(selectedId);
+      if (odata.ok) setOverview(odata as Overview);
     } catch {
       setStatus("Unable to update truck.");
     } finally {
       setBusy(false);
     }
+  }
+
+  async function saveDriverAssignment() {
+    const next = driverDraftId ? String(driverDraftId) : null;
+    await assignDriver(next);
   }
 
   async function createLoad(e: React.FormEvent<HTMLFormElement>) {
@@ -275,20 +285,14 @@ export function AdminFleetHub({
     };
 
     try {
-      const res = await fetch("/api/admin/loads", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setLoadStatus(data?.error ?? "Unable to create load.");
+      const data = await createLoadAction(payload);
+      if (!data.ok) {
+        setLoadStatus(data.error ?? "Unable to create load.");
         return;
       }
 
-      const o = await fetch(`/api/admin/trucks/${selectedId}/overview`, { method: "GET", cache: "no-store" });
-      const odata = (await o.json().catch(() => null)) as any;
-      if (o.ok) setOverview(odata as Overview);
+      const odata = await getTruckOverviewAction(selectedId);
+      if (odata.ok) setOverview(odata as Overview);
 
       router.refresh();
       showNotice("Load created.");
@@ -306,10 +310,9 @@ export function AdminFleetHub({
     setBusy(true);
     setStatus(null);
     try {
-      const res = await fetch(`/api/admin/trucks/${selectedId}`, { method: "DELETE" });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setStatus(data?.error ?? "Unable to delete truck.");
+      const data = await deleteTruckAction(selectedId);
+      if (!data.ok) {
+        setStatus(data.error ?? "Unable to delete truck.");
         return;
       }
       showNotice("Truck deleted.");
@@ -341,14 +344,9 @@ export function AdminFleetHub({
     };
 
     try {
-      const res = await fetch("/api/admin/fuel-logs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setFuelStatus(data?.error ?? "Unable to log fuel.");
+      const data = await createFuelLogAction(payload);
+      if (!data.ok) {
+        setFuelStatus(data.error ?? "Unable to log fuel.");
         return;
       }
       setFuelStatus("Fuel log created.");
@@ -378,14 +376,9 @@ export function AdminFleetHub({
     };
 
     try {
-      const res = await fetch("/api/admin/maintenance-logs", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setMaintenanceStatus(data?.error ?? "Unable to log maintenance.");
+      const data = await createMaintenanceLogAction(payload);
+      if (!data.ok) {
+        setMaintenanceStatus(data.error ?? "Unable to log maintenance.");
         return;
       }
       setMaintenanceStatus("Maintenance log created.");
@@ -415,14 +408,9 @@ export function AdminFleetHub({
     };
 
     try {
-      const res = await fetch("/api/admin/route-events", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setEventStatus(data?.error ?? "Unable to create event.");
+      const data = await createRouteEventAction(payload);
+      if (!data.ok) {
+        setEventStatus(data.error ?? "Unable to create event.");
         return;
       }
       setEventStatus("Event created.");
@@ -441,14 +429,9 @@ export function AdminFleetHub({
     setBusy(true);
     setStatus(null);
     try {
-      const res = await fetch(`/api/admin/trucks/${selectedId}/assign-driver`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ driverUserId: nextDriverUserId }),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setStatus(data?.error ?? "Unable to assign driver.");
+      const data = await assignDriverToTruckAction(selectedId, { driverUserId: nextDriverUserId });
+      if (!data.ok) {
+        setStatus(data.error ?? "Unable to assign driver.");
         return;
       }
 
@@ -476,9 +459,8 @@ export function AdminFleetHub({
         })
       );
 
-      const o = await fetch(`/api/admin/trucks/${selectedId}/overview`, { method: "GET", cache: "no-store" });
-      const odata = (await o.json().catch(() => null)) as any;
-      if (o.ok) setOverview(odata as Overview);
+      const odata = await getTruckOverviewAction(selectedId);
+      if (odata.ok) setOverview(odata as Overview);
 
       router.refresh();
       if (previousTruckForDriver?.name && nextDriverUserId) {
@@ -509,14 +491,9 @@ export function AdminFleetHub({
     };
 
     try {
-      const res = await fetch("/api/admin/trucks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setCreateStatus(data?.error ?? "Unable to create truck.");
+      const data = await createTruckAction(payload);
+      if (!data.ok) {
+        setCreateStatus(data.error ?? "Unable to create truck.");
         return;
       }
       showNotice("Truck created.");
@@ -528,7 +505,7 @@ export function AdminFleetHub({
         : undefined;
 
       const nextRow: TruckListItem = {
-        id: String(data?.truckId ?? data?.id ?? ""),
+        id: String(data?.truckId ?? ""),
         name: String(payload.name ?? ""),
         status: String(payload.status ?? "idle"),
         fuelPct: Number(payload.fuelPct ?? 0),
@@ -557,8 +534,7 @@ export function AdminFleetHub({
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm font-semibold tracking-tight">Fleet</div>
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant="outline"
@@ -656,29 +632,72 @@ export function AdminFleetHub({
                       <div className="grid gap-2">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                           <label className="text-sm font-medium" htmlFor="edit-status">Status</label>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {statusBadge(String(overview?.truck?.status ?? "idle"))}
-                            {fuelBadge(Number(overview?.truck?.fuelPct ?? 0))}
-                          </div>
                         </div>
-                        <select
-                          id="edit-status"
-                          className="h-9 rounded-md border border-border/70 bg-background/50 px-3 text-sm shadow-sm shadow-black/10 backdrop-blur"
-                          value={editDraft.status}
-                          onChange={(e) => {
-                            const v = (e.target as HTMLSelectElement | null)?.value ?? "";
-                            setEditDraft((p) => ({ ...p, status: v }));
-                          }}
-                        >
-                          <option value="active">Active</option>
-                          <option value="idle">Idle</option>
-                          <option value="maintenance">Maintenance</option>
-                        </select>
+                        <div className="relative">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            className="h-9 justify-start px-0"
+                            onClick={() => setStatusPickerOpen((v) => !v)}
+                            aria-haspopup="menu"
+                            aria-expanded={statusPickerOpen}
+                          >
+                            {statusBadge(editDraft.status)}
+                          </Button>
+
+                          {statusPickerOpen ? (
+                            <div className="absolute left-0 top-full z-50 mt-2 w-40 overflow-hidden rounded-md border border-border/60 bg-background/80 shadow-lg shadow-black/20 backdrop-blur">
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent/40"
+                                onClick={() => {
+                                  setEditDraft((p) => ({ ...p, status: "active" }));
+                                  setStatusPickerOpen(false);
+                                }}
+                              >
+                                <div>Active</div>
+                                {statusBadge("active")}
+                              </button>
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent/40"
+                                onClick={() => {
+                                  setEditDraft((p) => ({ ...p, status: "idle" }));
+                                  setStatusPickerOpen(false);
+                                }}
+                              >
+                                <div>Idle</div>
+                                {statusBadge("idle")}
+                              </button>
+                              <button
+                                type="button"
+                                className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-accent/40"
+                                onClick={() => {
+                                  setEditDraft((p) => ({ ...p, status: "maintenance" }));
+                                  setStatusPickerOpen(false);
+                                }}
+                              >
+                                <div>Maintenance</div>
+                                {statusBadge("maintenance")}
+                              </button>
+                            </div>
+                          ) : null}
+
+                          {statusPickerOpen ? (
+                            <button
+                              type="button"
+                              className="fixed inset-0 z-40 cursor-default"
+                              aria-label="Close"
+                              onClick={() => setStatusPickerOpen(false)}
+                            />
+                          ) : null}
+                        </div>
                       </div>
                       <div className="grid gap-2">
                         <label className="text-sm font-medium" htmlFor="edit-fuel">Fuel %</label>
                         <Input
                           id="edit-fuel"
+                          className="w-28"
                           type="number"
                           min={0}
                           max={100}
@@ -696,6 +715,7 @@ export function AdminFleetHub({
                         <label className="text-sm font-medium" htmlFor="edit-lat">Lat (optional)</label>
                         <Input
                           id="edit-lat"
+                          className="max-w-[220px]"
                           value={editDraft.lat}
                           onChange={(e) => {
                             const v = (e.target as HTMLInputElement | null)?.value ?? "";
@@ -707,6 +727,7 @@ export function AdminFleetHub({
                         <label className="text-sm font-medium" htmlFor="edit-lng">Lng (optional)</label>
                         <Input
                           id="edit-lng"
+                          className="max-w-[220px]"
                           value={editDraft.lng}
                           onChange={(e) => {
                             const v = (e.target as HTMLInputElement | null)?.value ?? "";
@@ -721,7 +742,13 @@ export function AdminFleetHub({
                 <div className="rounded-lg border border-border/60 bg-background/20 p-3">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div className="text-sm font-semibold tracking-tight">Assigned driver</div>
-                    <Button type="button" variant="outline" size="sm" disabled={busy || !selectedId} onClick={() => assignDriver(null)}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={busy || !selectedId}
+                      onClick={() => setDriverDraftId("")}
+                    >
                       Unassign
                     </Button>
                   </div>
@@ -729,11 +756,11 @@ export function AdminFleetHub({
                   <div className="mt-3 grid gap-3">
                     <select
                       className="h-9 w-full rounded-md border border-border/70 bg-background/50 px-3 text-sm shadow-sm shadow-black/10 backdrop-blur"
-                      value={overview?.truck?.driverUserId ? String(overview.truck.driverUserId) : ""}
+                      value={driverDraftId}
                       disabled={busy || !selectedId}
                       onChange={(e) => {
                         const next = e.currentTarget.value || null;
-                        void assignDriver(next);
+                        setDriverDraftId(next ? String(next) : "");
                       }}
                     >
                       <option value="">Unassigned</option>
@@ -743,6 +770,12 @@ export function AdminFleetHub({
                         </option>
                       ))}
                     </select>
+
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <Button type="button" disabled={busy || !selectedId} onClick={saveDriverAssignment}>
+                        {busy ? "Saving…" : "Save"}
+                      </Button>
+                    </div>
 
                     <div className="h-[260px] overflow-hidden rounded-md border border-border/60 bg-background/20">
                       <div className="flex h-full items-center justify-center px-4 text-xs text-muted-foreground">

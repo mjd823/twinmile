@@ -29,12 +29,17 @@ export default async function DriverPortalPage() {
                 {name ? name : user.email}
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-              <a className="hover:text-foreground" href="/driver/settings/profile">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+              <a
+                className="inline-flex h-9 items-center rounded-md border border-border/60 bg-background/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                href="/driver/settings/profile"
+              >
                 Profile
               </a>
-              <span className="text-muted-foreground/60">·</span>
-              <a className="hover:text-foreground" href="/driver/settings/password">
+              <a
+                className="inline-flex h-9 items-center rounded-md border border-border/60 bg-background/40 px-3 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                href="/driver/settings/password"
+              >
                 Password
               </a>
             </div>

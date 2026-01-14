@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { assignDriverToTruckAction, createTruckAction } from "@/app/actions/admin";
 
 type DriverOption = {
   id: string;
@@ -47,14 +48,9 @@ export function AdminTrucksForm({
     };
 
     try {
-      const res = await fetch("/api/admin/trucks", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setStatus(data?.error ?? "Unable to create truck.");
+      const data = await createTruckAction(payload);
+      if (!data.ok) {
+        setStatus(data.error ?? "Unable to create truck.");
         return;
       }
 
@@ -171,17 +167,9 @@ export function AdminTrucksForm({
                         const next = e.currentTarget.value || null;
 
                         try {
-                          const res = await fetch(
-                            `/api/admin/trucks/${t.id}/assign-driver`,
-                            {
-                              method: "POST",
-                              headers: { "content-type": "application/json" },
-                              body: JSON.stringify({ driverUserId: next }),
-                            }
-                          );
-                          const data = (await res.json().catch(() => null)) as any;
-                          if (!res.ok) {
-                            setAssignStatus(data?.error ?? "Unable to assign driver.");
+                          const data = await assignDriverToTruckAction(t.id, { driverUserId: next });
+                          if (!data.ok) {
+                            setAssignStatus(data.error ?? "Unable to assign driver.");
                             return;
                           }
                           setAssignStatus(
@@ -212,17 +200,9 @@ export function AdminTrucksForm({
                         setAssignStatus(null);
                         setAssigningTruckId(t.id);
                         try {
-                          const res = await fetch(
-                            `/api/admin/trucks/${t.id}/assign-driver`,
-                            {
-                              method: "POST",
-                              headers: { "content-type": "application/json" },
-                              body: JSON.stringify({ driverUserId: null }),
-                            }
-                          );
-                          const data = (await res.json().catch(() => null)) as any;
-                          if (!res.ok) {
-                            setAssignStatus(data?.error ?? "Unable to unassign driver.");
+                          const data = await assignDriverToTruckAction(t.id, { driverUserId: null });
+                          if (!data.ok) {
+                            setAssignStatus(data.error ?? "Unable to unassign driver.");
                             return;
                           }
                           setAssignStatus("Driver unassigned. Reload to see changes.");

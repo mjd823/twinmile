@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { loginAction } from "@/app/actions/auth";
 
 type Status =
   | { state: "idle" }
@@ -31,13 +32,8 @@ export function LoginForm({
 
     setStatus({ state: "submitting" });
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
+    const result = await loginAction(payload);
+    if (!result.ok) {
       setStatus({ state: "error", message: "Invalid login." });
       return;
     }

@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-import { breadcrumbSchema, localBusinessSchema, orgSchema } from "@/lib/seo";
+import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
 
 const INDUSTRIES = [
   { slug: "construction", name: "Construction" },
@@ -28,6 +28,7 @@ export default function IndustriesPage() {
       <JsonLd
         data={[
           orgSchema(),
+          webSiteSchema(),
           localBusinessSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },

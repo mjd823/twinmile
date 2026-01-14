@@ -8,6 +8,7 @@ import {
   localBusinessSchema,
   orgSchema,
   serviceSchema,
+  webSiteSchema,
 } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -25,6 +26,7 @@ export default function ServicesPage() {
       <JsonLd
         data={[
           orgSchema(),
+          webSiteSchema(),
           localBusinessSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },

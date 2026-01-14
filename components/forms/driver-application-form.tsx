@@ -5,6 +5,7 @@ import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { submitDriverApplicationAction } from "@/app/actions/public";
 
 type Status =
   | { state: "idle" }
@@ -23,21 +24,9 @@ export function DriverApplicationForm() {
 
     setStatus({ state: "submitting" });
 
-    const res = await fetch("/api/driver-application", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      let message = "Something went wrong. Please try again.";
-      try {
-        const data = (await res.json()) as { error?: string };
-        if (data?.error) message = data.error;
-      } catch {
-        // ignore
-      }
-      setStatus({ state: "error", message });
+    const result = await submitDriverApplicationAction(payload);
+    if (!result.ok) {
+      setStatus({ state: "error", message: result.error || "Something went wrong. Please try again." });
       return;
     }
 

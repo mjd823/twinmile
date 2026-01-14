@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getDriverProfileAction, updateDriverProfileAction } from "@/app/actions/driver";
 
 type Status =
   | { state: "idle" }
@@ -28,17 +29,17 @@ export function DriverProfileForm() {
 
     async function load() {
       try {
-        const res = await fetch("/api/driver/profile", { method: "GET", cache: "no-store", signal: ac.signal });
-        const data = (await res.json().catch(() => null)) as any;
-        if (!res.ok) {
-          setStatus({ state: "error", message: data?.error ?? "Unable to load profile." });
+        if (ac.signal.aborted) return;
+        const result = await getDriverProfileAction();
+        if (!result.ok) {
+          setStatus({ state: "error", message: result.error ?? "Unable to load profile." });
           return;
         }
         setProfile({
-          email: String(data?.profile?.email ?? ""),
-          firstName: String(data?.profile?.firstName ?? ""),
-          lastName: String(data?.profile?.lastName ?? ""),
-          isOwnerOperator: Boolean(data?.profile?.isOwnerOperator),
+          email: String(result.profile.email ?? ""),
+          firstName: String(result.profile.firstName ?? ""),
+          lastName: String(result.profile.lastName ?? ""),
+          isOwnerOperator: Boolean(result.profile.isOwnerOperator),
         });
         setStatus({ state: "idle" });
       } catch {
@@ -56,25 +57,13 @@ export function DriverProfileForm() {
 
     setStatus({ state: "saving" });
 
-    const res = await fetch("/api/driver/profile", {
-      method: "PATCH",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        firstName: profile.firstName,
-        lastName: profile.lastName,
-        isOwnerOperator: profile.isOwnerOperator,
-      }),
+    const result = await updateDriverProfileAction({
+      firstName: profile.firstName,
+      lastName: profile.lastName,
+      isOwnerOperator: profile.isOwnerOperator,
     });
-
-    if (!res.ok) {
-      let message = "Unable to save profile.";
-      try {
-        const data = (await res.json()) as any;
-        if (data?.error) message = String(data.error);
-      } catch {
-        // ignore
-      }
-      setStatus({ state: "error", message });
+    if (!result.ok) {
+      setStatus({ state: "error", message: result.error || "Unable to save profile." });
       return;
     }
 

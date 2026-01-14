@@ -11,6 +11,21 @@ export function orgSchema() {
   return schema;
 }
 
+export function webSiteSchema() {
+  const schema: WithContext<Record<string, unknown>> = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "Twin Mile LLC",
+    url: "https://twinmile.com",
+    publisher: {
+      "@type": "Organization",
+      name: "Twin Mile LLC",
+      url: "https://twinmile.com",
+    },
+  };
+  return schema;
+}
+
 export function localBusinessSchema() {
   const schema: WithContext<Record<string, unknown>> = {
     "@context": "https://schema.org",
@@ -79,6 +94,45 @@ export function faqSchema(
       },
     })),
     url,
+  };
+
+  return schema;
+}
+
+export function blogPostingSchema(input: {
+  url: string;
+  headline: string;
+  description: string;
+  datePublished: string;
+  imageUrl?: string;
+}) {
+  const schema: WithContext<Record<string, unknown>> = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": input.url,
+    },
+    headline: input.headline,
+    description: input.description,
+    datePublished: input.datePublished,
+    dateModified: input.datePublished,
+    author: {
+      "@type": "Organization",
+      name: "Twin Mile LLC",
+      url: "https://twinmile.com",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "Twin Mile LLC",
+      url: "https://twinmile.com",
+    },
+    ...(input.imageUrl
+      ? {
+          image: [input.imageUrl],
+        }
+      : {}),
+    url: input.url,
   };
 
   return schema;

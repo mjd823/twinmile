@@ -1,9 +1,32 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+
+import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 
+import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
+
+export const metadata: Metadata = {
+  title: "Twin Mile LLC",
+  description:
+    "Twin Mile LLC delivers fast, reliable logistics solutions nationwide — freight transportation, hotshot trucking, last‑mile delivery, dispatching, warehousing, and 3PL.",
+  alternates: { canonical: "/" },
+};
+
 export default async function Home() {
+  const baseUrl = "https://twinmile.com";
+
   return (
     <main>
+      <JsonLd
+        data={[
+          orgSchema(),
+          webSiteSchema(),
+          localBusinessSchema(),
+          breadcrumbSchema([{ name: "Home", url: `${baseUrl}/` }]),
+        ]}
+      />
+
       <section className="relative overflow-hidden border-b border-border/60">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -top-32 left-1/2 h-[520px] w-[980px] -translate-x-1/2 rounded-full bg-primary/20 blur-3xl" />

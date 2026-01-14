@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { createLoadAction, deleteLoadAction, listLoadsAction, updateLoadAction } from "@/app/actions/admin";
 
 type TruckOption = { id: string; name: string };
 
@@ -123,11 +124,10 @@ export function AdminLoadsForm({
 
   async function refreshList() {
     try {
-      const res = await fetch("/api/admin/loads", { method: "GET", cache: "no-store" });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok || !data?.ok || !Array.isArray(data.loads)) return;
+      const data = await listLoadsAction();
+      if (!data.ok || !Array.isArray((data as any).loads)) return;
       setRows(
-        data.loads.map((l: any) => ({
+        (data as any).loads.map((l: any) => ({
           id: String(l.id ?? l._id ?? ""),
           status: String(l.status ?? "planned"),
           pickup: String(l.pickup ?? ""),
@@ -158,19 +158,14 @@ export function AdminLoadsForm({
     };
 
     try {
-      const res = await fetch("/api/admin/loads", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setCreateStatus(data?.error ?? "Unable to create load.");
+      const data = await createLoadAction(payload);
+      if (!data.ok) {
+        setCreateStatus(data.error ?? "Unable to create load.");
         return;
       }
 
       const nextRow: LoadRow = {
-        id: String(data?.loadId ?? data?.id ?? ""),
+        id: String((data as any)?.loadId ?? ""),
         status: payload.status,
         pickup: payload.pickup,
         dropoff: payload.dropoff,
@@ -206,14 +201,9 @@ export function AdminLoadsForm({
         truckId: draft.truckId || "",
       };
 
-      const res = await fetch(`/api/admin/loads/${selectedId}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setEditStatus(data?.error ?? "Unable to save load.");
+      const data = await updateLoadAction(selectedId, payload);
+      if (!data.ok) {
+        setEditStatus(data.error ?? "Unable to save load.");
         return;
       }
 
@@ -249,10 +239,9 @@ export function AdminLoadsForm({
     setEditStatus(null);
     setBusy(true);
     try {
-      const res = await fetch(`/api/admin/loads/${selectedId}`, { method: "DELETE" });
-      const data = (await res.json().catch(() => null)) as any;
-      if (!res.ok) {
-        setEditStatus(data?.error ?? "Unable to delete load.");
+      const data = await deleteLoadAction(selectedId);
+      if (!data.ok) {
+        setEditStatus(data.error ?? "Unable to delete load.");
         return;
       }
 
@@ -271,11 +260,7 @@ export function AdminLoadsForm({
 
   return (
     <div className="grid gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold tracking-tight">Loads</div>
-          <div className="mt-1 text-sm text-muted-foreground">Create and manage routes/contracts.</div>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant="outline"

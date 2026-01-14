@@ -3,7 +3,7 @@ import Link from "next/link";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-import { breadcrumbSchema, localBusinessSchema, orgSchema } from "@/lib/seo";
+import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
 import { BLOG_POSTS } from "@/lib/blog";
 
 export const metadata: Metadata = {
@@ -30,6 +30,7 @@ export default function BlogIndexPage() {
       <JsonLd
         data={[
           orgSchema(),
+          webSiteSchema(),
           localBusinessSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },

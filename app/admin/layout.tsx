@@ -76,7 +76,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
           <Link
             className="shrink-0 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            href="/admin/settings/password"
+            href="/admin/settings"
           >
             Settings
           </Link>
@@ -151,7 +151,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
           <Link
             className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            href="/admin/settings/password"
+            href="/admin/settings"
           >
             Account Settings
           </Link>

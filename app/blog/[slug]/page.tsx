@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-import { breadcrumbSchema, localBusinessSchema, orgSchema } from "@/lib/seo";
+import { blogPostingSchema, breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
 import { BLOG_POSTS, getPostBySlug } from "@/lib/blog";
 
 export function generateStaticParams() {
@@ -44,7 +44,15 @@ export default async function BlogPostPage({
       <JsonLd
         data={[
           orgSchema(),
+          webSiteSchema(),
           localBusinessSchema(),
+          blogPostingSchema({
+            url: `${baseUrl}/blog/${post.slug}`,
+            headline: post.title,
+            description: post.description,
+            datePublished: post.publishedAt,
+            imageUrl: `${baseUrl}/og.svg`,
+          }),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
             { name: "Blog", url: `${baseUrl}/blog` },

@@ -9,6 +9,7 @@ import {
   faqSchema,
   localBusinessSchema,
   orgSchema,
+  webSiteSchema,
 } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -59,6 +60,7 @@ export default function DriveWithUsPage() {
       <JsonLd
         data={[
           orgSchema(),
+          webSiteSchema(),
           localBusinessSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
