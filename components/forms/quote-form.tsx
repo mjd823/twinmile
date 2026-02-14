@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { submitQuoteLeadAction } from "@/app/actions/public";
 import { captureUtm, getUtm } from "@/lib/utm";
 import { analytics } from "@/lib/analytics";
+import { automatedLeadManager } from "@/lib/automated-lead-manager";
 
 type Status =
   | { state: "idle" }
@@ -56,6 +57,34 @@ export function QuoteForm() {
       utmSource: utmData?.utm_source,
       utmMedium: utmData?.utm_medium,
       utmCampaign: utmData?.utm_campaign,
+    });
+
+    // Process lead automatically (this is the magic!)
+    const leadData = {
+      id: `quote_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'quote' as const,
+      name: formPayload.name as string,
+      email: formPayload.email as string,
+      serviceType: formPayload.serviceType as string,
+      pickupLocation: formPayload.pickupLocation as string,
+      dropoffLocation: formPayload.dropoffLocation as string,
+      company: formPayload.company as string,
+      utmSource: utmData?.utm_source,
+      utmMedium: utmData?.utm_medium,
+      utmCampaign: utmData?.utm_campaign,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Automatically score, qualify, and route the lead
+    const leadScore = await automatedLeadManager.processIncomingLead(leadData);
+    
+    console.log('🤖 Lead automatically processed:', {
+      score: leadScore.score,
+      quality: leadScore.quality,
+      value: leadScore.estimatedValue,
+      priority: leadScore.priority,
+      autoActions: leadScore.autoActions,
+      assignee: leadScore.routing.assignee,
     });
 
     setStatus({ state: "success" });

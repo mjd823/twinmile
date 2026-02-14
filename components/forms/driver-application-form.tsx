@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { submitDriverApplicationAction } from "@/app/actions/public";
 import { captureUtm, getUtm } from "@/lib/utm";
 import { analytics } from "@/lib/analytics";
+import { automatedLeadManager } from "@/lib/automated-lead-manager";
 
 type Status =
   | { state: "idle" }
@@ -54,6 +55,33 @@ export function DriverApplicationForm() {
       hasOwnAuthority: formPayload.hasOwnAuthority === 'true',
       utmSource: utmData?.utm_source,
       utmMedium: utmData?.utm_medium,
+    });
+
+    // Process driver lead automatically (this is the magic!)
+    const leadData = {
+      id: `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type: 'driver' as const,
+      name: formPayload.fullName as string,
+      email: formPayload.email as string,
+      phone: formPayload.phone as string,
+      truckType: formPayload.truckType as string,
+      yearsExperience: formPayload.yearsExperience as string,
+      hasOwnAuthority: formPayload.hasOwnAuthority === 'true',
+      utmSource: utmData?.utm_source,
+      utmMedium: utmData?.utm_medium,
+      timestamp: new Date().toISOString(),
+    };
+
+    // Automatically score, qualify, and route the driver lead
+    const leadScore = await automatedLeadManager.processIncomingLead(leadData);
+    
+    console.log('🤖 Driver lead automatically processed:', {
+      score: leadScore.score,
+      quality: leadScore.quality,
+      value: leadScore.estimatedValue,
+      priority: leadScore.priority,
+      autoActions: leadScore.autoActions,
+      assignee: leadScore.routing.assignee,
     });
 
     setStatus({ state: "success" });

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
+import { AutomationDashboard } from "@/components/admin/automation-dashboard";
 import { ChangePasswordForm } from "@/components/forms/change-password-form";
 import { Button } from "@/components/ui/button";
 import { restoreLeadAction } from "@/app/actions/admin";
@@ -123,6 +124,8 @@ export default async function AdminSettingsPage() {
                 </div>
               </div>
             </div>
+
+            <AutomationDashboard />
 
             <div className="rounded-2xl border border-border/60 bg-card p-5">
               <div className="text-sm font-semibold tracking-tight">Archived Leads</div>
