@@ -17,9 +17,11 @@ type Status =
 export function QuoteForm() {
   const [status, setStatus] = React.useState<Status>({ state: "idle" });
   const fieldClassName =
-    "h-10 border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 focus-visible:ring-primary/60";
+    "h-10 border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 transition-shadow focus-visible:border-primary/60 focus-visible:ring-primary/70 focus-visible:shadow-[0_0_0_3px_rgba(59,130,246,0.18)]";
+  const selectClassName =
+    "h-10 w-full rounded-md border border-border/80 bg-background/70 px-3 text-sm text-foreground shadow-sm shadow-black/10 transition-colors transition-shadow focus-visible:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70 focus-visible:shadow-[0_0_0_3px_rgba(59,130,246,0.18)]";
   const areaClassName =
-    "min-h-[108px] border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 focus-visible:ring-primary/60";
+    "min-h-[108px] border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 transition-shadow focus-visible:border-primary/60 focus-visible:ring-primary/70 focus-visible:shadow-[0_0_0_3px_rgba(59,130,246,0.18)]";
 
   React.useEffect(() => { captureUtm(); }, []);
 
@@ -94,13 +96,17 @@ export function QuoteForm() {
           <label className="text-sm font-semibold text-foreground/95" htmlFor="serviceType">
             Service type
           </label>
-          <Input
-            id="serviceType"
-            name="serviceType"
-            placeholder="Freight / Hotshot / Last‑mile / Dispatch / 3PL"
-            className={fieldClassName}
-            required
-          />
+          <select id="serviceType" name="serviceType" className={selectClassName} defaultValue="" required>
+            <option value="" disabled>
+              Select a service
+            </option>
+            <option value="Freight Transportation">Freight Transportation</option>
+            <option value="Hotshot Trucking">Hotshot Trucking</option>
+            <option value="Last-mile delivery">Last-mile delivery</option>
+            <option value="Dispatching">Dispatching</option>
+            <option value="3PL">3PL</option>
+            <option value="Other">Other</option>
+          </select>
         </div>
         <div className="grid gap-2">
           <label className="text-sm font-semibold text-foreground/95" htmlFor="pickupDate">

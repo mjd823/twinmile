@@ -21,11 +21,9 @@ export function SiteHeader() {
 
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [accountOpen, setAccountOpen] = React.useState(false);
-  const [signInOpen, setSignInOpen] = React.useState(false);
 
   const mobileRef = React.useRef<HTMLDivElement | null>(null);
   const accountRef = React.useRef<HTMLDivElement | null>(null);
-  const signInRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -61,7 +59,6 @@ export function SiteHeader() {
       if (e.key !== "Escape") return;
       setMobileOpen(false);
       setAccountOpen(false);
-      setSignInOpen(false);
     }
 
     function onPointerDown(e: MouseEvent | TouchEvent) {
@@ -70,11 +67,9 @@ export function SiteHeader() {
 
       if (mobileRef.current && mobileRef.current.contains(target)) return;
       if (accountRef.current && accountRef.current.contains(target)) return;
-      if (signInRef.current && signInRef.current.contains(target)) return;
 
       setMobileOpen(false);
       setAccountOpen(false);
-      setSignInOpen(false);
     }
 
     window.addEventListener("keydown", onKeyDown);
@@ -125,6 +120,13 @@ export function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Button asChild size="sm" className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm">
+            <Link href="/get-a-quote">Get a Quote</Link>
+          </Button>
+          <Button asChild variant="outline" size="sm" className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm">
+            <Link href="/drive-with-us">Drive With Us</Link>
+          </Button>
+
           <div ref={mobileRef} className="relative md:hidden">
             <button
               type="button"
@@ -134,7 +136,6 @@ export function SiteHeader() {
               onClick={() => {
                 setMobileOpen((v) => !v);
                 setAccountOpen(false);
-                setSignInOpen(false);
               }}
             >
               <svg viewBox="0 0 24 24" fill="none" className="h-5 w-5" aria-hidden="true">
@@ -147,8 +148,8 @@ export function SiteHeader() {
               </svg>
             </button>
             {mobileOpen ? (
-              <div className="absolute right-0 mt-3 max-h-[75vh] w-[min(92vw,360px)] overflow-auto rounded-lg border border-border/60 bg-popover shadow-xl">
-                <div className="grid gap-1 p-2 text-sm">
+              <div className="fixed inset-x-3 top-[72px] z-50 max-h-[calc(100vh-88px)] overflow-auto rounded-xl border border-border/60 bg-popover/95 shadow-2xl backdrop-blur md:hidden">
+                <div className="grid gap-1 p-3 text-sm">
                   <Link
                     className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     href="/services"
@@ -192,17 +193,7 @@ export function SiteHeader() {
                     Contact
                   </Link>
                 </div>
-                <div className="border-t border-border/60 p-2">
-                  <Button asChild className="w-full">
-                    <Link href="/get-a-quote" onClick={() => setMobileOpen(false)}>
-                      Get a Quote
-                    </Link>
-                  </Button>
-                  <Button asChild variant="outline" className="mt-2 w-full">
-                    <Link href="/drive-with-us" onClick={() => setMobileOpen(false)}>
-                      Drive With Us
-                    </Link>
-                  </Button>
+                <div className="border-t border-border/60 p-3">
                   {!portalHref ? (
                     <Button asChild variant="outline" className="mt-2 w-full">
                       <Link href="/driver/login" onClick={() => setMobileOpen(false)}>
@@ -217,13 +208,6 @@ export function SiteHeader() {
                           Dashboard
                         </Link>
                       </Button>
-                      {accountSettingsHref ? (
-                        <Button asChild variant="outline" className="w-full">
-                          <Link href={accountSettingsHref} onClick={() => setMobileOpen(false)}>
-                            Account settings
-                          </Link>
-                        </Button>
-                      ) : null}
                       <form action={logoutAction}>
                         <Button variant="outline" className="w-full" type="submit">
                           Sign out
@@ -243,7 +227,6 @@ export function SiteHeader() {
                 aria-expanded={accountOpen}
                 onClick={() => {
                   setAccountOpen((v) => !v);
-                  setSignInOpen(false);
                   setMobileOpen(false);
                 }}
               >
@@ -259,15 +242,6 @@ export function SiteHeader() {
                     >
                       Dashboard
                     </Link>
-                    {accountSettingsHref ? (
-                      <Link
-                        className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                        href={accountSettingsHref}
-                        onClick={() => setAccountOpen(false)}
-                      >
-                        Account settings
-                      </Link>
-                    ) : null}
                   </div>
                   <div className="border-t border-border/60 p-2">
                     <form action={logoutAction}>
@@ -279,50 +253,10 @@ export function SiteHeader() {
                 </div>
               ) : null}
             </div>
-          ) : (
-            <Button asChild variant="ghost" className="hidden sm:inline-flex">
-              <Link href="/drive-with-us">Drive With Us</Link>
-            </Button>
-          )}
-          {!portalHref ? (
-            <div ref={signInRef} className="relative hidden sm:block">
-              <button
-                type="button"
-                className="inline-flex h-9 cursor-pointer items-center justify-center rounded-md border border-border/60 bg-background/60 px-3 text-sm font-medium text-foreground shadow-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                aria-expanded={signInOpen}
-                onClick={() => {
-                  setSignInOpen((v) => !v);
-                  setAccountOpen(false);
-                  setMobileOpen(false);
-                }}
-              >
-                Sign in
-              </button>
-              {signInOpen ? (
-                <div className="absolute right-0 mt-2 max-h-[75vh] w-44 overflow-auto rounded-lg border border-border/60 bg-popover shadow-xl">
-                  <div className="grid gap-1 p-2 text-sm">
-                    <Link
-                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      href="/driver/login"
-                      onClick={() => setSignInOpen(false)}
-                    >
-                      Driver Sign In
-                    </Link>
-                    <Link
-                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      href="/admin/login"
-                      onClick={() => setSignInOpen(false)}
-                    >
-                      Admin Sign In
-                    </Link>
-                  </div>
-                </div>
-              ) : null}
-            </div>
           ) : null}
           {!portalHref ? (
-            <Button asChild>
-              <Link href="/get-a-quote">Get a Quote</Link>
+            <Button asChild variant="outline" className="hidden sm:inline-flex">
+              <Link href="/driver/login">Sign in</Link>
             </Button>
           ) : null}
         </div>

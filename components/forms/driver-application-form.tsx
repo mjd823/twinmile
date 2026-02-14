@@ -17,9 +17,9 @@ type Status =
 export function DriverApplicationForm() {
   const [status, setStatus] = React.useState<Status>({ state: "idle" });
   const fieldClassName =
-    "h-10 border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 focus-visible:ring-primary/60";
+    "h-10 border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 transition-shadow focus-visible:border-primary/60 focus-visible:ring-primary/70 focus-visible:shadow-[0_0_0_3px_rgba(59,130,246,0.18)]";
   const areaClassName =
-    "min-h-[108px] border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 focus-visible:ring-primary/60";
+    "min-h-[108px] border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 transition-shadow focus-visible:border-primary/60 focus-visible:ring-primary/70 focus-visible:shadow-[0_0_0_3px_rgba(59,130,246,0.18)]";
 
   React.useEffect(() => { captureUtm(); }, []);
 
