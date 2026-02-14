@@ -18,7 +18,7 @@ export default async function AdminInboxPage() {
   const client = await clientPromise!;
   const db = client.db();
 
-  const [quoteLeads, driverLeads, archivedQuoteLeads, archivedDriverLeads] = await Promise.all([
+  const [quoteLeads, driverLeads] = await Promise.all([
     db
       .collection("leads_quotes")
       .find({ isArchived: { $ne: true } }, { sort: { createdAt: -1 }, limit: 300 })
@@ -26,14 +26,6 @@ export default async function AdminInboxPage() {
     db
       .collection("leads_drivers")
       .find({ isArchived: { $ne: true } }, { sort: { createdAt: -1 }, limit: 300 })
-      .toArray(),
-    db
-      .collection("leads_quotes")
-      .find({ isArchived: true }, { sort: { archivedAt: -1, createdAt: -1 }, limit: 300 })
-      .toArray(),
-    db
-      .collection("leads_drivers")
-      .find({ isArchived: true }, { sort: { archivedAt: -1, createdAt: -1 }, limit: 300 })
       .toArray(),
   ]);
 
@@ -63,6 +55,9 @@ export default async function AdminInboxPage() {
               phone: String(l.phone ?? ""),
               pickupLocation: String(l.pickupLocation ?? ""),
               dropoffLocation: String(l.dropoffLocation ?? ""),
+              serviceType: String(l.serviceType ?? ""),
+              pickupDate: String(l.pickupDate ?? ""),
+              notes: String(l.notes ?? ""),
               status: (l.status ?? "new") as any,
               createdAt: l.createdAt ? String(new Date(l.createdAt).toISOString()) : "",
             }))}
@@ -72,26 +67,10 @@ export default async function AdminInboxPage() {
               email: String(l.email ?? ""),
               phone: String(l.phone ?? ""),
               truckType: String(l.truckType ?? ""),
-              status: (l.status ?? "new") as any,
-              createdAt: l.createdAt ? String(new Date(l.createdAt).toISOString()) : "",
-            }))}
-            archivedQuoteLeads={archivedQuoteLeads.map((l: any) => ({
-              id: String(l._id),
-              name: String(l.name ?? ""),
-              company: String(l.company ?? ""),
-              email: String(l.email ?? ""),
-              phone: String(l.phone ?? ""),
-              pickupLocation: String(l.pickupLocation ?? ""),
-              dropoffLocation: String(l.dropoffLocation ?? ""),
-              status: (l.status ?? "new") as any,
-              createdAt: l.createdAt ? String(new Date(l.createdAt).toISOString()) : "",
-            }))}
-            archivedDriverLeads={archivedDriverLeads.map((l: any) => ({
-              id: String(l._id),
-              fullName: String(l.fullName ?? ""),
-              email: String(l.email ?? ""),
-              phone: String(l.phone ?? ""),
-              truckType: String(l.truckType ?? ""),
+              yearsExperience: String(l.yearsExperience ?? ""),
+              preferredRoutes: String(l.preferredRoutes ?? ""),
+              startDate: String(l.startDate ?? ""),
+              notes: String(l.notes ?? ""),
               status: (l.status ?? "new") as any,
               createdAt: l.createdAt ? String(new Date(l.createdAt).toISOString()) : "",
             }))}
