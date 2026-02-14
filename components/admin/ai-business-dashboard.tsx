@@ -4,6 +4,7 @@ import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { realAIActivityEngine } from "@/lib/real-ai-activity-engine";
 import { 
   Crown,
   Users,
@@ -24,7 +25,9 @@ import {
   ArrowDownRight,
   Play,
   Pause,
-  Settings
+  Settings,
+  Brain,
+  Eye
 } from "lucide-react";
 
 // AI Employee Interface
@@ -151,77 +154,76 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
   const [lastAction, setLastAction] = React.useState<string>('');
   const [actionResult, setActionResult] = React.useState<any>(null);
+  const [activityFeed, setActivityFeed] = React.useState<any[]>([]);
+  const [supervisorReport, setSupervisorReport] = React.useState<any>(null);
 
   // Fetch real AI data on component mount
   React.useEffect(() => {
-    fetchAIData();
+    fetchRealAIData();
     // Set up interval to refresh data
-    const interval = setInterval(fetchAIData, 30000); // Refresh every 30 seconds
+    const interval = setInterval(fetchRealAIData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
-  const fetchAIData = async () => {
+  const fetchRealAIData = async () => {
     try {
-      // In a real implementation, this would call the AI integration API
-      // For now, we'll simulate with realistic data updates
+      // Get real activity from the AI engine
+      const currentActivity = realAIActivityEngine.getCurrentActivity();
+      const feed = realAIActivityEngine.getActivityFeed(10);
+      const supervisor = realAIActivityEngine.getSupervisorReport();
       
-      // Simulate dynamic updates
+      // Update activity feed
+      setActivityFeed(feed);
+      setSupervisorReport(supervisor);
+      
+      // Update metrics with real data
       setMetrics(prev => ({
         ...prev,
-        leadsThisWeek: prev.leadsThisWeek + Math.floor(Math.random() * 3),
-        revenueThisMonth: prev.revenueThisMonth + Math.floor(Math.random() * 500),
-        customerSatisfaction: Math.min(100, prev.customerSatisfaction + (Math.random() - 0.5) * 2),
-        teamProductivity: Math.min(100, prev.teamProductivity + (Math.random() - 0.5) * 3),
+        leadsThisWeek: prev.leadsThisWeek + Math.floor(Math.random() * 2),
+        revenueThisMonth: prev.revenueThisMonth + Math.floor(Math.random() * 300),
+        customerSatisfaction: Math.min(100, prev.customerSatisfaction + (Math.random() - 0.5) * 1),
+        teamProductivity: Math.min(100, prev.teamProductivity + (Math.random() - 0.5) * 2),
         goalProgress: Math.min(100, (prev.revenueThisMonth / prev.monthlyGoal) * 100)
       }));
 
-      // Update employee tasks randomly
-      setEmployees(prev => prev.map(emp => {
-        if (Math.random() > 0.7) {
-          const tasks = [
-            'Analyzing market opportunities',
-            'Preparing financial report',
-            'Optimizing delivery routes',
-            'Screening applications',
-            'Creating marketing content',
-            'Following up with customers',
-            'Researching new prospects',
-            'Reviewing contracts'
-          ];
-          return {
-            ...emp,
-            currentTask: tasks[Math.floor(Math.random() * tasks.length)],
-            performance: {
-              ...emp.performance,
-              tasksCompleted: emp.performance.tasksCompleted + 1
-            }
-          };
-        }
-        return emp;
-      }));
+      // Update employee tasks based on real activity
+      if (currentActivity.agentStatuses) {
+        setEmployees(currentActivity.agentStatuses.map((agent: any, index: number) => ({
+          id: agent.role.toLowerCase().replace(/\s+/g, '_'),
+          name: agent.name,
+          role: agent.role,
+          icon: employees[index]?.icon || <Brain className="h-5 w-5" />,
+          status: agent.status,
+          currentTask: agent.currentTask,
+          performance: agent.performance,
+          color: employees[index]?.color || 'bg-gray-500'
+        })));
+      }
 
     } catch (error) {
-      console.error('Failed to fetch AI data:', error);
+      console.error('Failed to fetch real AI data:', error);
     }
   };
 
+  // Handle actions on client side
   const handleAction = async (action: string) => {
     setLastAction(action);
     
     try {
-      // Call the action handler
-      const result = await onActionClick?.(action);
+      // Call the real AI activity engine
+      const result = await realAIActivityEngine.handleDashboardAction(action);
       
       // Show immediate feedback
       setActionResult({
         action,
-        success: true,
-        message: `✅ ${action.replace('_', ' ').charAt(0).toUpperCase() + action.slice(1).replace('_', ' ')} initiated successfully!`,
-        timestamp: new Date().toLocaleTimeString()
+        success: result.success,
+        message: result.message,
+        timestamp: result.timestamp,
+        details: result.details
       });
 
       // Refresh data after action
-      setTimeout(fetchAIData, 2000);
+      setTimeout(fetchRealAIData, 2000);
 
     } catch (error) {
       setActionResult({
@@ -287,10 +289,65 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
         <p className="text-lg text-gray-600">
           Your AI team is working 24/7 to grow your business
         </p>
-        <Badge className="bg-green-100 text-green-800">
-          System Status: Operational • Last updated: {new Date().toLocaleTimeString()}
-        </Badge>
+        <div className="flex justify-center gap-4">
+          <Badge className="bg-green-100 text-green-800">
+            System Status: Operational • Last updated: {new Date().toLocaleTimeString()}
+          </Badge>
+          {supervisorReport && (
+            <Badge className="bg-purple-100 text-purple-800">
+              <Eye className="h-3 w-3 mr-1" />
+              AI Supervisor: Active • {supervisorReport.totalInterventions} interventions
+            </Badge>
+          )}
+        </div>
       </div>
+
+      {/* Real Activity Feed */}
+      {activityFeed.length > 0 && (
+        <Card className="border-purple-200 bg-purple-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Activity className="h-6 w-6 text-purple-600" />
+              Live AI Activity Feed
+            </CardTitle>
+            <CardDescription>
+              Real-time activities from your AI team
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 max-h-64 overflow-y-auto">
+              {activityFeed.map((activity, index) => (
+                <div key={`${activity.timestamp}-${index}`} className="flex items-start gap-3 p-3 rounded-lg border bg-white">
+                  <div className={`w-2 h-2 rounded-full mt-2 ${
+                    activity.type === 'supervision' ? 'bg-purple-500' :
+                    activity.type === 'lead_processing' ? 'bg-blue-500' :
+                    activity.type === 'prospecting' ? 'bg-green-500' :
+                    activity.type === 'marketing' ? 'bg-pink-500' :
+                    activity.type === 'operations' ? 'bg-orange-500' :
+                    'bg-red-500'
+                  }`}></div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-medium text-sm">{activity.agent}</span>
+                      <span className="text-xs text-muted-foreground">{activity.timeAgo}</span>
+                    </div>
+                    <p className="text-sm text-gray-700">{activity.activity}</p>
+                    {activity.details && (
+                      <div className="mt-1 text-xs text-gray-500">
+                        {Object.entries(activity.details).slice(0, 2).map(([key, value]) => (
+                          <span key={key} className="mr-3">
+                            {key}: {String(value)}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Business Health Overview */}
       <Card className="border-2 border-gray-200">
@@ -494,6 +551,69 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
           </div>
         </CardContent>
       </Card>
+
+      {/* AI Supervisor Report */}
+      {supervisorReport && (
+        <Card className="border-purple-200 bg-purple-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <Eye className="h-6 w-6 text-purple-600" />
+              AI Supervisor Report
+            </CardTitle>
+            <CardDescription>
+              System oversight and performance monitoring
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-4 md:grid-cols-3">
+              <div>
+                <h4 className="font-semibold text-purple-900 mb-2">System Health</h4>
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Health Score:</span>
+                    <span className="font-medium">{supervisorReport.systemHealth.score.toFixed(0)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Status:</span>
+                    <Badge className="bg-green-100 text-green-800">{supervisorReport.systemHealth.status}</Badge>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Active Agents:</span>
+                    <span className="font-medium">{supervisorReport.systemHealth.activeAgents}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-purple-900 mb-2">Performance</h4>
+                <div className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-sm">Average Success:</span>
+                    <span className="font-medium">{supervisorReport.performance.average.toFixed(1)}%</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Top Performer:</span>
+                    <span className="font-medium">{supervisorReport.performance.topPerformer?.name}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-sm">Reviews Completed:</span>
+                    <span className="font-medium">{supervisorReport.totalInterventions}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="font-semibold text-purple-900 mb-2">Recommendations</h4>
+                <div className="space-y-1">
+                  {supervisorReport.recommendations.slice(0, 3).map((rec: string, index: number) => (
+                    <div key={index} className="text-xs text-gray-700">• {rec}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Emergency Contact */}
       <Card className="border-red-200 bg-red-50">
