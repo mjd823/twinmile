@@ -5,14 +5,16 @@ import { ensureIndexes } from "@/lib/security/indexes";
 const uri = process.env.MONGODB_URI;
 const options: MongoClientOptions = {
   appName: "twinmile-web",
-  connectTimeoutMS: 30000,
-  socketTimeoutMS: 45000,
-  serverSelectionTimeoutMS: 30000,
-  maxPoolSize: 10,
-  minPoolSize: 2,
-  maxIdleTimeMS: 30000,
+  connectTimeoutMS: 60000,
+  socketTimeoutMS: 60000,
+  serverSelectionTimeoutMS: 60000,
+  maxPoolSize: 5,
+  minPoolSize: 1,
+  maxIdleTimeMS: 60000,
+  heartbeatFrequencyMS: 10000,
   retryWrites: true,
   retryReads: true,
+  compressors: ['snappy', 'zlib'],
 };
 
 let client: MongoClient;
@@ -28,13 +30,35 @@ if (uri) {
 
     if (!globalWithMongo._mongoClientPromise) {
       client = new MongoClient(uri, options);
-      globalWithMongo._mongoClientPromise = client.connect();
+      globalWithMongo._mongoClientPromise = client.connect()
+        .catch(err => {
+          console.error('MongoDB connection failed, retrying...', err.message);
+          // Wait 2 seconds and retry once
+          return new Promise((resolve, reject) => {
+            setTimeout(() => {
+              client.connect()
+                .then(resolve)
+                .catch(reject);
+            }, 2000);
+          });
+        });
     }
     clientPromise = globalWithMongo._mongoClientPromise;
   } else {
     // In production mode, it's best to not use a global variable.
     client = new MongoClient(uri, options);
-    clientPromise = client.connect();
+    clientPromise = client.connect()
+      .catch(err => {
+        console.error('MongoDB connection failed, retrying...', err.message);
+        // Wait 2 seconds and retry once
+        return new Promise((resolve, reject) => {
+          setTimeout(() => {
+            client.connect()
+              .then(resolve)
+              .catch(reject);
+          }, 2000);
+        });
+      });
   }
 }
 
