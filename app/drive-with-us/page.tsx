@@ -190,25 +190,19 @@ export default function DriveWithUsPage() {
                 </div>
               </div>
 
-              <h2 className="mt-10 text-xl font-semibold tracking-tight">Why Twin Mile</h2>
-              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
+              <h2 className="mt-8 text-lg font-semibold tracking-tight">What we need</h2>
+              <div className="mt-3 grid gap-2 text-xs text-foreground/80">
                 <div>Clear communication.</div>
-                <div>Time-critical freight opportunities.</div>
-                <div>Dedicated routes and high-priority loads.</div>
-              </div>
-
-              <h2 className="mt-10 text-xl font-semibold tracking-tight">What we need</h2>
-              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
                 <div>Owner-operators with their own equipment.</div>
                 <div>Professional, on-time performance.</div>
                 <div>Safety-first mindset.</div>
               </div>
 
-              <h2 className="mt-10 text-xl font-semibold tracking-tight">Before you apply</h2>
-              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
+              <h2 className="mt-8 text-lg font-semibold tracking-tight">Before you apply</h2>
+              <div className="mt-3 grid gap-2 text-xs text-foreground/80">
                 <div>Have your equipment type and availability ready.</div>
                 <div>Be specific about preferred lanes and start date (ASAP is fine).</div>
-                <div>If you’re an owner-operator, mention your insurance and operating authority in notes (optional).</div>
+                <div>If you're an owner-operator, mention your insurance and operating authority.</div>
               </div>
 
               <div className="mt-8 flex flex-wrap gap-3">
@@ -237,11 +231,16 @@ export default function DriveWithUsPage() {
 
           <div className="mt-14 rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
             <h2 className="text-xl font-semibold tracking-tight">FAQ</h2>
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div className="mt-6 space-y-3">
               {faqs.map((f) => (
-                <div key={f.question} className="rounded-lg border border-border/60 bg-background/20 p-4">
-                  <div className="text-sm font-semibold tracking-tight">{f.question}</div>
-                  <div className="mt-2 text-sm text-muted-foreground">{f.answer}</div>
+                <div key={f.question} className="group rounded-lg border border-border/40 bg-background/10 p-4 transition-all hover:border-primary/30 hover:bg-primary/5">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary/60 group-hover:bg-primary transition-colors" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-foreground">{f.question}</div>
+                      <div className="mt-2 text-sm text-muted-foreground leading-relaxed">{f.answer}</div>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
