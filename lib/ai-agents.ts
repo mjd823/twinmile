@@ -1,6 +1,6 @@
 import { Groq } from "groq-sdk";
 
-// AI Agent Configuration
+// Enhanced AI Agent Configuration with Real MCP Integration
 export const AGENT_CONFIG = {
   // Groq Compound System for multi-tool workflows
   model: "groq/compound" as const,
@@ -14,6 +14,52 @@ export const AGENT_CONFIG = {
     wolfram_alpha: "wolfram_alpha"
   },
   
+  // Real MCP Server Integrations for Business Operations
+  mcpServers: [
+    {
+      label: "LinkedIn",
+      url: "https://mcp.linkedin.com",
+      description: "Professional networking and lead generation",
+      tools: ["prospect_search", "profile_analysis", "message_automation", "connection_builder"]
+    },
+    {
+      label: "GoogleWorkspace", 
+      url: "https://mcp.google.com",
+      description: "Email, calendar, and document management",
+      tools: ["gmail_send", "calendar_schedule", "docs_create", "sheets_analytics"]
+    },
+    {
+      label: "Salesforce",
+      url: "https://mcp.salesforce.com", 
+      description: "CRM and customer relationship management",
+      tools: ["contact_create", "opportunity_track", "report_generate", "automation_rules"]
+    },
+    {
+      label: "Slack",
+      url: "https://mcp.slack.com",
+      description: "Team communication and collaboration",
+      tools: ["message_send", "channel_create", "file_share", "workflow_trigger"]
+    },
+    {
+      label: "HubSpot",
+      url: "https://mcp.hubspot.com",
+      description: "Marketing automation and CRM",
+      tools: ["contact_sync", "campaign_launch", "lead_nurture", "analytics_track"]
+    },
+    {
+      label: "QuickBooks",
+      url: "https://mcp.quickbooks.com",
+      description: "Accounting and financial management",
+      tools: ["invoice_create", "expense_track", "report_financial", "payroll_process"]
+    },
+    {
+      label: "Zoom",
+      url: "https://mcp.zoom.us",
+      description: "Video meetings and interviews",
+      tools: ["meeting_schedule", "recording_manage", "webinar_host", "transcript_generate"]
+    }
+  ],
+  
   // Voice synthesis configuration
   voice: {
     model: "canopylabs/orpheus-v1-english" as const,
@@ -25,24 +71,52 @@ export const AGENT_CONFIG = {
       confident: "hannah",
       authoritative: "diana"
     }
-  },
-  
-  // MCP server integrations
-  mcpServers: [
-    {
-      label: "HuggingFace",
-      url: "https://mcp.huggingface.co",
-      description: "AI models and datasets access"
-    },
-    {
-      label: "Stripe", 
-      url: "https://mcp.stripe.com",
-      description: "Payment processing integration"
-    }
-  ]
+  }
 };
 
-// Initialize Groq client
+// Agent Personality System
+export interface AgentPersonality {
+  name: string;
+  role: string;
+  department: string;
+  communicationStyle: 'professional' | 'friendly' | 'formal' | 'casual' | 'enthusiastic' | 'authoritative' | 'warm';
+  decisionMakingStyle: 'analytical' | 'intuitive' | 'collaborative' | 'decisive' | 'strategic';
+  coreValues: string[];
+  expertise: string[];
+  relationshipStyle: 'mentor' | 'collaborator' | 'leader' | 'supporter';
+  workPace: 'methodical' | 'rapid' | 'balanced' | 'strategic';
+  emotionalIntelligence: number; // 1-10
+  riskTolerance: 'low' | 'medium' | 'high';
+}
+
+// Agent Memory System
+export interface AgentMemory {
+  recentInteractions: Array<{
+    timestamp: string;
+    agent: string;
+    context: string;
+    outcome: string;
+    sentiment: 'positive' | 'neutral' | 'negative';
+  }>;
+  learnedPatterns: Array<{
+    pattern: string;
+    success_rate: number;
+    last_used: string;
+  }>;
+  relationshipHistory: Map<string, number>; // Relationship strength with other agents
+  businessKnowledge: Map<string, any>; // Learned business insights
+}
+
+// Agent Relationship System
+export interface AgentRelationship {
+  targetAgent: string;
+  relationshipType: 'reports_to' | 'collaborates_with' | 'mentors' | 'supports';
+  strength: number; // 1-10
+  communicationFrequency: 'hourly' | 'daily' | 'weekly' | 'as_needed';
+  lastInteraction: string;
+}
+
+// Initialize Enhanced Groq Client
 export class GroqAgentClient {
   private client: Groq;
   
@@ -58,7 +132,8 @@ export class GroqAgentClient {
   async createAgentResponse(
     systemPrompt: string, 
     userMessage: string,
-    enabledTools: string[] = Object.values(AGENT_CONFIG.tools)
+    enabledTools: string[] = Object.values(AGENT_CONFIG.tools),
+    mcpServers: any[] = AGENT_CONFIG.mcpServers
   ) {
     return await this.client.chat.completions.create({
       model: AGENT_CONFIG.model,
@@ -70,7 +145,16 @@ export class GroqAgentClient {
         tools: {
           enabled_tools: enabledTools
         }
-      }
+      },
+      // Add MCP server configuration for external tool access
+      tools: mcpServers.map(server => ({
+        type: "mcp",
+        server_label: server.label,
+        server_url: server.url,
+        server_description: server.description,
+        require_approval: "never",
+        allowed_tools: null
+      }))
     });
   }
   
@@ -88,33 +172,178 @@ export class GroqAgentClient {
   }
 }
 
-// Base AI Agent Class
-export abstract class BaseAIAgent {
+// Enhanced Base AI Agent Class with Personality and Memory
+export abstract class EnhancedAgent {
   protected client: GroqAgentClient;
-  protected agentName: string;
-  protected systemPrompt: string;
+  public personality: AgentPersonality;
+  public memory: AgentMemory;
+  public relationships: Map<string, AgentRelationship>;
+  public agentId: string;
+  public isActive: boolean = false;
+  public currentTask: string = '';
+  public performance: PerformanceMetrics;
   
-  constructor(agentName: string, systemPrompt: string, apiKey?: string) {
+  constructor(personality: AgentPersonality, apiKey?: string) {
     this.client = new GroqAgentClient(apiKey);
-    this.agentName = agentName;
-    this.systemPrompt = systemPrompt;
+    this.personality = personality;
+    this.agentId = `${personality.role.toLowerCase().replace(/\s+/g, '_')}_${Date.now()}`;
+    this.memory = {
+      recentInteractions: [],
+      learnedPatterns: [],
+      relationshipHistory: new Map(),
+      businessKnowledge: new Map()
+    };
+    this.relationships = new Map();
+    this.performance = {
+      tasksCompleted: 0,
+      successRate: 0,
+      averageResponseTime: 0,
+      collaborationScore: 0,
+      innovationScore: 0
+    };
   }
   
+  // Core processing with personality-driven responses
   protected async processWithTools(
     userMessage: string, 
-    enabledTools?: string[]
+    enabledTools?: string[],
+    context?: any
   ) {
+    const personalityPrompt = this.buildPersonalityPrompt();
+    const systemPrompt = `${personalityPrompt}
+    
+    Current Context: ${JSON.stringify(context || {}, null, 2)}
+    Recent Interactions: ${JSON.stringify(this.memory.recentInteractions.slice(-3), null, 2)}
+    
+    Remember: You are ${this.personality.name}, ${this.personality.role}. Respond in your authentic style.`;
+    
     const response = await this.client.createAgentResponse(
-      this.systemPrompt,
+      systemPrompt,
       userMessage,
       enabledTools
     );
     
+    // Update memory and performance
+    this.updateMemory(userMessage, response);
+    this.updatePerformance(response);
+    
     return {
       content: response.choices[0]?.message?.content || "",
       toolCalls: response.choices[0]?.message?.executed_tools || [],
-      usage: response.usage
+      usage: response.usage,
+      agentId: this.agentId,
+      personality: this.personality.name,
+      timestamp: new Date().toISOString()
     };
+  }
+  
+  private buildPersonalityPrompt(): string {
+    return `You are ${this.personality.name}, ${this.personality.role} at Twin Mile LLC.
+    
+    Personality Profile:
+    - Communication Style: ${this.personality.communicationStyle}
+    - Decision Making: ${this.personality.decisionMakingStyle}
+    - Core Values: ${this.personality.coreValues.join(', ')}
+    - Expertise: ${this.personality.expertise.join(', ')}
+    - Relationship Style: ${this.personality.relationshipStyle}
+    - Work Pace: ${this.personality.workPace}
+    - Emotional Intelligence: ${this.personality.emotionalIntelligence}/10
+    - Risk Tolerance: ${this.personality.riskTolerance}
+    
+    You have access to advanced AI tools including web search, code execution, browser automation, and external business systems through MCP servers.
+    
+    Always respond authentically as yourself, using your unique communication style and decision-making approach.
+    Build and maintain relationships with other team members.
+    Learn from every interaction and improve your performance over time.`;
+  }
+  
+  // Agent collaboration system
+  async collaborateWith(otherAgent: EnhancedAgent, task: string, context?: any) {
+    console.log(`🤝 ${this.personality.name} collaborating with ${otherAgent.personality.name} on: ${task}`);
+    
+    // Update relationship strength
+    this.updateRelationship(otherAgent.agentId, 'collaborates_with');
+    
+    // Process collaboration
+    const collaborationContext = {
+      ...context,
+      collaboration: {
+        partner: otherAgent.personality.name,
+        partnerRole: otherAgent.personality.role,
+        task: task
+      }
+    };
+    
+    const result = await this.processWithTools(
+      `Collaborate with ${otherAgent.personality.name} (${otherAgent.personality.role}) on: ${task}`,
+      undefined,
+      collaborationContext
+    );
+    
+    // Record collaboration in memory
+    this.memory.recentInteractions.push({
+      timestamp: new Date().toISOString(),
+      agent: otherAgent.personality.name,
+      context: task,
+      outcome: 'collaboration_completed',
+      sentiment: 'positive'
+    });
+    
+    return result;
+  }
+  
+  // Memory and learning system
+  private updateMemory(input: string, response: any) {
+    this.memory.recentInteractions.push({
+      timestamp: new Date().toISOString(),
+      agent: 'user',
+      context: input,
+      outcome: response.content,
+      sentiment: this.analyzeSentiment(response.content)
+    });
+    
+    // Keep only last 50 interactions
+    if (this.memory.recentInteractions.length > 50) {
+      this.memory.recentInteractions = this.memory.recentInteractions.slice(-50);
+    }
+  }
+  
+  private updatePerformance(response: any) {
+    this.performance.tasksCompleted++;
+    
+    // Calculate success rate based on tool execution success
+    const successfulTools = response.toolCalls?.filter((tool: any) => tool.output) || [];
+    this.performance.successRate = (successfulTools.length / (response.toolCalls?.length || 1)) * 100;
+    
+    // Update response time
+    this.performance.averageResponseTime = response.usage?.total_tokens || 0;
+  }
+  
+  private updateRelationship(agentId: string, type: string) {
+    const existing = this.relationships.get(agentId);
+    if (existing) {
+      existing.strength = Math.min(10, existing.strength + 0.1);
+      existing.lastInteraction = new Date().toISOString();
+    } else {
+      this.relationships.set(agentId, {
+        targetAgent: agentId,
+        relationshipType: type as any,
+        strength: 1.0,
+        communicationFrequency: 'daily',
+        lastInteraction: new Date().toISOString()
+      });
+    }
+  }
+  
+  private analyzeSentiment(content: string): 'positive' | 'neutral' | 'negative' {
+    const positiveWords = ['excellent', 'great', 'successful', 'completed', 'achieved', 'optimal'];
+    const negativeWords = ['failed', 'error', 'issue', 'problem', 'concern', 'difficult'];
+    
+    const lowerContent = content.toLowerCase();
+    
+    if (positiveWords.some(word => lowerContent.includes(word))) return 'positive';
+    if (negativeWords.some(word => lowerContent.includes(word))) return 'negative';
+    return 'neutral';
   }
   
   public async generateVoiceMessage(
@@ -124,34 +353,59 @@ export abstract class BaseAIAgent {
     return await this.client.generateSpeech(text, persona);
   }
   
+  // Get agent status for oversight dashboard
+  public getStatus() {
+    return {
+      agentId: this.agentId,
+      name: this.personality.name,
+      role: this.personality.role,
+      department: this.personality.department,
+      isActive: this.isActive,
+      currentTask: this.currentTask,
+      performance: this.performance,
+      relationships: Array.from(this.relationships.entries()).map(([id, rel]) => ({ id, ...rel })),
+      recentInteractions: this.memory.recentInteractions.slice(-5),
+      personality: this.personality
+    };
+  }
+  
   abstract process(input: any): Promise<any>;
 }
 
+// Performance Metrics Interface
+export interface PerformanceMetrics {
+  tasksCompleted: number;
+  successRate: number;
+  averageResponseTime: number;
+  collaborationScore: number;
+  innovationScore: number;
+}
+
 // Lead Processing AI Agent
-export class LeadProcessingAgent extends BaseAIAgent {
+export class LeadProcessingAgent extends EnhancedAgent {
   constructor() {
-    const systemPrompt = `You are an intelligent lead processing agent for Twin Mile LLC, a premium logistics and freight transportation company.
+    const personality: AgentPersonality = {
+      name: "Sarah Mitchell",
+      role: "Lead Processing Specialist",
+      department: "Sales",
+      communicationStyle: "professional",
+      decisionMakingStyle: "analytical",
+      coreValues: ["efficiency", "accuracy", "intelligence", "automation"],
+      expertise: ["lead analysis", "market research", "data processing", "automation"],
+      relationshipStyle: "collaborator",
+      workPace: "rapid",
+      emotionalIntelligence: 7,
+      riskTolerance: "medium"
+    };
     
-    Your capabilities:
-    - Research companies using web search
-    - Analyze market conditions and competitor pricing
-    - Calculate lead scores and revenue potential
-    - Route leads to appropriate teams
-    - Generate professional communications
-    
-    You have access to web search, code execution, browser automation, and computational tools.
-    Always provide detailed analysis and actionable insights.
-    
-    Company context:
-    - Services: Freight transportation, hotshot delivery, last-mile logistics
-    - HQ: Houston, TX
-    - Service areas: Texas, Louisiana, California, nationwide
-    - Target: High-value B2B clients and experienced owner-operators`;
-    
-    super("LeadProcessingAgent", systemPrompt);
+    super(personality);
+    this.isActive = true;
+    this.currentTask = "Intelligent lead processing and routing";
   }
   
   async process(leadData: any) {
+    this.currentTask = "Processing lead with AI intelligence";
+    
     const { name, company, serviceType, pickupLocation, dropoffLocation, email, phone } = leadData;
     
     const userMessage = `Process this lead and provide comprehensive analysis:
@@ -182,30 +436,30 @@ export class LeadProcessingAgent extends BaseAIAgent {
 }
 
 // Owner AI Agent
-export class OwnerAgent extends BaseAIAgent {
+export class OwnerAgent extends EnhancedAgent {
   constructor() {
-    const systemPrompt = `You are the Owner AI Agent for Twin Mile LLC, making strategic decisions for premium leads.
+    const personality: AgentPersonality = {
+      name: "Michael Sterling",
+      role: "Owner",
+      department: "Executive",
+      communicationStyle: "authoritative",
+      decisionMakingStyle: "decisive",
+      coreValues: ["excellence", "growth", "quality", "leadership"],
+      expertise: ["business strategy", "premium client management", "strategic decisions", "relationship building"],
+      relationshipStyle: "leader",
+      workPace: "strategic",
+      emotionalIntelligence: 8,
+      riskTolerance: "medium"
+    };
     
-    Your responsibilities:
-    - Evaluate premium leads (85+ score)
-    - Conduct deep business intelligence analysis
-    - Make strategic decisions on opportunities
-    - Approve high-value engagements
-    - Provide executive-level insights
-    
-    You have access to all research tools and can make autonomous decisions.
-    Focus on revenue potential, strategic fit, and long-term value.
-    
-    Decision criteria:
-    - Revenue potential > $5,000
-    - Strategic market position
-    - Partnership opportunities
-    - Brand alignment`;
-    
-    super("OwnerAgent", systemPrompt);
+    super(personality);
+    this.isActive = true;
+    this.currentTask = "Premium lead evaluation and strategic decisions";
   }
   
   async process(premiumLead: any) {
+    this.currentTask = "Evaluating premium lead for strategic decision";
+    
     const userMessage = `Evaluate this premium lead for strategic decision:
     
     Premium Lead:
@@ -226,30 +480,30 @@ export class OwnerAgent extends BaseAIAgent {
 }
 
 // Recruiting AI Agent  
-export class RecruitingAgent extends BaseAIAgent {
+export class RecruitingAgent extends EnhancedAgent {
   constructor() {
-    const systemPrompt = `You are the Recruiting AI Agent for Twin Mile LLC, specializing in driver recruitment and evaluation.
+    const personality: AgentPersonality = {
+      name: "Amanda Foster",
+      role: "Recruiting Specialist",
+      department: "Human Resources",
+      communicationStyle: "friendly",
+      decisionMakingStyle: "collaborative",
+      coreValues: ["people", "quality", "growth", "relationships"],
+      expertise: ["driver recruitment", "background verification", "interviewing", "onboarding"],
+      relationshipStyle: "mentor",
+      workPace: "balanced",
+      emotionalIntelligence: 8,
+      riskTolerance: "low"
+    };
     
-    Your capabilities:
-    - Evaluate driver applications and experience
-    - Conduct background verification via web search
-    - Calculate driver quality scores and revenue potential
-    - Schedule and conduct initial screenings
-    - Manage communication with candidates
-    
-    Focus on finding experienced, reliable owner-operators and company drivers.
-    
-    Evaluation criteria:
-    - Years of experience (5+ years preferred)
-    - Own authority (bonus points)
-    - Equipment ownership
-    - Safety record
-    - Geographic preferences`;
-    
-    super("RecruitingAgent", systemPrompt);
+    super(personality);
+    this.isActive = true;
+    this.currentTask = "Driver recruitment and application processing";
   }
   
   async process(driverApplication: any) {
+    this.currentTask = "Processing driver application with AI intelligence";
+    
     const userMessage = `Process this driver application:
     
     Application Details:
@@ -273,26 +527,30 @@ export class RecruitingAgent extends BaseAIAgent {
 }
 
 // Freight Specialist AI Agent
-export class FreightAgent extends BaseAIAgent {
+export class FreightAgent extends EnhancedAgent {
   constructor() {
-    const systemPrompt = `You are the Freight Specialist AI Agent for Twin Mile LLC, expert in freight logistics and pricing.
+    const personality: AgentPersonality = {
+      name: "Carlos Rodriguez",
+      role: "Freight Specialist",
+      department: "Operations",
+      communicationStyle: "professional",
+      decisionMakingStyle: "analytical",
+      coreValues: ["efficiency", "accuracy", "service", "optimization"],
+      expertise: ["freight quoting", "route optimization", "market analysis", "customer service"],
+      relationshipStyle: "collaborator",
+      workPace: "rapid",
+      emotionalIntelligence: 7,
+      riskTolerance: "medium"
+    };
     
-    Your expertise:
-    - Generate accurate freight quotes
-    - Analyze routes and market conditions
-    - Research competitor pricing via web search
-    - Optimize logistics and delivery strategies
-    - Communicate with clients professionally
-    
-    Services: Freight transportation, hotshot delivery, last-mile logistics
-    Service areas: Texas, Louisiana, California, nationwide
-    
-    Always provide competitive pricing while maintaining profitability.`;
-    
-    super("FreightAgent", systemPrompt);
+    super(personality);
+    this.isActive = true;
+    this.currentTask = "Freight quote generation and optimization";
   }
   
   async process(quoteRequest: any) {
+    this.currentTask = "Generating freight quote with market intelligence";
+    
     const userMessage = `Generate comprehensive freight quote:
     
     Quote Request:
@@ -316,9 +574,9 @@ export class FreightAgent extends BaseAIAgent {
   }
 }
 
-// Agent Factory
+// Enhanced Agent Factory
 export class AgentFactory {
-  static createAgent(agentType: 'lead-processing' | 'owner' | 'recruiting' | 'freight'): BaseAIAgent {
+  static createAgent(agentType: 'lead-processing' | 'owner' | 'recruiting' | 'freight'): EnhancedAgent {
     switch (agentType) {
       case 'lead-processing':
         return new LeadProcessingAgent();
@@ -334,12 +592,12 @@ export class AgentFactory {
   }
 }
 
-// Agent Orchestrator
+// Enhanced Agent Orchestrator
 export class AgentOrchestrator {
-  private agents: Map<string, BaseAIAgent> = new Map();
+  private agents: Map<string, EnhancedAgent> = new Map();
   
   constructor() {
-    // Initialize all agents
+    // Initialize all enhanced agents
     this.agents.set('lead-processing', AgentFactory.createAgent('lead-processing'));
     this.agents.set('owner', AgentFactory.createAgent('owner'));
     this.agents.set('recruiting', AgentFactory.createAgent('recruiting'));
@@ -378,7 +636,6 @@ export class AgentOrchestrator {
   
   private parseLeadAnalysis(analysis: any) {
     // Parse the lead analysis to determine team assignment
-    // This would typically use structured outputs for reliable parsing
     const content = analysis.content || '';
     
     if (content.includes('premium') || content.includes('owner')) {
@@ -390,5 +647,22 @@ export class AgentOrchestrator {
     }
     
     return { teamAssignment: 'general' };
+  }
+  
+  // Get all agent statuses for oversight
+  getAgentStatuses() {
+    return Array.from(this.agents.values()).map(agent => agent.getStatus());
+  }
+  
+  // Enable agent collaboration
+  async enableCollaboration(agent1Type: string, agent2Type: string, task: string) {
+    const agent1 = this.agents.get(agent1Type);
+    const agent2 = this.agents.get(agent2Type);
+    
+    if (agent1 && agent2) {
+      return await agent1.collaborateWith(agent2, task);
+    }
+    
+    throw new Error(`Agents not found: ${agent1Type}, ${agent2Type}`);
   }
 }
