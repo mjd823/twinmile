@@ -115,25 +115,78 @@ export default function DriveWithUsPage() {
             </div>
           </div>
 
+          <div className="mb-10 rounded-xl border border-primary/20 bg-primary/5 p-6 backdrop-blur">
+            <h2 className="text-lg font-semibold tracking-tight">Pay & Perks</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">$250k-$350k+ Annual Gross</div>
+                  <div className="mt-1 text-xs text-muted-foreground">High-value, consistent lanes with strong earning potential</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">100% Fuel Surcharge</div>
+                  <div className="mt-1 text-xs text-muted-foreground">No hidden fees — you keep the full surcharge</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Weekly Direct Deposit</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Reliable, transparent settlements every week</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">National Maintenance Network</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Access corporate pricing at Love's shops</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Business Support</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Fuel advances, ELD, and fuel discounts included</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Power Only Focus</div>
+                  <div className="mt-1 text-xs text-muted-foreground">No trailer fees or maintenance — maximize your uptime</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-10 md:grid-cols-2">
             <div>
               <h2 className="text-xl font-semibold tracking-tight">How it works</h2>
               <div className="mt-4 grid gap-3">
-                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
-                  <div className="text-xs font-semibold text-foreground/80">01 · Apply</div>
-                  <div className="mt-1">Submit the short form with your contact info, equipment, and availability.</div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-3 text-sm text-foreground/80 backdrop-blur">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">1</div>
+                    <div className="font-medium">Apply</div>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">Submit the short form with your contact info, equipment, and availability.</div>
                 </div>
-                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
-                  <div className="text-xs font-semibold text-foreground/80">02 · Review</div>
-                  <div className="mt-1">We review your application and match it against current lanes and freight needs.</div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-3 text-sm text-foreground/80 backdrop-blur">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">2</div>
+                    <div className="font-medium">Confirm</div>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">Quick call/text to confirm equipment, routes, and expectations.</div>
                 </div>
-                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
-                  <div className="text-xs font-semibold text-foreground/80">03 · Confirm</div>
-                  <div className="mt-1">Quick call/text to confirm equipment, routes, and expectations.</div>
-                </div>
-                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
-                  <div className="text-xs font-semibold text-foreground/80">04 · Onboard</div>
-                  <div className="mt-1">If it’s a fit, we’ll guide you through onboarding and get you dispatched.</div>
+                <div className="rounded-lg border border-border/60 bg-card/30 p-3 text-sm text-foreground/80 backdrop-blur">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">3</div>
+                    <div className="font-medium">Onboard</div>
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">If it's a fit, we'll guide you through onboarding and get you dispatched.</div>
                 </div>
               </div>
 
@@ -142,7 +195,6 @@ export default function DriveWithUsPage() {
                 <div>Clear communication.</div>
                 <div>Time-critical freight opportunities.</div>
                 <div>Dedicated routes and high-priority loads.</div>
-                <div>Nationwide lanes (TX, LA, CA and beyond).</div>
               </div>
 
               <h2 className="mt-10 text-xl font-semibold tracking-tight">What we need</h2>
