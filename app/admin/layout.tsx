@@ -22,6 +22,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
           <Link
             className="shrink-0 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            href="/admin/inbox"
+          >
+            Inbox
+          </Link>
+          <Link
+            className="shrink-0 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             href="/admin/fleet"
           >
             Fleet
@@ -61,12 +67,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             href="/admin/events"
           >
             Events
-          </Link>
-          <Link
-            className="shrink-0 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            href="/admin/inbox"
-          >
-            Inbox
           </Link>
           <Link
             className="shrink-0 rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -97,6 +97,12 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </Link>
           <Link
             className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            href="/admin/inbox"
+          >
+            Inbox
+          </Link>
+          <Link
+            className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             href="/admin/fleet"
           >
             Fleet
@@ -136,12 +142,6 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             href="/admin/events"
           >
             Events
-          </Link>
-          <Link
-            className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            href="/admin/inbox"
-          >
-            Inbox
           </Link>
           <Link
             className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"

@@ -16,6 +16,10 @@ type Status =
 
 export function DriverApplicationForm() {
   const [status, setStatus] = React.useState<Status>({ state: "idle" });
+  const fieldClassName =
+    "h-10 border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 focus-visible:ring-primary/60";
+  const areaClassName =
+    "min-h-[108px] border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 focus-visible:ring-primary/60";
 
   React.useEffect(() => { captureUtm(); }, []);
 
@@ -42,70 +46,72 @@ export function DriverApplicationForm() {
   return (
     <form onSubmit={onSubmit} className="grid gap-4">
       <div className="grid gap-2">
-        <label className="text-sm font-medium" htmlFor="fullName">
+        <label className="text-sm font-semibold text-foreground/95" htmlFor="fullName">
           Full name
         </label>
-        <Input id="fullName" name="fullName" autoComplete="name" required />
+        <Input id="fullName" name="fullName" autoComplete="name" className={fieldClassName} required />
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="email">
+          <label className="text-sm font-semibold text-foreground/95" htmlFor="email">
             Email
           </label>
-          <Input id="email" name="email" type="email" autoComplete="email" required />
+          <Input id="email" name="email" type="email" autoComplete="email" className={fieldClassName} required />
         </div>
         <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="phone">
+          <label className="text-sm font-semibold text-foreground/95" htmlFor="phone">
             Phone
           </label>
-          <Input id="phone" name="phone" autoComplete="tel" required />
+          <Input id="phone" name="phone" autoComplete="tel" className={fieldClassName} required />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="truckType">
+          <label className="text-sm font-semibold text-foreground/95" htmlFor="truckType">
             Truck / trailer type
           </label>
           <Input
             id="truckType"
             name="truckType"
             placeholder="26ft box • Hotshot • Semi • Sprinter…"
+            className={fieldClassName}
             required
           />
         </div>
         <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="yearsExperience">
+          <label className="text-sm font-semibold text-foreground/95" htmlFor="yearsExperience">
             Years experience (optional)
           </label>
-          <Input id="yearsExperience" name="yearsExperience" placeholder="e.g. 3" />
+          <Input id="yearsExperience" name="yearsExperience" placeholder="e.g. 3" className={fieldClassName} />
         </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="preferredRoutes">
+          <label className="text-sm font-semibold text-foreground/95" htmlFor="preferredRoutes">
             Preferred routes (optional)
           </label>
-          <Input id="preferredRoutes" name="preferredRoutes" placeholder="TX/LA • Regional • OTR…" />
+          <Input id="preferredRoutes" name="preferredRoutes" placeholder="TX/LA • Regional • OTR…" className={fieldClassName} />
         </div>
         <div className="grid gap-2">
-          <label className="text-sm font-medium" htmlFor="startDate">
+          <label className="text-sm font-semibold text-foreground/95" htmlFor="startDate">
             Start date (optional)
           </label>
-          <Input id="startDate" name="startDate" placeholder="ASAP" />
+          <Input id="startDate" name="startDate" placeholder="ASAP" className={fieldClassName} />
         </div>
       </div>
 
       <div className="grid gap-2">
-        <label className="text-sm font-medium" htmlFor="notes">
+        <label className="text-sm font-semibold text-foreground/95" htmlFor="notes">
           Notes (optional)
         </label>
         <Textarea
           id="notes"
           name="notes"
           placeholder="Tell us about your equipment, endorsements, availability…"
+          className={areaClassName}
         />
       </div>
 
@@ -119,7 +125,7 @@ export function DriverApplicationForm() {
       </Button>
 
       {status.state === "success" ? (
-        <div className="rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm text-muted-foreground">
+        <div className="rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-sm text-foreground/90">
           Thanks — we received your application. We’ll reach out shortly.
         </div>
       ) : null}

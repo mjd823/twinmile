@@ -1731,6 +1731,98 @@ export async function updateLeadAction(
   return { ok: true };
 }
 
+export async function deleteLeadAction(
+  kind: "quotes" | "drivers",
+  leadId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  const admin = auth.admin;
+
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+  if (!/^[0-9a-fA-F]{24}$/.test(leadId)) return { ok: false, error: "Invalid lead id." };
+
+  const client = await clientPromise;
+  const db = client.db();
+  const leadObjectId = new ObjectId(leadId);
+  const collection = kind === "quotes" ? "leads_quotes" : "leads_drivers";
+
+  const existing = await db.collection(collection).findOne({ _id: leadObjectId }, { projection: { isArchived: 1 } });
+  if (!existing) return { ok: true };
+  if ((existing as any).isArchived) return { ok: true };
+
+  await db.collection(collection).updateOne(
+    { _id: leadObjectId },
+    {
+      $set: {
+        isArchived: true,
+        archivedAt: new Date(),
+        archivedByUserId: String((admin as any)._id),
+        updatedAt: new Date(),
+      },
+      $push: {
+        notes: {
+          at: new Date(),
+          actorUserId: String((admin as any)._id),
+          message: "Archived from admin inbox.",
+        },
+      },
+    } as any
+  );
+
+  return { ok: true };
+}
+
+export async function restoreLeadAction(
+  kind: "quotes" | "drivers",
+  leadId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  const admin = auth.admin;
+
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+  if (!/^[0-9a-fA-F]{24}$/.test(leadId)) return { ok: false, error: "Invalid lead id." };
+
+  const client = await clientPromise;
+  const db = client.db();
+  const leadObjectId = new ObjectId(leadId);
+  const collection = kind === "quotes" ? "leads_quotes" : "leads_drivers";
+
+  const existing = await db.collection(collection).findOne({ _id: leadObjectId }, { projection: { isArchived: 1 } });
+  if (!existing) return { ok: true };
+  if (!(existing as any).isArchived) return { ok: true };
+
+  await db.collection(collection).updateOne(
+    { _id: leadObjectId },
+    {
+      $set: {
+        isArchived: false,
+        updatedAt: new Date(),
+      },
+      $unset: {
+        archivedAt: "",
+        archivedByUserId: "",
+      },
+      $push: {
+        notes: {
+          at: new Date(),
+          actorUserId: String((admin as any)._id),
+          message: "Restored to admin inbox.",
+        },
+      },
+    } as any
+  );
+
+  return { ok: true };
+}
+
 const ConvertQuoteLeadSchema = z.object({
   createLoad: z.boolean().default(true),
   contractName: z.string().min(1).max(140).optional(),

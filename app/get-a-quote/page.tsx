@@ -47,7 +47,7 @@ export default function GetAQuotePage() {
               Fast response • Nationwide coverage
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-5xl">Get a Quote</h1>
-            <p className="mt-4 text-muted-foreground">
+            <p className="mt-4 text-base text-foreground/85 md:text-lg">
               Tell us what you’re moving and where it’s going. We’ll respond fast with a clear plan.
             </p>
           </div>
@@ -57,20 +57,20 @@ export default function GetAQuotePage() {
       <section>
         <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
           <div className="grid gap-10 md:grid-cols-2">
-            <div className="rounded-xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur">
+            <div className="rounded-xl border border-primary/25 bg-card/55 p-6 shadow-xl shadow-black/20 backdrop-blur">
               <QuoteForm />
             </div>
 
             <div>
               <h2 className="text-xl font-semibold tracking-tight">What happens next</h2>
-              <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
                 <div>Fast response and clear communication.</div>
                 <div>Time-critical support for urgent loads.</div>
                 <div>Nationwide coverage — local to long-haul.</div>
               </div>
 
               <h2 className="mt-10 text-xl font-semibold tracking-tight">Service focus</h2>
-              <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
                 <div>Freight Transportation</div>
                 <div>Hotshot Trucking</div>
                 <div>Last-mile delivery</div>

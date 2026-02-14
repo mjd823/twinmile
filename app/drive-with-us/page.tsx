@@ -82,7 +82,7 @@ export default function DriveWithUsPage() {
               Owner-operators & drivers • Nationwide lanes
             </div>
             <h1 className="mt-5 text-3xl font-semibold tracking-tight md:text-5xl">Drive With Us</h1>
-            <p className="mt-4 text-muted-foreground">
+            <p className="mt-4 text-base text-foreground/85 md:text-lg">
               Apply in minutes. We’ll review and reach out with next steps.
               Owner-operators and professional drivers — nationwide lanes.
             </p>
@@ -93,25 +93,25 @@ export default function DriveWithUsPage() {
       <section>
         <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
           <div className="mb-10 grid gap-6 sm:grid-cols-2 md:grid-cols-4">
-            <div className="rounded-xl border border-primary/40 bg-primary/5 p-6 backdrop-blur">
+            <div className="rounded-xl border border-primary/40 bg-primary/8 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Owner-operators</div>
               <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">80% Gross</div>
-              <div className="mt-2 text-sm text-muted-foreground">To the truck. Competitive pay, transparent settlement.</div>
+              <div className="mt-2 text-sm text-foreground/80">To the truck. Competitive pay, transparent settlement.</div>
             </div>
-            <div className="rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Communication</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">Clear</div>
-              <div className="mt-2 text-sm text-muted-foreground">Professional expectations and tight updates.</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">Clear</div>
+              <div className="mt-2 text-sm text-foreground/80">Professional expectations and tight updates.</div>
             </div>
-            <div className="rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Lanes</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">Nationwide</div>
-              <div className="mt-2 text-sm text-muted-foreground">Strong coverage across TX, LA, CA and beyond.</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">Nationwide</div>
+              <div className="mt-2 text-sm text-foreground/80">Strong coverage across TX, LA, CA and beyond.</div>
             </div>
-            <div className="rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Opportunity</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight">Time‑critical</div>
-              <div className="mt-2 text-sm text-muted-foreground">High‑priority loads and dedicated routes.</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">Time‑critical</div>
+              <div className="mt-2 text-sm text-foreground/80">High‑priority loads and dedicated routes.</div>
             </div>
           </div>
 
@@ -119,26 +119,26 @@ export default function DriveWithUsPage() {
             <div>
               <h2 className="text-xl font-semibold tracking-tight">How it works</h2>
               <div className="mt-4 grid gap-3">
-                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
                   <div className="text-xs font-semibold text-foreground/80">01 · Apply</div>
                   <div className="mt-1">Submit the short form with your contact info, equipment, and availability.</div>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
                   <div className="text-xs font-semibold text-foreground/80">02 · Review</div>
                   <div className="mt-1">We review your application and match it against current lanes and freight needs.</div>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
                   <div className="text-xs font-semibold text-foreground/80">03 · Confirm</div>
                   <div className="mt-1">Quick call/text to confirm equipment, routes, and expectations.</div>
                 </div>
-                <div className="rounded-xl border border-border/60 bg-card/30 p-4 text-sm text-muted-foreground backdrop-blur">
+                <div className="rounded-xl border border-border/70 bg-card/45 p-4 text-sm text-foreground/75 backdrop-blur">
                   <div className="text-xs font-semibold text-foreground/80">04 · Onboard</div>
                   <div className="mt-1">If it’s a fit, we’ll guide you through onboarding and get you dispatched.</div>
                 </div>
               </div>
 
               <h2 className="mt-10 text-xl font-semibold tracking-tight">Why Twin Mile</h2>
-              <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
                 <div>Clear communication.</div>
                 <div>Time-critical freight opportunities.</div>
                 <div>Dedicated routes and high-priority loads.</div>
@@ -146,14 +146,14 @@ export default function DriveWithUsPage() {
               </div>
 
               <h2 className="mt-10 text-xl font-semibold tracking-tight">What we need</h2>
-              <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
                 <div>Owner-operators with their own equipment.</div>
                 <div>Professional, on-time performance.</div>
                 <div>Safety-first mindset.</div>
               </div>
 
               <h2 className="mt-10 text-xl font-semibold tracking-tight">Before you apply</h2>
-              <div className="mt-4 grid gap-3 text-sm text-muted-foreground">
+              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
                 <div>Have your equipment type and availability ready.</div>
                 <div>Be specific about preferred lanes and start date (ASAP is fine).</div>
                 <div>If you’re an owner-operator, mention your insurance and operating authority in notes (optional).</div>
@@ -171,11 +171,11 @@ export default function DriveWithUsPage() {
 
             <div
               id="apply"
-              className="rounded-xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur"
+              className="rounded-xl border border-primary/25 bg-card/55 p-6 shadow-xl shadow-black/20 backdrop-blur"
             >
               <div className="mb-4">
-                <div className="text-sm font-medium">Application</div>
-                <div className="mt-1 text-sm text-muted-foreground">
+                <div className="text-sm font-semibold tracking-wide text-foreground/95">Application</div>
+                <div className="mt-1 text-sm text-foreground/75">
                   Apply in under 2 minutes. Most applicants hear back within 1 business day.
                 </div>
               </div>
