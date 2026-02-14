@@ -1,5 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
+import { analytics } from "@/lib/analytics";
 
 export function SiteFooter() {
   return (
@@ -12,7 +13,7 @@ export function SiteFooter() {
         <div className="grid gap-10 md:grid-cols-12">
           <div className="md:col-span-5">
             <div className="flex items-center gap-3">
-              <Image src="/logo.png" alt="Twin Mile Logistics" width={200} height={44} />
+              <Image src="/logo.png" alt="Twin Mile LLC - Fast. Tough. Reliable. Freight Transportation and Logistics" width={200} height={44} />
             </div>
             <div className="mt-4 text-sm text-muted-foreground">
               Fast. Tough. Reliable. Logistics built for the urgent.
@@ -22,12 +23,14 @@ export function SiteFooter() {
               <a
                 href="tel:+12817107787"
                 className="text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => analytics.trackPhoneCall('+12817107787', 'footer')}
               >
                 (281) 710-7787
               </a>
               <a
                 href="mailto:admin@twinmile.com"
                 className="text-muted-foreground transition-colors hover:text-foreground"
+                onClick={() => analytics.trackEmailClick('admin@twinmile.com', 'footer')}
               >
                 admin@twinmile.com
               </a>

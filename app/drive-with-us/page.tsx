@@ -5,6 +5,7 @@ import { DriverApplicationForm } from "@/components/forms/driver-application-for
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import { CollapsibleFAQ } from "@/components/ui/collapsible-faq";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import {
   breadcrumbSchema,
   faqSchema,
@@ -161,6 +162,10 @@ export default function DriveWithUsPage() {
           faqSchema(faqs, `${baseUrl}/drive-with-us`),
         ]}
       />
+
+      <div className="mx-auto w-full max-w-6xl px-5 py-6">
+        <Breadcrumbs items={[{ label: "Drive With Us" }]} />
+      </div>
 
       <section className="relative overflow-hidden border-b border-border/60">
         <div className="pointer-events-none absolute inset-0">

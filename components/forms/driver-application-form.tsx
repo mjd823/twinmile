@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitDriverApplicationAction } from "@/app/actions/public";
 import { captureUtm, getUtm } from "@/lib/utm";
+import { analytics } from "@/lib/analytics";
 
 type Status =
   | { state: "idle" }
@@ -27,7 +28,8 @@ export function DriverApplicationForm() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     const payload: Record<string, unknown> = Object.fromEntries(formData.entries());
     const utm = getUtm();
     if (utm) payload.utm = utm;
@@ -40,8 +42,22 @@ export function DriverApplicationForm() {
       return;
     }
 
+    // Track successful driver application with business intelligence
+    const formPayload = Object.fromEntries(formData.entries());
+    const utmData = getUtm();
+    
+    analytics.trackDriverApplication({
+      truckType: formPayload.truckType as string || 'dry_van',
+      yearsExperience: formPayload.yearsExperience as string || '0',
+      preferredRoutes: formPayload.preferredRoutes as string || '',
+      startDate: formPayload.startDate as string || '',
+      hasOwnAuthority: formPayload.hasOwnAuthority === 'true',
+      utmSource: utmData?.utm_source,
+      utmMedium: utmData?.utm_medium,
+    });
+
     setStatus({ state: "success" });
-    e.currentTarget.reset();
+    form.reset();
   }
 
   return (

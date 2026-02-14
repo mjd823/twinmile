@@ -5,6 +5,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { QuoteForm } from "@/components/forms/quote-form";
 import { Button } from "@/components/ui/button";
 import { CollapsibleFAQ } from "@/components/ui/collapsible-faq";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 
 import { 
   breadcrumbSchema, 
@@ -121,6 +122,10 @@ export default function GetAQuotePage() {
           }),
         ]}
       />
+
+      <div className="mx-auto w-full max-w-6xl px-5 py-6">
+        <Breadcrumbs items={[{ label: "Get a Quote" }]} />
+      </div>
 
       <section className="relative overflow-hidden border-b border-border/60">
         <div className="pointer-events-none absolute inset-0">

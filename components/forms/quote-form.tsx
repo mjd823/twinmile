@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitQuoteLeadAction } from "@/app/actions/public";
 import { captureUtm, getUtm } from "@/lib/utm";
+import { analytics } from "@/lib/analytics";
 
 type Status =
   | { state: "idle" }
@@ -28,7 +29,8 @@ export function QuoteForm() {
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    const formData = new FormData(e.currentTarget);
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     const payload: Record<string, unknown> = Object.fromEntries(formData.entries());
     const utm = getUtm();
     if (utm) payload.utm = utm;
@@ -41,8 +43,23 @@ export function QuoteForm() {
       return;
     }
 
+    // Track successful quote submission with business intelligence
+    const formPayload = Object.fromEntries(formData.entries());
+    const utmData = getUtm();
+    
+    analytics.trackQuoteSubmission({
+      serviceType: formPayload.serviceType as string || 'freight',
+      pickupLocation: formPayload.pickupLocation as string || '',
+      dropoffLocation: formPayload.dropoffLocation as string || undefined,
+      contactMethod: 'email', // Default since form submission is email-based
+      company: formPayload.company as string || undefined,
+      utmSource: utmData?.utm_source,
+      utmMedium: utmData?.utm_medium,
+      utmCampaign: utmData?.utm_campaign,
+    });
+
     setStatus({ state: "success" });
-    e.currentTarget.reset();
+    form.reset();
   }
 
   return (

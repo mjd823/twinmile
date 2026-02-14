@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
+import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import {
   breadcrumbSchema,
   localBusinessSchema,
@@ -74,6 +75,10 @@ export default function ServicesPage() {
           ]),
         ]}
       />
+
+      <div className="mx-auto w-full max-w-6xl px-5 py-6">
+        <Breadcrumbs items={[{ label: "Services" }]} />
+      </div>
 
       <section className="relative overflow-hidden border-b border-border/60">
         <div className="pointer-events-none absolute inset-0">

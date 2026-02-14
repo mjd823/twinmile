@@ -3,6 +3,7 @@ import "./globals.css";
 import { inter } from "./fonts";
 import { SiteHeader } from "@/components/site/header";
 import { SiteFooter } from "@/components/site/footer";
+import Script from "next/script";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://twinmile.com"),
@@ -88,6 +89,36 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${inter.variable} dark`}>
+      <head>
+        {/* Performance optimizations */}
+        <link rel="preconnect" href="https://www.googletagmanager.com" />
+        <link rel="preconnect" href="https://www.google-analytics.com" />
+        <link rel="dns-prefetch" href="https://twinmile.com" />
+        
+        {/* Google Analytics */}
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=G-RQ0CTNQDNY"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'G-RQ0CTNQDNY', {
+              page_title: document.title,
+              page_location: window.location.href,
+              send_page_view: false,
+            });
+            
+            // Send page view after config
+            gtag('event', 'page_view', {
+              page_title: document.title,
+              page_location: window.location.href,
+            });
+          `}
+        </Script>
+      </head>
       <body>
         <SiteHeader />
         {children}
