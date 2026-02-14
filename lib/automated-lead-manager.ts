@@ -34,6 +34,15 @@ export interface LeadScore {
     shouldEscalate: boolean;
     assignee?: string;
   };
+  // AI-enhanced properties
+  aiAnalysis?: {
+    leadAnalysis: any;
+    specialistResult: any;
+    teamAssignment: string;
+    insights: string[];
+    recommendations: string[];
+  };
+  processingMethod?: 'traditional' | 'ai-enhanced';
 }
 
 export class AutomatedLeadManager {

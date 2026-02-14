@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { submitDriverApplicationAction } from "@/app/actions/public";
 import { captureUtm, getUtm } from "@/lib/utm";
 import { analytics } from "@/lib/analytics";
-import { automatedLeadManager } from "@/lib/automated-lead-manager";
+import { aiEnhancedLeadManager } from "@/lib/ai-enhanced-lead-manager";
 
 type Status =
   | { state: "idle" }
@@ -57,7 +57,7 @@ export function DriverApplicationForm() {
       utmMedium: utmData?.utm_medium,
     });
 
-    // Process driver lead automatically (this is the magic!)
+    // Process driver lead with AI intelligence (this is the MAGIC!)
     const leadData = {
       id: `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       type: 'driver' as const,
@@ -72,16 +72,19 @@ export function DriverApplicationForm() {
       timestamp: new Date().toISOString(),
     };
 
-    // Automatically score, qualify, and route the driver lead
-    const leadScore = await automatedLeadManager.processIncomingLead(leadData);
+    // Process with AI-enhanced intelligence
+    const leadScore = await aiEnhancedLeadManager.processIncomingLead(leadData);
     
-    console.log('🤖 Driver lead automatically processed:', {
+    console.log('🤖 AI Agent processed driver lead:', {
       score: leadScore.score,
       quality: leadScore.quality,
       value: leadScore.estimatedValue,
       priority: leadScore.priority,
       autoActions: leadScore.autoActions,
       assignee: leadScore.routing.assignee,
+      aiInsights: leadScore.aiAnalysis?.insights || [],
+      aiRecommendations: leadScore.aiAnalysis?.recommendations || [],
+      processingMethod: leadScore.processingMethod
     });
 
     setStatus({ state: "success" });

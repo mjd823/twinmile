@@ -23,9 +23,10 @@ function formatLocalDate(iso: string): string {
     });
   }
   
-  return d.toLocaleString(undefined, {
+  return d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
+  }) + " " + d.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
   });
@@ -368,6 +369,8 @@ export function AdminInbox({
             }}
           >
             Type {typeFilter !== "all" && `(${typeFilter === "quotes" ? "Q" : "D"})`}
+            {typeFilter === "quotes" && "↓"}
+            {typeFilter === "drivers" && "↓"}
           </button>
           <div className="col-span-3">Name</div>
           <div className="col-span-3">Email</div>

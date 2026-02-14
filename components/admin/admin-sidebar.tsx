@@ -6,8 +6,8 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-  BarChart3,
   Inbox,
+  BarChart3,
   Truck,
   Package,
   Users,
@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 
 const navigation = [
+  { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
   { name: "Inbox", href: "/admin/inbox", icon: Inbox },
   { name: "Operations", href: "/admin", icon: BarChart3 },
   { name: "Fleet", href: "/admin/fleet", icon: Truck },
@@ -47,7 +48,7 @@ export function AdminSidebar({ className }: AdminSidebarProps) {
   return (
     <aside
       className={cn(
-        "sticky top-20 hidden h-[calc(100vh-5rem)] shrink-0 overflow-auto rounded-lg border border-border/60 bg-card/60 backdrop-blur transition-all duration-300 md:block",
+        "sticky top-20 hidden h-[calc(100vh-5rem)] shrink-0 overflow-auto rounded-r-lg border border-border/60 bg-card/60 backdrop-blur transition-all duration-300 md:block",
         isCollapsed ? "w-16" : "w-64",
         className
       )}
