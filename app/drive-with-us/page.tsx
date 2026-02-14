@@ -92,7 +92,12 @@ export default function DriveWithUsPage() {
 
       <section>
         <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
-          <div className="mb-10 grid gap-6 md:grid-cols-3">
+          <div className="mb-10 grid gap-6 sm:grid-cols-2 md:grid-cols-4">
+            <div className="rounded-xl border border-primary/40 bg-primary/5 p-6 backdrop-blur">
+              <div className="text-sm text-muted-foreground">Owner-operators</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">80% Gross</div>
+              <div className="mt-2 text-sm text-muted-foreground">To the truck. Competitive pay, transparent settlement.</div>
+            </div>
             <div className="rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Communication</div>
               <div className="mt-2 text-2xl font-semibold tracking-tight">Clear</div>

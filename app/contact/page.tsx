@@ -55,9 +55,20 @@ export default function ContactPage() {
             <div className="rounded-xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur">
               <h2 className="text-lg font-semibold tracking-tight">Headquarters</h2>
               <p className="mt-2 text-sm text-muted-foreground">Houston, TX</p>
-              <p className="mt-4 text-sm text-muted-foreground">
-                Email and phone will be added here when ready.
-              </p>
+              <div className="mt-4 grid gap-2 text-sm">
+                <a
+                  href="tel:+12817107787"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  (281) 710-7787
+                </a>
+                <a
+                  href="mailto:admin@twinmile.com"
+                  className="text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  admin@twinmile.com
+                </a>
+              </div>
             </div>
 
             <div className="rounded-xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur">

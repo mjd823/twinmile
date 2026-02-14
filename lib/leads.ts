@@ -1,5 +1,15 @@
 import { z } from "zod";
 
+const UtmSchema = z
+  .object({
+    utm_source: z.string().max(200).optional(),
+    utm_medium: z.string().max(200).optional(),
+    utm_campaign: z.string().max(200).optional(),
+    utm_term: z.string().max(200).optional(),
+    utm_content: z.string().max(200).optional(),
+  })
+  .optional();
+
 export const QuoteLeadSchema = z.object({
   name: z.string().min(1).max(120),
   company: z.string().max(200).optional().or(z.literal("")),
@@ -11,6 +21,7 @@ export const QuoteLeadSchema = z.object({
   pickupDate: z.string().max(40).optional().or(z.literal("")),
   notes: z.string().max(4000).optional().or(z.literal("")),
   hp: z.string().optional().or(z.literal("")),
+  utm: UtmSchema,
 });
 
 export type QuoteLeadInput = z.infer<typeof QuoteLeadSchema>;
@@ -25,6 +36,7 @@ export const DriverLeadSchema = z.object({
   startDate: z.string().max(40).optional().or(z.literal("")),
   notes: z.string().max(4000).optional().or(z.literal("")),
   hp: z.string().optional().or(z.literal("")),
+  utm: UtmSchema,
 });
 
 export type DriverLeadInput = z.infer<typeof DriverLeadSchema>;

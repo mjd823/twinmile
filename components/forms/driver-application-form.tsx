@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitDriverApplicationAction } from "@/app/actions/public";
+import { captureUtm, getUtm } from "@/lib/utm";
 
 type Status =
   | { state: "idle" }
@@ -16,11 +17,15 @@ type Status =
 export function DriverApplicationForm() {
   const [status, setStatus] = React.useState<Status>({ state: "idle" });
 
+  React.useEffect(() => { captureUtm(); }, []);
+
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     const formData = new FormData(e.currentTarget);
-    const payload = Object.fromEntries(formData.entries());
+    const payload: Record<string, unknown> = Object.fromEntries(formData.entries());
+    const utm = getUtm();
+    if (utm) payload.utm = utm;
 
     setStatus({ state: "submitting" });
 

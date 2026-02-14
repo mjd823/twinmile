@@ -7,6 +7,8 @@ export function orgSchema() {
     name: "Twin Mile LLC",
     url: "https://twinmile.com",
     slogan: "Fast. Tough. Reliable.",
+    telephone: "+1-281-710-7787",
+    email: "admin@twinmile.com",
   };
   return schema;
 }
@@ -32,6 +34,8 @@ export function localBusinessSchema() {
     "@type": "LocalBusiness",
     name: "Twin Mile LLC",
     url: "https://twinmile.com",
+    telephone: "+1-281-710-7787",
+    email: "admin@twinmile.com",
     address: {
       "@type": "PostalAddress",
       addressLocality: "Houston",

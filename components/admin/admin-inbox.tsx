@@ -197,7 +197,7 @@ export function AdminInbox({
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border/60 bg-card">
-        <div className="grid grid-cols-12 gap-2 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold">
+        <div className="hidden grid-cols-12 gap-2 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold md:grid">
           <div className="col-span-2">Type</div>
           <div className="col-span-3">Name</div>
           <div className="col-span-3">Email</div>
@@ -212,14 +212,27 @@ export function AdminInbox({
             <button
               key={`${r.kind}:${r.id}`}
               type="button"
-              className="grid w-full grid-cols-12 gap-2 border-b border-border/60 px-4 py-3 text-left text-sm transition-colors hover:bg-accent/40"
+              className="w-full border-b border-border/60 px-4 py-3 text-left text-sm transition-colors hover:bg-accent/40"
               onClick={() => setSelected({ kind: r.kind, id: r.id })}
             >
-              <div className="col-span-2">{typePill(r.kind, r.typeLabel)}</div>
-              <div className="col-span-3 font-medium">{r.name}</div>
-              <div className="col-span-3 text-muted-foreground">{r.email}</div>
-              <div className="col-span-3 text-muted-foreground">{r.detail || "—"}</div>
-              <div className="col-span-1 text-muted-foreground">{r.status}</div>
+              <div className="hidden grid-cols-12 gap-2 md:grid">
+                <div className="col-span-2">{typePill(r.kind, r.typeLabel)}</div>
+                <div className="col-span-3 font-medium">{r.name}</div>
+                <div className="col-span-3 text-muted-foreground">{r.email}</div>
+                <div className="col-span-3 text-muted-foreground">{r.detail || "—"}</div>
+                <div className="col-span-1 text-muted-foreground">{r.status}</div>
+              </div>
+              <div className="grid gap-1 md:hidden">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium">{r.name}</span>
+                  {typePill(r.kind, r.typeLabel)}
+                </div>
+                <div className="text-muted-foreground">{r.email}</div>
+                <div className="flex items-center justify-between gap-2 text-muted-foreground">
+                  <span>{r.detail || "—"}</span>
+                  <span className="shrink-0 rounded-full border border-border/60 px-2 py-0.5 text-xs">{r.status}</span>
+                </div>
+              </div>
             </button>
           ))
         )}

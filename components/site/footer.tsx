@@ -18,6 +18,20 @@ export function SiteFooter() {
               Fast. Tough. Reliable. Logistics built for the urgent.
             </div>
             <div className="mt-4 text-sm text-muted-foreground">HQ: Houston, TX</div>
+            <div className="mt-2 grid gap-1 text-sm">
+              <a
+                href="tel:+12817107787"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                (281) 710-7787
+              </a>
+              <a
+                href="mailto:admin@twinmile.com"
+                className="text-muted-foreground transition-colors hover:text-foreground"
+              >
+                admin@twinmile.com
+              </a>
+            </div>
           </div>
 
           <div className="grid gap-8 sm:grid-cols-2 md:col-span-7 md:grid-cols-3">

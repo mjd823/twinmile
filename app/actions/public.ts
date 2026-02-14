@@ -5,6 +5,12 @@ import clientPromise from "@/lib/mongodb";
 import { rateLimit } from "@/lib/security/rate-limit";
 
 import { getClientIpFromHeaders } from "@/app/actions/_request";
+import {
+  notifyNewQuoteLead,
+  notifyNewDriverLead,
+  sendQuoteLeadConfirmation,
+  sendDriverLeadConfirmation,
+} from "@/lib/email";
 
 export async function submitQuoteLeadAction(
   input: unknown
@@ -39,6 +45,9 @@ export async function submitQuoteLeadAction(
     createdAt: new Date(),
     source: "web",
   });
+
+  notifyNewQuoteLead(parsed.data).catch(() => {});
+  sendQuoteLeadConfirmation(parsed.data).catch(() => {});
 
   return { ok: true };
 }
@@ -76,6 +85,9 @@ export async function submitDriverApplicationAction(
     createdAt: new Date(),
     source: "web",
   });
+
+  notifyNewDriverLead(parsed.data).catch(() => {});
+  sendDriverLeadConfirmation(parsed.data).catch(() => {});
 
   return { ok: true };
 }
