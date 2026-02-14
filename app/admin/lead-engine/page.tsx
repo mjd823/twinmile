@@ -27,48 +27,6 @@ export default async function LeadEnginePage() {
       .toArray(),
   ]);
 
-  // Handle AI business actions
-  async function handleAIAction(action: string) {
-    console.log(`🤖 AI Business Action Triggered: ${action}`);
-    
-    switch (action) {
-      case 'find_customers':
-        // Trigger autonomous lead generation
-        console.log('🎯 Activating lead generation system...');
-        break;
-      case 'send_marketing':
-        // Launch marketing campaigns
-        console.log('📢 Launching marketing campaigns...');
-        break;
-      case 'check_revenue':
-        // Generate financial report
-        console.log('💰 Generating revenue report...');
-        break;
-      case 'hire_drivers':
-        // Start recruitment process
-        console.log('👥 Initiating driver recruitment...');
-        break;
-      case 'schedule_deliveries':
-        // Optimize delivery routes
-        console.log('🚚 Optimizing delivery schedules...');
-        break;
-      case 'customer_support':
-        // Review customer satisfaction
-        console.log('😊 Checking customer satisfaction...');
-        break;
-      case 'emergency_call':
-        // Trigger emergency support
-        console.log('🚨 Emergency support requested...');
-        break;
-      case 'emergency_email':
-        // Send support email
-        console.log('📧 Support email requested...');
-        break;
-      default:
-        console.log(`Unknown action: ${action}`);
-    }
-  }
-
   return (
     <main>
       <section className="border-b border-border/60">
@@ -87,7 +45,7 @@ export default async function LeadEnginePage() {
 
       <section>
         <div className="w-full py-6">
-          <AIBusinessDashboard onActionClick={handleAIAction} />
+          <AIBusinessDashboard />
         </div>
       </section>
     </main>
