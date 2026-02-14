@@ -9,13 +9,49 @@ import {
   orgSchema,
   serviceSchema,
   webSiteSchema,
+  freightServiceSchema,
+  hotshotServiceSchema,
+  lastMileServiceSchema,
+  powerOnlyServiceSchema,
 } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Services",
+  title: "Freight Transportation Services | Hotshot | Last-Mile | Power Only",
   description:
-    "Twin Mile LLC logistics services: freight transportation, hotshot trucking, last-mile delivery, dispatching, warehousing, and 3PL nationwide.",
+    "Twin Mile LLC offers comprehensive logistics services: freight transportation, hotshot trucking, last-mile delivery, power only services, dispatching, warehousing, and 3PL nationwide. 80% gross for owner-operators.",
+  keywords: [
+    "freight transportation services",
+    "hotshot trucking services",
+    "last mile delivery services",
+    "power only trucking",
+    "dispatching services",
+    "warehousing services",
+    "3PL services",
+    "Houston logistics services",
+    "Texas freight services",
+    "nationwide shipping services",
+  ],
   alternates: { canonical: "/services" },
+  openGraph: {
+    title: "Freight Transportation Services | Hotshot | Last-Mile | Power Only",
+    description: "Comprehensive logistics services with 80% gross for owner-operators. Freight, hotshot, last-mile, power only, dispatching, warehousing, and 3PL.",
+    url: "https://twinmile.com/services",
+    type: "website",
+    images: [
+      {
+        url: "/og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Twin Mile LLC Logistics Services",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Freight Transportation Services | Twin Mile LLC",
+    description: "Complete logistics solutions: freight, hotshot, last-mile, power only, dispatching, warehousing, and 3PL.",
+    images: ["/og.svg"],
+  },
 };
 
 export default function ServicesPage() {
@@ -28,16 +64,14 @@ export default function ServicesPage() {
           orgSchema(),
           webSiteSchema(),
           localBusinessSchema(),
+          freightServiceSchema(),
+          hotshotServiceSchema(),
+          lastMileServiceSchema(),
+          powerOnlyServiceSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
             { name: "Services", url: `${baseUrl}/services` },
           ]),
-          serviceSchema({
-            name: "Nationwide Logistics Services",
-            description:
-              "Freight transportation, hotshot trucking, last-mile delivery, dispatching, warehousing, and 3PL nationwide.",
-            url: `${baseUrl}/services`,
-          }),
         ]}
       />
 

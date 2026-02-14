@@ -3,13 +3,57 @@ import type { Metadata } from "next";
 import { JsonLd } from "@/components/seo/json-ld";
 import { QuoteForm } from "@/components/forms/quote-form";
 
-import { breadcrumbSchema, localBusinessSchema, orgSchema, serviceSchema, webSiteSchema } from "@/lib/seo";
+import { 
+  breadcrumbSchema, 
+  localBusinessSchema, 
+  orgSchema, 
+  serviceSchema, 
+  webSiteSchema,
+  freightServiceSchema,
+  hotshotServiceSchema,
+  lastMileServiceSchema,
+  powerOnlyServiceSchema,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Get a Quote",
+  title: "Get Freight Quote | Houston Logistics | Fast Quote | Twin Mile LLC",
   description:
-    "Request a freight quote from Twin Mile LLC for time-critical, local, regional, or long-haul shipments nationwide.",
+    "Request a freight quote from Twin Mile LLC. Fast quotes for freight transportation, hotshot trucking, last-mile delivery, and power only services. Houston-based logistics nationwide.",
+  keywords: [
+    "freight quote",
+    "get freight quote",
+    "Houston freight quote",
+    "Texas freight quote",
+    "hotshot quote",
+    "last mile delivery quote",
+    "power only quote",
+    "logistics quote",
+    "shipping quote",
+    "transportation quote",
+    "fast freight quote",
+    "urgent freight quote",
+  ],
   alternates: { canonical: "/get-a-quote" },
+  openGraph: {
+    title: "Get Freight Quote | Houston Logistics | Fast Quote | Twin Mile LLC",
+    description: "Request a fast freight quote from Twin Mile LLC. Freight, hotshot, last-mile, and power only services. Houston-based logistics.",
+    url: "https://twinmile.com/get-a-quote",
+    type: "website",
+    images: [
+      {
+        url: "/og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Get Freight Quote - Twin Mile LLC",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Get Freight Quote | Twin Mile LLC",
+    description: "Request a fast freight quote from Twin Mile LLC. Freight, hotshot, last-mile, and power only services.",
+    images: ["/og.svg"],
+  },
 };
 
 export default function GetAQuotePage() {
@@ -22,14 +66,17 @@ export default function GetAQuotePage() {
           orgSchema(),
           webSiteSchema(),
           localBusinessSchema(),
+          freightServiceSchema(),
+          hotshotServiceSchema(),
+          lastMileServiceSchema(),
+          powerOnlyServiceSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
             { name: "Get a Quote", url: `${baseUrl}/get-a-quote` },
           ]),
           serviceSchema({
             name: "Freight Quote Request",
-            description:
-              "Request a freight quote for time-critical, local, regional, or long-haul shipments nationwide.",
+            description: "Request a freight quote for time-critical, local, regional, or long-haul shipments nationwide.",
             url: `${baseUrl}/get-a-quote`,
           }),
         ]}

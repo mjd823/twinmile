@@ -10,23 +10,59 @@ import {
   localBusinessSchema,
   orgSchema,
   webSiteSchema,
+  jobPostingSchema,
+  employerRatingSchema,
+  contactPointSchema,
 } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Drive With Us",
+  title: "Owner Operator Jobs Houston | 80% Gross | Power Only | Twin Mile LLC",
   description:
-    "Owner-operators and drivers: apply to haul loads with Twin Mile LLC. Nationwide freight, hotshot, and last-mile opportunities.",
+    "Join Twin Mile LLC as an owner-operator in Houston. Power only trucking with 80% gross, $250k-$350k potential, 100% fuel surcharge, weekly direct deposit. Apply in 2 minutes.",
+  keywords: [
+    "owner operator jobs Houston",
+    "power only owner operator",
+    "hotshot driver jobs Texas",
+    "lease on authority 80% gross",
+    "truck driving jobs Houston",
+    "owner operator opportunities",
+    "power only trucking companies",
+    "Houston logistics jobs",
+    "Texas truck driver jobs",
+    "owner operator lease on",
+  ],
   alternates: { canonical: "/drive-with-us" },
+  openGraph: {
+    title: "Owner Operator Jobs Houston | 80% Gross | Twin Mile LLC",
+    description: "Power only owner operator jobs with 80% gross, $250k-$350k potential. Weekly direct deposit, 100% fuel surcharge. Apply in 2 minutes.",
+    url: "https://twinmile.com/drive-with-us",
+    type: "website",
+    images: [
+      {
+        url: "/og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Owner Operator Jobs Houston - 80% Gross - Twin Mile LLC",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Owner Operator Jobs Houston | 80% Gross | Twin Mile LLC",
+    description: "Power only trucking with 80% gross, $250k-$350k potential. Apply in 2 minutes.",
+    images: ["/og.svg"],
+  },
 };
 
 export default function DriveWithUsPage() {
   const baseUrl = "https://twinmile.com";
+  const today = new Date().toISOString().split('T')[0];
 
   const faqs = [
     {
       question: "How does the application work?",
       answer:
-        "Submit the short application, then our team reviews it and reaches out for a quick call/text to confirm availability, equipment, and lanes. If it’s a fit, we’ll guide you through onboarding and dispatch." ,
+        "Submit the short application, then our team reviews it and reaches out for a quick call/text to confirm availability, equipment, and lanes. If it's a fit, we'll guide you through onboarding and dispatch." ,
     },
     {
       question: "How fast will you respond to an application?",
@@ -41,19 +77,71 @@ export default function DriveWithUsPage() {
     {
       question: "What routes do you run?",
       answer:
-        "We operate nationwide, with strong coverage across Texas, Louisiana, California, and beyond. We’ll match lanes based on your availability and equipment.",
+        "We operate nationwide, with strong coverage across Texas, Louisiana, California, and beyond. We'll match lanes based on your availability and equipment.",
     },
     {
       question: "What do you need from me to get started?",
       answer:
-        "At minimum: basic contact info, your equipment type, and your availability. If we move forward, we’ll request standard onboarding documents and insurance details (owner-operators).",
+        "At minimum: basic contact info, your equipment type, and your availability. If we move forward, we'll request standard onboarding documents and insurance details (owner-operators).",
     },
     {
       question: "Is this a W-2 role or 1099/owner-operator?",
       answer:
-        "We support owner-operators and contractors. If you’re applying as a company driver, mention it in the notes and we’ll confirm options based on current openings.",
+        "We support owner-operators and contractors. If you're applying as a company driver, mention it in the notes and we'll confirm options based on current openings.",
+    },
+    {
+      question: "What is the pay structure?",
+      answer:
+        "Owner-operators earn 80% gross to the truck with $250k-$350k+ annual gross potential. We provide 100% fuel surcharge, weekly direct deposit, and no hidden fees.",
+    },
+    {
+      question: "What equipment do I need?",
+      answer:
+        "We focus on power only operations, so you need your own tractor. Common equipment includes hotshot trucks, semi-trucks, and specialized vehicles. No trailer required.",
     },
   ];
+
+  const jobPostingData = {
+    title: "Owner Operator - Power Only Trucking - Houston, TX",
+    description: "Join Twin Mile LLC as an owner-operator specializing in power only trucking. Earn 80% gross with $250k-$350k+ annual potential, 100% fuel surcharge, weekly direct deposit, and no trailer fees. Houston-based with nationwide lanes.",
+    datePosted: today,
+    employmentType: "CONTRACTOR",
+    hiringOrganization: {
+      name: "Twin Mile LLC",
+      sameAs: "https://twinmile.com",
+    },
+    jobLocation: {
+      "@type": "Place",
+      address: {
+        "@type": "PostalAddress",
+        addressLocality: "Houston",
+        addressRegion: "TX",
+        addressCountry: "US",
+        postalCode: "77002",
+      },
+    },
+    baseSalary: {
+      "@type": "MonetaryAmount",
+      currency: "USD",
+      value: {
+        "@type": "QuantitativeValue",
+        minValue: 250000,
+        maxValue: 350000,
+        unitText: "YEAR",
+      },
+    },
+    qualifications: "Valid CDL-A, 2+ years OTR experience, clean MVR, reliable DOT-compliant tractor, safety-first mindset. Owner-operators must have proper insurance and operating authority.",
+    responsibilities: "Transport freight using power only equipment, maintain professional communication, ensure on-time deliveries, follow safety protocols, manage vehicle maintenance, represent Twin Mile professionally.",
+    workHours: "Flexible schedule - OTR and regional routes available",
+    applicantLocationRequirements: {
+      "@type": "Country",
+      address: {
+        "@type": "PostalAddress",
+        addressCountry: "US",
+      },
+    },
+    url: `${baseUrl}/drive-with-us#apply`,
+  };
 
   return (
     <main>
@@ -62,6 +150,9 @@ export default function DriveWithUsPage() {
           orgSchema(),
           webSiteSchema(),
           localBusinessSchema(),
+          contactPointSchema(),
+          employerRatingSchema(),
+          jobPostingSchema(jobPostingData),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
             { name: "Drive With Us", url: `${baseUrl}/drive-with-us` },

@@ -4,13 +4,45 @@ import Link from "next/link";
 
 import { JsonLd } from "@/components/seo/json-ld";
 
-import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
+import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema, contactPointSchema } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Contact",
+  title: "Contact Twin Mile LLC | Houston Logistics | (281) 710-7787",
   description:
-    "Contact Twin Mile LLC for freight quotes, dispatching, last-mile delivery, hotshot trucking, warehousing, and 3PL nationwide.",
+    "Contact Twin Mile LLC for freight quotes, dispatching, last-mile delivery, hotshot trucking, warehousing, and 3PL nationwide. Call (281) 710-7787 or email admin@twinmile.com.",
+  keywords: [
+    "contact Twin Mile LLC",
+    "Houston logistics contact",
+    "freight quote contact",
+    "hotshot trucking contact",
+    "last mile delivery contact",
+    "dispatching services contact",
+    "warehousing contact",
+    "3PL services contact",
+    "Texas logistics contact",
+    "freight transportation contact",
+  ],
   alternates: { canonical: "/contact" },
+  openGraph: {
+    title: "Contact Twin Mile LLC | Houston Logistics | (281) 710-7787",
+    description: "Get in touch with Twin Mile LLC for all your logistics needs. Call (281) 710-7787 or email admin@twinmile.com.",
+    url: "https://twinmile.com/contact",
+    type: "website",
+    images: [
+      {
+        url: "/og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Contact Twin Mile LLC - Houston Logistics",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Contact Twin Mile LLC | (281) 710-7787",
+    description: "Contact Twin Mile LLC for freight quotes and logistics services. Call (281) 710-7787 or email admin@twinmile.com.",
+    images: ["/og.svg"],
+  },
 };
 
 export default function ContactPage() {
@@ -23,6 +55,7 @@ export default function ContactPage() {
           orgSchema(),
           webSiteSchema(),
           localBusinessSchema(),
+          contactPointSchema(),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
             { name: "Contact", url: `${baseUrl}/contact` },

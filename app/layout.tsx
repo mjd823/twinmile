@@ -19,6 +19,23 @@ export const metadata: Metadata = {
   },
   description:
     "Twin Mile LLC delivers fast, reliable, rugged logistics solutions nationwide — freight transportation, hotshot trucking, last‑mile delivery, dispatching, warehousing, and 3PL.",
+  keywords: [
+    "freight transportation",
+    "hotshot trucking",
+    "last mile delivery",
+    "dispatching services",
+    "warehousing",
+    "3PL services",
+    "logistics company",
+    "Houston logistics",
+    "Texas freight",
+    "nationwide shipping",
+    "owner operator jobs",
+    "power only trucking",
+  ],
+  authors: [{ name: "Twin Mile LLC", url: "https://twinmile.com" }],
+  creator: "Twin Mile LLC",
+  publisher: "Twin Mile LLC",
   alternates: {
     canonical: "/",
   },
@@ -44,6 +61,8 @@ export const metadata: Metadata = {
     description:
       "Fast, reliable, rugged logistics solutions nationwide. Get a quote or drive with us.",
     images: ["/og.svg"],
+    creator: "@twinmilellc",
+    site: "@twinmilellc",
   },
   robots: {
     index: true,
@@ -55,6 +74,10 @@ export const metadata: Metadata = {
       "max-snippet": -1,
       "max-video-preview": -1,
     },
+  },
+  verification: {
+    google: "your-google-verification-code", // Add when available
+    yandex: "your-yandex-verification-code", // Add when available
   },
 };
 

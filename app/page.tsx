@@ -3,14 +3,54 @@ import Link from "next/link";
 
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
-
-import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
+import {
+  breadcrumbSchema,
+  localBusinessSchema,
+  orgSchema,
+  webSiteSchema,
+  contactPointSchema,
+  employerRatingSchema,
+} from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Twin Mile LLC",
+  title: "Twin Mile LLC | Freight Transportation | Houston Logistics",
   description:
-    "Twin Mile LLC delivers fast, reliable logistics solutions nationwide — freight transportation, hotshot trucking, last‑mile delivery, dispatching, warehousing, and 3PL.",
+    "Twin Mile LLC delivers fast, reliable logistics solutions nationwide — freight transportation, hotshot trucking, last‑mile delivery, dispatching, warehousing, and 3PL. 80% gross for owner-operators.",
+  keywords: [
+    "freight transportation",
+    "hotshot trucking",
+    "last mile delivery",
+    "dispatching services",
+    "warehousing",
+    "3PL services",
+    "logistics company",
+    "Houston logistics",
+    "Texas freight",
+    "nationwide shipping",
+    "owner operator jobs",
+    "power only trucking",
+  ],
   alternates: { canonical: "/" },
+  openGraph: {
+    title: "Twin Mile LLC | Freight Transportation | Houston Logistics",
+    description: "Fast. Tough. Reliable. Logistics built for the urgent — nationwide freight, hotshot, last‑mile, dispatching, warehousing, and 3PL.",
+    url: "https://twinmile.com",
+    type: "website",
+    images: [
+      {
+        url: "/og.svg",
+        width: 1200,
+        height: 630,
+        alt: "Twin Mile LLC — Fast. Tough. Reliable.",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Twin Mile LLC | Houston Logistics",
+    description: "Fast, reliable, rugged logistics solutions nationwide. Get a quote or drive with us.",
+    images: ["/og.svg"],
+  },
 };
 
 export default async function Home() {
@@ -23,6 +63,8 @@ export default async function Home() {
           orgSchema(),
           webSiteSchema(),
           localBusinessSchema(),
+          contactPointSchema(),
+          employerRatingSchema(),
           breadcrumbSchema([{ name: "Home", url: `${baseUrl}/` }]),
         ]}
       />
