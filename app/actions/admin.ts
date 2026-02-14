@@ -1717,13 +1717,35 @@ export async function updateLeadAction(
   const update: any = { $set };
 
   if (parsed.data.note && parsed.data.note.trim().length > 0) {
-    update.$push = {
-      notes: {
-        at: new Date(),
-        actorUserId: String((admin as any)._id),
-        message: parsed.data.note.trim(),
-      },
-    };
+    // Check if notes field exists and its type
+    const existing = await db.collection(kind === "quotes" ? "leads_quotes" : "leads_drivers")
+      .findOne({ _id: leadObjectId }, { projection: { notes: 1 } });
+    
+    if (existing && Array.isArray((existing as any).notes)) {
+      // Notes is already an array, push to it
+      update.$push = {
+        notes: {
+          at: new Date(),
+          actorUserId: String((admin as any)._id),
+          message: parsed.data.note.trim(),
+        },
+      };
+    } else {
+      // Notes is null, undefined, or a string - convert to array
+      const existingNotes = (existing as any)?.notes;
+      update.$set.notes = [
+        ...(existingNotes ? [{ 
+          at: new Date((existing as any).createdAt || new Date()), 
+          actorUserId: null, 
+          message: existingNotes 
+        }] : []),
+        {
+          at: new Date(),
+          actorUserId: String((admin as any)._id),
+          message: parsed.data.note.trim(),
+        },
+      ];
+    }
   }
 
   await db.collection(kind === "quotes" ? "leads_quotes" : "leads_drivers").updateOne({ _id: leadObjectId }, update as any);
@@ -1750,28 +1772,45 @@ export async function deleteLeadAction(
   const leadObjectId = new ObjectId(leadId);
   const collection = kind === "quotes" ? "leads_quotes" : "leads_drivers";
 
-  const existing = await db.collection(collection).findOne({ _id: leadObjectId }, { projection: { isArchived: 1 } });
+  const existing = await db.collection(collection).findOne({ _id: leadObjectId }, { projection: { isArchived: 1, notes: 1 } });
   if (!existing) return { ok: true };
   if ((existing as any).isArchived) return { ok: true };
 
-  await db.collection(collection).updateOne(
-    { _id: leadObjectId },
-    {
-      $set: {
-        isArchived: true,
-        archivedAt: new Date(),
-        archivedByUserId: String((admin as any)._id),
-        updatedAt: new Date(),
+  // Ensure notes is always an array before pushing
+  const update: any = {
+    $set: {
+      isArchived: true,
+      archivedAt: new Date(),
+      archivedByUserId: String((admin as any)._id),
+      updatedAt: new Date(),
+    },
+  };
+
+  // Handle notes field type conversion
+  if (Array.isArray((existing as any).notes)) {
+    update.$push = {
+      notes: {
+        at: new Date(),
+        actorUserId: String((admin as any)._id),
+        message: "Archived from admin inbox.",
       },
-      $push: {
-        notes: {
+    };
+  } else {
+    // Convert string notes to array format
+    update.$set = {
+      ...update.$set,
+      notes: [
+        ...(existing as any).notes ? [{ at: new Date((existing as any).createdAt || new Date()), actorUserId: null, message: (existing as any).notes }] : [],
+        {
           at: new Date(),
           actorUserId: String((admin as any)._id),
           message: "Archived from admin inbox.",
         },
-      },
-    } as any
-  );
+      ],
+    };
+  }
+
+  await db.collection(collection).updateOne({ _id: leadObjectId }, update as any);
 
   return { ok: true };
 }
@@ -1795,30 +1834,47 @@ export async function restoreLeadAction(
   const leadObjectId = new ObjectId(leadId);
   const collection = kind === "quotes" ? "leads_quotes" : "leads_drivers";
 
-  const existing = await db.collection(collection).findOne({ _id: leadObjectId }, { projection: { isArchived: 1 } });
+  const existing = await db.collection(collection).findOne({ _id: leadObjectId }, { projection: { isArchived: 1, notes: 1 } });
   if (!existing) return { ok: true };
   if (!(existing as any).isArchived) return { ok: true };
 
-  await db.collection(collection).updateOne(
-    { _id: leadObjectId },
-    {
-      $set: {
-        isArchived: false,
-        updatedAt: new Date(),
+  // Ensure notes is always an array before pushing
+  const update: any = {
+    $set: {
+      isArchived: false,
+      updatedAt: new Date(),
+    },
+    $unset: {
+      archivedAt: "",
+      archivedByUserId: "",
+    },
+  };
+
+  // Handle notes field type conversion
+  if (Array.isArray((existing as any).notes)) {
+    update.$push = {
+      notes: {
+        at: new Date(),
+        actorUserId: String((admin as any)._id),
+        message: "Restored to admin inbox.",
       },
-      $unset: {
-        archivedAt: "",
-        archivedByUserId: "",
-      },
-      $push: {
-        notes: {
+    };
+  } else {
+    // Convert string notes to array format
+    update.$set = {
+      ...update.$set,
+      notes: [
+        ...(existing as any).notes ? [{ at: new Date((existing as any).createdAt || new Date()), actorUserId: null, message: (existing as any).notes }] : [],
+        {
           at: new Date(),
           actorUserId: String((admin as any)._id),
           message: "Restored to admin inbox.",
         },
-      },
-    } as any
-  );
+      ],
+    };
+  }
+
+  await db.collection(collection).updateOne({ _id: leadObjectId }, update as any);
 
   return { ok: true };
 }
