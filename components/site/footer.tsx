@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { analytics } from "@/lib/analytics";
+import { ContactLinks } from "@/components/site/contact-links";
 
 export function SiteFooter() {
   return (
@@ -19,22 +19,7 @@ export function SiteFooter() {
               Fast. Tough. Reliable. Logistics built for the urgent.
             </div>
             <div className="mt-4 text-sm text-muted-foreground">HQ: Houston, TX</div>
-            <div className="mt-2 grid gap-1 text-sm">
-              <a
-                href="tel:+12817107787"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() => analytics.trackPhoneCall('+12817107787', 'footer')}
-              >
-                (281) 710-7787
-              </a>
-              <a
-                href="mailto:admin@twinmile.com"
-                className="text-muted-foreground transition-colors hover:text-foreground"
-                onClick={() => analytics.trackEmailClick('admin@twinmile.com', 'footer')}
-              >
-                admin@twinmile.com
-              </a>
-            </div>
+            <ContactLinks />
           </div>
 
           <div className="grid gap-8 sm:grid-cols-2 md:col-span-7 md:grid-cols-3">
