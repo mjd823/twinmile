@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 
+import Link from "next/link";
 import { JsonLd } from "@/components/seo/json-ld";
 import { QuoteForm } from "@/components/forms/quote-form";
+import { Button } from "@/components/ui/button";
+import { CollapsibleFAQ } from "@/components/ui/collapsible-faq";
 
 import { 
   breadcrumbSchema, 
@@ -13,6 +16,7 @@ import {
   hotshotServiceSchema,
   lastMileServiceSchema,
   powerOnlyServiceSchema,
+  faqSchema,
 } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -59,6 +63,41 @@ export const metadata: Metadata = {
 export default function GetAQuotePage() {
   const baseUrl = "https://twinmile.com";
 
+  const faqs = [
+    {
+      question: "How fast will I receive a quote?",
+      answer: "Most quotes are sent within 1-2 hours during business hours. For urgent requests, call us directly at (281) 710-7787 for immediate assistance.",
+    },
+    {
+      question: "What types of freight do you handle?",
+      answer: "We handle all freight types including general cargo, time-critical shipments, hotshot loads, last-mile deliveries, and specialized power only services.",
+    },
+    {
+      question: "Do you serve all states?",
+      answer: "Yes, we provide nationwide freight transportation with strong coverage across Texas, Louisiana, California, and all other states.",
+    },
+    {
+      question: "What information do you need for a quote?",
+      answer: "We need pickup location, delivery location, freight type/weight, dimensions, and any special requirements. The more details you provide, the more accurate your quote.",
+    },
+    {
+      question: "Do you offer expedited services?",
+      answer: "Yes, we specialize in time-critical and expedited freight services with dedicated trucks and priority routing for urgent shipments.",
+    },
+    {
+      question: "What payment methods do you accept?",
+      answer: "We accept cash, credit cards, ACH transfers, and offer net payment terms for established business customers.",
+    },
+    {
+      question: "Do you provide tracking?",
+      answer: "Yes, all shipments include real-time tracking with regular updates on location and estimated delivery times.",
+    },
+    {
+      question: "Are you insured and bonded?",
+      answer: "Yes, we carry comprehensive cargo insurance, liability coverage, and are fully licensed and bonded for all transportation services.",
+    },
+  ];
+
   return (
     <main>
       <JsonLd
@@ -70,6 +109,7 @@ export default function GetAQuotePage() {
           hotshotServiceSchema(),
           lastMileServiceSchema(),
           powerOnlyServiceSchema(),
+          faqSchema(faqs, `${baseUrl}/get-a-quote`),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
             { name: "Get a Quote", url: `${baseUrl}/get-a-quote` },
@@ -103,6 +143,77 @@ export default function GetAQuotePage() {
 
       <section>
         <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
+          <div className="mb-10 grid gap-6 sm:grid-cols-2 md:grid-cols-4">
+            <div className="rounded-xl border border-primary/40 bg-primary/8 p-6 backdrop-blur">
+              <div className="text-sm text-muted-foreground">Quote Response</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">24 Hours</div>
+              <div className="mt-2 text-sm text-foreground/80">Fast, accurate pricing with detailed service breakdowns.</div>
+            </div>
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
+              <div className="text-sm text-muted-foreground">On-Time Delivery</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">95%</div>
+              <div className="mt-2 text-sm text-foreground/80">Reliable service with real-time tracking and updates.</div>
+            </div>
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
+              <div className="text-sm text-muted-foreground">Coverage</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">Nationwide</div>
+              <div className="mt-2 text-sm text-foreground/80">From local Houston routes to cross-country freight.</div>
+            </div>
+            <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
+              <div className="text-sm text-muted-foreground">Support</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">24/7</div>
+              <div className="mt-2 text-sm text-foreground/80">Round-the-clock assistance for urgent shipments.</div>
+            </div>
+          </div>
+
+          <div className="mb-10 rounded-xl border border-primary/20 bg-primary/5 p-6 backdrop-blur">
+            <h2 className="text-lg font-semibold tracking-tight">Why Choose Twin Mile</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Fast Response Times</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Quotes within 24 hours, immediate support for urgent requests</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Transparent Pricing</div>
+                  <div className="mt-1 text-xs text-muted-foreground">No hidden fees, clear breakdowns, competitive rates</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Dedicated Support</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Personal account manager and 24/7 availability</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Real-Time Tracking</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Live updates on shipment status and ETA</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Expert Logistics</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Experienced team handling complex shipments</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div>
+                  <div className="text-sm font-medium text-foreground">Full Coverage</div>
+                  <div className="mt-1 text-xs text-muted-foreground">Comprehensive insurance and liability protection</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-10 md:grid-cols-2">
             <div className="rounded-xl border border-primary/25 bg-card/55 p-6 shadow-xl shadow-black/20 backdrop-blur">
               <QuoteForm />
@@ -111,18 +222,95 @@ export default function GetAQuotePage() {
             <div>
               <h2 className="text-xl font-semibold tracking-tight">What happens next</h2>
               <div className="mt-4 grid gap-3 text-sm text-foreground/80">
-                <div>Fast response and clear communication.</div>
-                <div>Time-critical support for urgent loads.</div>
-                <div>Nationwide coverage — local to long-haul.</div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>
+                    <div className="font-medium">Fast Response</div>
+                    <div className="mt-1 text-muted-foreground">Receive your detailed quote within 24 hours with transparent pricing.</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>
+                    <div className="font-medium">Dedicated Support</div>
+                    <div className="mt-1 text-muted-foreground">Personal account manager handles your shipment from start to finish.</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>
+                    <div className="font-medium">Real-Time Tracking</div>
+                    <div className="mt-1 text-muted-foreground">Live updates on your shipment status with accurate ETAs.</div>
+                  </div>
+                </div>
+              </div>
+
+              <h2 className="mt-10 text-xl font-semibold tracking-tight">Service Benefits</h2>
+              <div className="mt-4 grid gap-3 text-sm text-foreground/80">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>
+                    <div className="font-medium">No Hidden Fees</div>
+                    <div className="mt-1 text-muted-foreground">Transparent pricing with detailed cost breakdowns.</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>
+                    <div className="font-medium">Full Insurance Coverage</div>
+                    <div className="mt-1 text-muted-foreground">Comprehensive cargo insurance for peace of mind.</div>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>
+                    <div className="font-medium">Professional Communication</div>
+                    <div className="mt-1 text-muted-foreground">Regular updates and proactive issue resolution.</div>
+                  </div>
+                </div>
               </div>
 
               <h2 className="mt-10 text-xl font-semibold tracking-tight">Service focus</h2>
               <div className="mt-4 grid gap-3 text-sm text-foreground/80">
-                <div>Freight Transportation</div>
-                <div>Hotshot Trucking</div>
-                <div>Last-mile delivery</div>
-                <div>Dispatching and 3PL</div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>Freight Transportation</div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>Hotshot Trucking</div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>Last-mile delivery</div>
+                </div>
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                  <div>Dispatching and 3PL</div>
+                </div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
+          <div className="mt-14 rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
+            <h2 className="text-xl font-semibold tracking-tight">FAQ</h2>
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
+              {faqs.map((f) => (
+                <CollapsibleFAQ key={f.question} question={f.question} answer={f.answer} />
+              ))}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                Need immediate assistance? Call us for fast, personal service.
+              </div>
+              <Button asChild variant="outline">
+                <Link href="/contact">Contact us</Link>
+              </Button>
             </div>
           </div>
         </div>

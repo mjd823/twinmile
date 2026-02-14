@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DriverApplicationForm } from "@/components/forms/driver-application-form";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
+import { CollapsibleFAQ } from "@/components/ui/collapsible-faq";
 import {
   breadcrumbSchema,
   faqSchema,
@@ -322,17 +323,9 @@ export default function DriveWithUsPage() {
 
           <div className="mt-14 rounded-xl border border-border/60 bg-card/30 p-6 backdrop-blur">
             <h2 className="text-xl font-semibold tracking-tight">FAQ</h2>
-            <div className="mt-6 space-y-3">
+            <div className="mt-6 grid gap-3 md:grid-cols-2">
               {faqs.map((f) => (
-                <div key={f.question} className="group rounded-lg border border-border/40 bg-background/10 p-4 transition-all hover:border-primary/30 hover:bg-primary/5">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 h-1.5 w-1.5 rounded-full bg-primary/60 group-hover:bg-primary transition-colors" />
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-foreground">{f.question}</div>
-                      <div className="mt-2 text-sm text-muted-foreground leading-relaxed">{f.answer}</div>
-                    </div>
-                  </div>
-                </div>
+                <CollapsibleFAQ key={f.question} question={f.question} answer={f.answer} />
               ))}
             </div>
 
