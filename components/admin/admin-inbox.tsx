@@ -13,10 +13,19 @@ import {
 
 function formatLocalDate(iso: string): string {
   const d = new Date(iso);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  
+  if (isToday) {
+    return d.toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  }
+  
   return d.toLocaleString(undefined, {
     month: "short",
     day: "numeric",
-    year: "numeric",
     hour: "numeric",
     minute: "2-digit",
   });
@@ -95,6 +104,7 @@ export function AdminInbox({
   const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("all");
   const [stageFilter, setStageFilter] = React.useState<StageFilter>("all");
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   const rows = React.useMemo<InboxItem[]>(() => {
     const q: InboxItem[] = quoteLeads.map((l: QuoteLeadRow) => ({
@@ -150,6 +160,15 @@ export function AdminInbox({
     const filtered = rows.filter((r) => {
       if (typeFilter !== "all" && r.kind !== typeFilter) return false;
       if (stageFilter !== "all" && r.status !== stageFilter) return false;
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        return (
+          r.name.toLowerCase().includes(query) ||
+          r.email.toLowerCase().includes(query) ||
+          r.detail.toLowerCase().includes(query) ||
+          r.status.toLowerCase().includes(query)
+        );
+      }
       return true;
     });
 
@@ -168,7 +187,7 @@ export function AdminInbox({
     });
 
     return sorted;
-  }, [rows, sortMode, stageFilter, typeFilter]);
+  }, [rows, sortMode, stageFilter, typeFilter, searchQuery]);
 
   const selectedQuote = React.useMemo(() => {
     if (!selected || selected.kind !== "quotes") return null;
@@ -286,94 +305,107 @@ export function AdminInbox({
   }
 
   return (
-    <div className="grid gap-4">
-      {message ? (
-        <div className="rounded-lg border border-border/60 bg-card p-4 text-sm text-muted-foreground">
-          {message}
-        </div>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-3">
-          <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-            Type
-            <select
-              className="h-9 rounded-md border border-border/70 bg-background/50 px-3 text-sm text-foreground shadow-sm shadow-black/10"
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.currentTarget.value as TypeFilter)}
-            >
-              <option value="all">All leads</option>
-              <option value="quotes">Quote leads</option>
-              <option value="drivers">Driver applications</option>
-            </select>
-          </label>
-
-          <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-            Stage
-            <select
-              className="h-9 rounded-md border border-border/70 bg-background/50 px-3 text-sm text-foreground shadow-sm shadow-black/10"
-              value={stageFilter}
-              onChange={(e) => setStageFilter(e.currentTarget.value as StageFilter)}
-            >
-              <option value="all">All stages</option>
-              <option value="new">New</option>
-              <option value="contacted">Contacted</option>
-              <option value="qualified">Qualified</option>
-              <option value="converted">Converted</option>
-              <option value="lost">Lost</option>
-            </select>
-          </label>
-
-          <label className="grid gap-1 text-xs font-medium text-muted-foreground">
-            Sort
-            <select
-              className="h-9 rounded-md border border-border/70 bg-background/50 px-3 text-sm text-foreground shadow-sm shadow-black/10"
-              value={sortMode}
-              onChange={(e) => setSortMode(e.currentTarget.value as SortMode)}
-            >
-              <option value="newest">Newest first</option>
-              <option value="oldest">Oldest first</option>
-              <option value="stage_priority">Stage priority</option>
-            </select>
-          </label>
-        </div>
+  <div className="grid gap-4">
+    {message ? (
+      <div className="rounded-lg border border-border/60 bg-card p-4 text-sm text-muted-foreground">
+        {message}
       </div>
+    ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-        <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-          <div className="text-xs text-muted-foreground">Total</div>
-          <div className="mt-1 text-lg font-semibold">{metrics.all}</div>
-        </div>
-        <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-          <div className="text-xs text-muted-foreground">New</div>
-          <div className="mt-1 text-lg font-semibold">{metrics.new}</div>
-        </div>
-        <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-          <div className="text-xs text-muted-foreground">Contacted</div>
-          <div className="mt-1 text-lg font-semibold">{metrics.contacted}</div>
-        </div>
-        <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-          <div className="text-xs text-muted-foreground">Qualified</div>
-          <div className="mt-1 text-lg font-semibold">{metrics.qualified}</div>
-        </div>
-        <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-          <div className="text-xs text-muted-foreground">Converted</div>
-          <div className="mt-1 text-lg font-semibold">{metrics.converted}</div>
-        </div>
-        <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-          <div className="text-xs text-muted-foreground">Lost</div>
-          <div className="mt-1 text-lg font-semibold">{metrics.lost}</div>
-        </div>
+    <div className="mt-6 flex flex-wrap items-center justify-between gap-4">
+      <div className="text-sm text-muted-foreground">
+        Click headers to sort/filter • {visibleRows.length} of {rows.length} leads
       </div>
+      <div className="flex items-center gap-2">
+        <Input
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.currentTarget.value)}
+          className="h-9 w-48"
+        />
+      </div>
+    </div>
+
+    <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
+        <div className="text-xs text-muted-foreground">Total</div>
+        <div className="mt-1 text-lg font-semibold">{metrics.all}</div>
+      </div>
+      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
+        <div className="text-xs text-muted-foreground">New</div>
+        <div className="mt-1 text-lg font-semibold">{metrics.new}</div>
+      </div>
+      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
+        <div className="text-xs text-muted-foreground">Contacted</div>
+        <div className="mt-1 text-lg font-semibold">{metrics.contacted}</div>
+      </div>
+      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
+        <div className="text-xs text-muted-foreground">Qualified</div>
+        <div className="mt-1 text-lg font-semibold">{metrics.qualified}</div>
+      </div>
+      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
+        <div className="text-xs text-muted-foreground">Converted</div>
+        <div className="mt-1 text-lg font-semibold">{metrics.converted}</div>
+      </div>
+      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
+        <div className="text-xs text-muted-foreground">Lost</div>
+        <div className="mt-1 text-lg font-semibold">{metrics.lost}</div>
+      </div>
+    </div>
 
       <div className="overflow-hidden rounded-lg border border-border/60 bg-card">
         <div className="hidden grid-cols-13 gap-2 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold md:grid">
-          <div className="col-span-2">Type</div>
+          <button 
+            className="col-span-2 flex items-center gap-1 hover:text-primary transition-colors"
+            onClick={() => {
+              if (typeFilter === "all") {
+                setTypeFilter("quotes");
+              } else if (typeFilter === "quotes") {
+                setTypeFilter("drivers");
+              } else {
+                setTypeFilter("all");
+              }
+            }}
+          >
+            Type {typeFilter !== "all" && `(${typeFilter === "quotes" ? "Q" : "D"})`}
+          </button>
           <div className="col-span-3">Name</div>
           <div className="col-span-3">Email</div>
           <div className="col-span-3">Details</div>
-          <div className="col-span-1">Stage</div>
-          <div className="col-span-1">Submitted</div>
+          <button 
+            className="col-span-1 flex items-center gap-1 hover:text-primary transition-colors"
+            onClick={() => {
+              if (stageFilter === "all") {
+                setStageFilter("new");
+              } else if (stageFilter === "new") {
+                setStageFilter("contacted");
+              } else if (stageFilter === "contacted") {
+                setStageFilter("qualified");
+              } else if (stageFilter === "qualified") {
+                setStageFilter("converted");
+              } else if (stageFilter === "converted") {
+                setStageFilter("lost");
+              } else {
+                setStageFilter("all");
+              }
+            }}
+          >
+            Stage {stageFilter !== "all" && `(${stageFilter.slice(0, 3).toUpperCase()})`}
+          </button>
+          <button 
+            className="col-span-1 flex items-center gap-1 hover:text-primary transition-colors"
+            onClick={() => {
+              if (sortMode === "newest") {
+                setSortMode("oldest");
+              } else if (sortMode === "oldest") {
+                setSortMode("stage_priority");
+              } else {
+                setSortMode("newest");
+              }
+            }}
+          >
+            Submitted {sortMode === "oldest" && "↑"}{sortMode === "newest" && "↓"}{sortMode === "stage_priority" && "⚡"}
+          </button>
         </div>
 
         {visibleRows.length === 0 ? (
