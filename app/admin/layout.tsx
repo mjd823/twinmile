@@ -31,18 +31,18 @@ export default async function AdminLayout({
   }
 
   return (
-    <div className="mx-auto w-full max-w-7xl px-5 py-6">
+    <div className="w-full min-h-screen">
       {!isLoginPage && <AdminMobileNav />}
 
       {!isLoginPage && (
-        <div className="flex gap-6">
+        <div className="flex">
           <AdminSidebar />
-          <div className="min-w-0 flex-1">{children}</div>
+          <div className="min-w-0 flex-1 p-6">{children}</div>
         </div>
       )}
 
       {isLoginPage && (
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="mx-auto w-full max-w-7xl px-5 py-6">{children}</div>
       )}
     </div>
   );

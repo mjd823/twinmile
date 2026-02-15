@@ -29,6 +29,7 @@ export function QuoteForm() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    console.log("[QuoteForm] Form submission started");
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -36,13 +37,20 @@ export function QuoteForm() {
     const utm = getUtm();
     if (utm) payload.utm = utm;
 
+    console.log("[QuoteForm] Payload prepared:", { ...payload, hp: payload.hp ? '[HONEYPOT]' : undefined });
     setStatus({ state: "submitting" });
 
+    console.log("[QuoteForm] Calling submitQuoteLeadAction...");
     const result = await submitQuoteLeadAction(payload);
+    console.log("[QuoteForm] Server action result:", result);
+    
     if (!result.ok) {
+      console.error("[QuoteForm] Submission failed:", result.error);
       setStatus({ state: "error", message: result.error || "Something went wrong. Please try again." });
       return;
     }
+
+    console.log("[QuoteForm] Submission successful");
 
     // Track successful quote submission with business intelligence
     const formPayload = Object.fromEntries(formData.entries());

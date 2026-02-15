@@ -28,6 +28,7 @@ export function DriverApplicationForm() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    console.log("[DriverApplicationForm] Form submission started");
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -35,13 +36,20 @@ export function DriverApplicationForm() {
     const utm = getUtm();
     if (utm) payload.utm = utm;
 
+    console.log("[DriverApplicationForm] Payload prepared:", { ...payload, hp: payload.hp ? '[HONEYPOT]' : undefined });
     setStatus({ state: "submitting" });
 
+    console.log("[DriverApplicationForm] Calling submitDriverApplicationAction...");
     const result = await submitDriverApplicationAction(payload);
+    console.log("[DriverApplicationForm] Server action result:", result);
+    
     if (!result.ok) {
+      console.error("[DriverApplicationForm] Submission failed:", result.error);
       setStatus({ state: "error", message: result.error || "Something went wrong. Please try again." });
       return;
     }
+
+    console.log("[DriverApplicationForm] Submission successful");
 
     // Track successful driver application with business intelligence
     const formPayload = Object.fromEntries(formData.entries());
