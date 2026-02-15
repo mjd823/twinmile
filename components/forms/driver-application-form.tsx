@@ -47,45 +47,50 @@ export function DriverApplicationForm() {
     const formPayload = Object.fromEntries(formData.entries());
     const utmData = getUtm();
     
-    analytics.trackDriverApplication({
-      truckType: formPayload.truckType as string || 'dry_van',
-      yearsExperience: formPayload.yearsExperience as string || '0',
-      preferredRoutes: formPayload.preferredRoutes as string || '',
-      startDate: formPayload.startDate as string || '',
-      hasOwnAuthority: formPayload.hasOwnAuthority === 'true',
-      utmSource: utmData?.utm_source,
-      utmMedium: utmData?.utm_medium,
-    });
-
-    // Process driver lead with AI intelligence (this is the MAGIC!)
-    const leadData = {
-      id: `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      type: 'driver' as const,
-      name: formPayload.fullName as string,
-      email: formPayload.email as string,
-      phone: formPayload.phone as string,
-      truckType: formPayload.truckType as string,
-      yearsExperience: formPayload.yearsExperience as string,
-      hasOwnAuthority: formPayload.hasOwnAuthority === 'true',
-      utmSource: utmData?.utm_source,
-      utmMedium: utmData?.utm_medium,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Process with AI-enhanced intelligence
-    const leadScore = await aiEnhancedLeadManager.processIncomingLead(leadData);
+    // Basic analytics tracking (with error handling)
+    try {
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'generate_lead', {
+          event_category: 'form_submission',
+          event_label: 'driver_application'
+        });
+      }
+    } catch (error) {
+      console.warn('Analytics tracking failed:', error);
+    }
     
-    console.log('🤖 AI Agent processed driver lead:', {
-      score: leadScore.score,
-      quality: leadScore.quality,
-      value: leadScore.estimatedValue,
-      priority: leadScore.priority,
-      autoActions: leadScore.autoActions,
-      assignee: leadScore.routing.assignee,
-      aiInsights: leadScore.aiAnalysis?.insights || [],
-      aiRecommendations: leadScore.aiAnalysis?.recommendations || [],
-      processingMethod: leadScore.processingMethod
-    });
+    // AI lead processing (with error handling)
+    try {
+      const leadData = {
+        id: `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'driver' as const,
+        name: formPayload.fullName as string,
+        email: formPayload.email as string,
+        phone: formPayload.phone as string,
+        truckType: formPayload.truckType as string,
+        yearsExperience: formPayload.yearsExperience as string,
+        hasOwnAuthority: formPayload.hasOwnAuthority === 'true',
+        utmSource: utmData?.utm_source,
+        utmMedium: utmData?.utm_medium,
+        timestamp: new Date().toISOString(),
+      };
+
+      const leadScore = await aiEnhancedLeadManager.processIncomingLead(leadData);
+      
+      console.log('🤖 AI Agent processed driver lead:', {
+        score: leadScore.score,
+        quality: leadScore.quality,
+        value: leadScore.estimatedValue,
+        priority: leadScore.priority,
+        autoActions: leadScore.autoActions,
+        assignee: leadScore.routing.assignee,
+        aiInsights: leadScore.aiAnalysis?.insights || [],
+        aiRecommendations: leadScore.aiAnalysis?.recommendations || [],
+        processingMethod: leadScore.processingMethod
+      });
+    } catch (error) {
+      console.warn('AI lead processing failed:', error);
+    }
 
     setStatus({ state: "success" });
     form.reset();

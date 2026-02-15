@@ -48,47 +48,50 @@ export function QuoteForm() {
     const formPayload = Object.fromEntries(formData.entries());
     const utmData = getUtm();
     
-    analytics.trackQuoteSubmission({
-      serviceType: formPayload.serviceType as string || 'freight',
-      pickupLocation: formPayload.pickupLocation as string || '',
-      dropoffLocation: formPayload.dropoffLocation as string || undefined,
-      contactMethod: 'email', // Default since form submission is email-based
-      company: formPayload.company as string || undefined,
-      utmSource: utmData?.utm_source,
-      utmMedium: utmData?.utm_medium,
-      utmCampaign: utmData?.utm_campaign,
-    });
-
-    // Process lead with AI intelligence (this is the MAGIC!)
-    const leadData = {
-      id: `quote_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      type: 'quote' as const,
-      name: formPayload.name as string,
-      email: formPayload.email as string,
-      serviceType: formPayload.serviceType as string,
-      pickupLocation: formPayload.pickupLocation as string,
-      dropoffLocation: formPayload.dropoffLocation as string,
-      company: formPayload.company as string,
-      utmSource: utmData?.utm_source,
-      utmMedium: utmData?.utm_medium,
-      utmCampaign: utmData?.utm_campaign,
-      timestamp: new Date().toISOString(),
-    };
-
-    // Process with AI-enhanced intelligence
-    const leadScore = await aiEnhancedLeadManager.processIncomingLead(leadData);
+    // Basic analytics tracking (with error handling)
+    try {
+      if (typeof window !== 'undefined' && window.gtag) {
+        window.gtag('event', 'generate_lead', {
+          event_category: 'form_submission',
+          event_label: 'quote_request'
+        });
+      }
+    } catch (error) {
+      console.warn('Analytics tracking failed:', error);
+    }
     
-    console.log('🤖 AI Agent processed lead:', {
-      score: leadScore.score,
-      quality: leadScore.quality,
-      value: leadScore.estimatedValue,
-      priority: leadScore.priority,
-      autoActions: leadScore.autoActions,
-      assignee: leadScore.routing.assignee,
-      aiInsights: leadScore.aiAnalysis?.insights || [],
-      aiRecommendations: leadScore.aiAnalysis?.recommendations || [],
-      processingMethod: leadScore.processingMethod
-    });
+    // AI lead processing (with error handling)
+    try {
+      const leadData = {
+        id: `quote_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'quote' as const,
+        name: formPayload.name as string,
+        email: formPayload.email as string,
+        serviceType: formPayload.serviceType as string,
+        pickupLocation: formPayload.pickupLocation as string,
+        dropoffLocation: formPayload.dropoffLocation as string,
+        company: formPayload.company as string,
+        utmSource: utmData?.utm_source,
+        utmMedium: utmData?.utm_medium,
+        utmCampaign: utmData?.utm_campaign,
+        timestamp: new Date().toISOString(),
+      };
+
+      const leadScore = await aiEnhancedLeadManager.processIncomingLead(leadData);
+      console.log('🤖 AI Agent processed lead:', {
+        score: leadScore.score,
+        quality: leadScore.quality,
+        value: leadScore.estimatedValue,
+        priority: leadScore.priority,
+        autoActions: leadScore.autoActions,
+        assignee: leadScore.routing.assignee,
+        aiInsights: leadScore.aiAnalysis?.insights || [],
+        aiRecommendations: leadScore.aiAnalysis?.recommendations || [],
+        processingMethod: leadScore.processingMethod
+      });
+    } catch (error) {
+      console.warn('AI lead processing failed:', error);
+    }
 
     setStatus({ state: "success" });
     form.reset();
