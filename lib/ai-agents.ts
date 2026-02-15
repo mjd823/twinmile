@@ -118,15 +118,28 @@ export interface AgentRelationship {
 
 // Initialize Enhanced Groq Client
 export class GroqAgentClient {
-  private client: Groq;
+  private client: Groq | null = null;
+  private apiKey: string | undefined;
   
   constructor(apiKey?: string) {
-    this.client = new Groq({
-      apiKey: apiKey || process.env.GROQ_API_KEY,
-      defaultHeaders: {
-        "Groq-Model-Version": "latest"
+    this.apiKey = apiKey;
+    // Don't initialize client in constructor - lazy load on first use
+  }
+  
+  private getClient(): Groq {
+    if (!this.client) {
+      const key = this.apiKey || (typeof process !== 'undefined' ? process.env.GROQ_API_KEY : undefined);
+      if (!key) {
+        throw new Error('Groq API key not available. AI features require server-side execution.');
       }
-    });
+      this.client = new Groq({
+        apiKey: key,
+        defaultHeaders: {
+          "Groq-Model-Version": "latest"
+        }
+      });
+    }
+    return this.client;
   }
   
   async createAgentResponse(
@@ -135,7 +148,7 @@ export class GroqAgentClient {
     enabledTools: string[] = Object.values(AGENT_CONFIG.tools),
     mcpServers: any[] = AGENT_CONFIG.mcpServers
   ) {
-    return await this.client.chat.completions.create({
+    return await this.getClient().chat.completions.create({
       model: AGENT_CONFIG.model,
       messages: [
         { role: "system", content: systemPrompt },
@@ -161,7 +174,7 @@ export class GroqAgentClient {
   async generateSpeech(text: string, persona: keyof typeof AGENT_CONFIG.voice.personas = "professional") {
     const voice = AGENT_CONFIG.voice.personas[persona];
     
-    const response = await this.client.audio.speech.create({
+    const response = await this.getClient().audio.speech.create({
       model: AGENT_CONFIG.voice.model,
       voice: voice,
       input: text,
