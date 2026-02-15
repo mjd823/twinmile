@@ -3,8 +3,10 @@
 import * as React from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { logoutAction, meAction } from "@/app/actions/auth";
+import { cn } from "@/lib/utils";
 
 type MeResponse = {
   loggedIn: boolean;
@@ -13,6 +15,7 @@ type MeResponse = {
 };
 
 export function SiteHeader() {
+  const pathname = usePathname();
   const [me, setMe] = React.useState<MeResponse>({
     loggedIn: false,
     role: null,
@@ -99,31 +102,82 @@ export function SiteHeader() {
         </Link>
 
         <nav className="hidden items-center gap-6 text-sm text-muted-foreground md:flex">
-          <Link className="transition-colors hover:text-foreground" href="/services">
+          <Link 
+            className={cn(
+              "transition-colors hover:text-foreground",
+              pathname === "/services" && "text-foreground font-medium"
+            )} 
+            href="/services"
+          >
             Services
           </Link>
-          <Link className="transition-colors hover:text-foreground" href="/service-areas">
+          <Link 
+            className={cn(
+              "transition-colors hover:text-foreground",
+              pathname === "/service-areas" && "text-foreground font-medium"
+            )} 
+            href="/service-areas"
+          >
             Areas
           </Link>
-          <Link className="transition-colors hover:text-foreground" href="/industries">
+          <Link 
+            className={cn(
+              "transition-colors hover:text-foreground",
+              pathname === "/industries" && "text-foreground font-medium"
+            )} 
+            href="/industries"
+          >
             Industries
           </Link>
-          <Link className="transition-colors hover:text-foreground" href="/blog">
+          <Link 
+            className={cn(
+              "transition-colors hover:text-foreground",
+              pathname === "/blog" && "text-foreground font-medium"
+            )} 
+            href="/blog"
+          >
             Blog
           </Link>
-          <Link className="transition-colors hover:text-foreground" href="/about">
+          <Link 
+            className={cn(
+              "transition-colors hover:text-foreground",
+              pathname === "/about" && "text-foreground font-medium"
+            )} 
+            href="/about"
+          >
             About
           </Link>
-          <Link className="transition-colors hover:text-foreground" href="/contact">
+          <Link 
+            className={cn(
+              "transition-colors hover:text-foreground",
+              pathname === "/contact" && "text-foreground font-medium"
+            )} 
+            href="/contact"
+          >
             Contact
           </Link>
         </nav>
 
         <div className="flex items-center gap-2">
-          <Button asChild size="sm" className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm">
+          <Button 
+            asChild 
+            size="sm" 
+            className={cn(
+              "h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm",
+              pathname === "/get-a-quote" && "bg-primary/90 ring-2 ring-primary/50"
+            )}
+          >
             <Link href="/get-a-quote">Get a Quote</Link>
           </Button>
-          <Button asChild variant="outline" size="sm" className="h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm">
+          <Button 
+            asChild 
+            variant="outline" 
+            size="sm" 
+            className={cn(
+              "h-8 px-3 text-xs sm:h-9 sm:px-4 sm:text-sm",
+              pathname === "/drive-with-us" && "bg-accent border-primary/50 text-foreground"
+            )}
+          >
             <Link href="/drive-with-us">Drive With Us</Link>
           </Button>
 
@@ -255,9 +309,35 @@ export function SiteHeader() {
             </div>
           ) : null}
           {!portalHref ? (
-            <Button asChild variant="outline" className="hidden sm:inline-flex">
-              <Link href="/driver/login">Sign in</Link>
-            </Button>
+            <div className="relative hidden sm:block" ref={accountRef}>
+              <Button 
+                variant="outline" 
+                onClick={() => setAccountOpen((v) => !v)}
+                aria-expanded={accountOpen}
+              >
+                Sign in
+              </Button>
+              {accountOpen ? (
+                <div className="absolute right-0 mt-2 w-48 rounded-lg border border-border/60 bg-popover shadow-xl">
+                  <div className="grid gap-1 p-2 text-sm">
+                    <Link
+                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      href="/driver/login"
+                      onClick={() => setAccountOpen(false)}
+                    >
+                      Driver Sign in
+                    </Link>
+                    <Link
+                      className="rounded-md px-3 py-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      href="/admin/login"
+                      onClick={() => setAccountOpen(false)}
+                    >
+                      Admin Sign in
+                    </Link>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </div>

@@ -26,7 +26,7 @@ export default function AdminLoginPage() {
 
       <section>
         <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
-          <div className="max-w-xl rounded-lg border border-border/60 bg-card p-6">
+          <div className="mx-auto max-w-xl rounded-lg border border-border/60 bg-card p-6">
             <LoginForm role="admin" redirectTo="/admin" />
           </div>
         </div>
