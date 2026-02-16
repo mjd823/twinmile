@@ -1,9 +1,9 @@
-import { AgentOrchestrator, AgentFactory } from "@/lib/ai-agents";
+import { BusinessAgentFactory, EnhancedAgent } from "@/lib/business-organization";
 import { automatedLeadManager, type LeadData } from "@/lib/automated-lead-manager";
 
 // Enhanced AI-Powered Lead Manager
 export class AIEnhancedLeadManager {
-  private orchestrator: AgentOrchestrator;
+  private agents: Map<string, EnhancedAgent>;
   private static instance: AIEnhancedLeadManager;
   
   static getInstance(): AIEnhancedLeadManager {
@@ -14,7 +14,7 @@ export class AIEnhancedLeadManager {
   }
   
   private constructor() {
-    this.orchestrator = new AgentOrchestrator();
+    this.agents = BusinessAgentFactory.initializeOrganization();
   }
   
   // Process lead with full AI intelligence
@@ -26,7 +26,7 @@ export class AIEnhancedLeadManager {
       const traditionalScore = await automatedLeadManager.processIncomingLead(lead);
       
       // Step 2: Process with AI agents for deep intelligence
-      const aiAnalysis = await this.orchestrator.processLead(lead);
+      const aiAnalysis = await this.processLeadWithAgents(lead);
       
       // Step 3: Combine traditional scoring with AI insights
       const enhancedResult = {
@@ -103,15 +103,49 @@ export class AIEnhancedLeadManager {
     return recommendations;
   }
   
+  // Route lead to correct specialist agent
+  private async processLeadWithAgents(lead: LeadData) {
+    // Step 1: Lead generation agent does initial analysis
+    const leadGenAgent = this.agents.get('lead_generation');
+    const leadAnalysis = leadGenAgent ? await leadGenAgent.process(lead) : { content: '' };
+    
+    // Step 2: Route to specialist based on lead type
+    let specialistResult;
+    let teamAssignment: string;
+    
+    if (lead.type === 'driver') {
+      teamAssignment = 'recruiting';
+      const hrAgent = this.agents.get('hr_director');
+      specialistResult = hrAgent ? await hrAgent.process(lead) : leadAnalysis;
+    } else {
+      // Freight/quote leads
+      const content = leadAnalysis.content || '';
+      if (content.includes('premium') || (lead.company && lead.company.length > 0)) {
+        teamAssignment = 'executive';
+        const ceoAgent = this.agents.get('ceo');
+        specialistResult = ceoAgent ? await ceoAgent.process(lead) : leadAnalysis;
+      } else {
+        teamAssignment = 'sales';
+        const salesAgent = this.agents.get('sales_director');
+        specialistResult = salesAgent ? await salesAgent.process(lead) : leadAnalysis;
+      }
+    }
+    
+    return { leadAnalysis, specialistResult, teamAssignment };
+  }
+
   // Generate AI-powered communication
   async generateCommunication(
     leadData: LeadData, 
     communicationType: 'initial' | 'followup' | 'approval' | 'rejection',
     persona: 'professional' | 'friendly' | 'urgent' = 'professional'
   ) {
-    const agent = AgentFactory.createAgent(
-      leadData.type === 'driver' ? 'recruiting' : 'freight'
-    );
+    const agentKey = leadData.type === 'driver' ? 'hr_director' : 'sales_director';
+    const agent = this.agents.get(agentKey) || this.agents.get('lead_generation');
+    
+    if (!agent) {
+      return { text: '', generatedAt: new Date().toISOString() };
+    }
     
     const prompt = `Generate ${communicationType} communication for this ${leadData.type} lead:
     
@@ -130,23 +164,30 @@ export class AIEnhancedLeadManager {
     };
   }
   
-  // Get AI agent performance metrics
+  // Get AI agent performance metrics from the real organization
   getPerformanceMetrics() {
+    const orgStatus = BusinessAgentFactory.getOrganizationStatus();
     return {
-      agentsActive: 4,
+      agentsActive: orgStatus.activeAgents,
+      totalAgents: orgStatus.totalAgents,
+      departments: orgStatus.departments,
       processingMethods: ['ai-enhanced', 'traditional-fallback'],
       capabilities: [
-        'web-research',
-        'code-execution', 
+        'web-search',
+        'code-interpreter', 
         'browser-automation',
-        'voice-synthesis',
-        'market-analysis',
-        'background-verification',
-        'competitor-intelligence'
+        'visit-website',
+        'wolfram-alpha',
+        'voice-synthesis'
       ],
       averageProcessingTime: '2-5 seconds',
       intelligenceLevel: 'advanced-autonomous'
     };
+  }
+
+  // Get all agent statuses for dashboard
+  getAgentStatuses() {
+    return BusinessAgentFactory.getOrganizationStatus().agentStatuses;
   }
 }
 

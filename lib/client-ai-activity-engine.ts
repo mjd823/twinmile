@@ -68,33 +68,35 @@ export class ClientAIActivityEngine {
     }));
   }
 
-  // Get supervisor report
+  // Get supervisor report — returns whatever the API gave us, no fakes
   getSupervisorReport() {
     const data = this.activityCache || this.getFallbackData();
     return {
       supervisorName: data.supervisor?.name || 'AI Supervisor',
-      systemHealth: data.systemHealth || { 
-        score: 95, 
-        status: 'excellent', 
-        recentActivities: 7, 
-        databaseConnected: true,
-        performanceOptimized: true
+      systemHealth: data.systemHealth || {
+        score: 0,
+        status: 'loading',
+        activeAgents: 8,
+        databaseConnected: false,
+        totalRecords: 0,
       },
       performance: {
-        average: 96.8,
-        topPerformer: { name: 'Robert Chang (Finance)', successRate: 99.2 },
+        average: data.systemHealth?.score ?? 0,
+        topPerformer: { name: 'N/A', successRate: 0 },
         needsAttention: [],
-        efficiency: 'Peak Performance'
       },
       activeAlerts: [],
       totalInterventions: data.supervisor?.interventionsCount || 0,
       lastReview: new Date().toISOString(),
-      recommendations: [
-        'All systems operating at peak efficiency',
-        'AI team performing optimally',
-        'Database integration successful'
-      ],
-      systemStatus: 'All Systems Operational'
+      recommendations: data.systemHealth?.databaseConnected
+        ? [
+            `${data.realMetrics?.actualLeadsProcessed ?? 0} leads in pipeline`,
+            `${data.realMetrics?.actualCustomers ?? 0} customer accounts`,
+          ]
+        : ['Connecting to database…'],
+      systemStatus: data.systemHealth?.databaseConnected
+        ? 'All Systems Operational'
+        : 'Connecting…',
     };
   }
 
@@ -133,75 +135,31 @@ export class ClientAIActivityEngine {
     return null;
   }
 
-  // Fallback data when API is unavailable
+  // Honest fallback when API hasn't responded yet
   private getFallbackData() {
     return {
-      isActive: true,
-      systemHealth: { 
-        score: 88, 
-        status: 'optimal', 
-        recentActivities: 5, 
+      isActive: false,
+      systemHealth: {
+        score: 0,
+        status: 'loading',
+        activeAgents: 8,
         databaseConnected: false,
-        performanceOptimized: true,
-        fallbackMode: true
+        totalRecords: 0,
       },
-      recentActivities: this.getFallbackActivities(),
+      recentActivities: [],
       supervisor: {
         name: 'AI Supervisor',
-        currentTask: 'System operating in resilient mode - AI team continues operations',
+        currentTask: 'Connecting to database…',
         alertsCount: 0,
-        interventionsCount: 0
+        interventionsCount: 0,
       },
       realMetrics: {
         actualLeadsProcessed: 0,
         actualCustomers: 0,
-        actualDrivers: 0
+        actualDrivers: 0,
       },
       databaseStats: null,
-      error: 'API connection failed - using resilient fallback mode'
     };
-  }
-
-  // Fallback activities
-  private getFallbackActivities() {
-    const currentTime = new Date().toISOString();
-    return [
-      {
-        timestamp: currentTime,
-        agent: 'AI Supervisor',
-        activity: 'System monitoring - AI team operating in resilient mode',
-        type: 'supervision',
-        details: { resilientMode: true, performance: 'optimal', timestamp: currentTime }
-      },
-      {
-        timestamp: currentTime,
-        agent: 'Sofia Rodriguez (Lead Generation)',
-        activity: 'Lead processing active - system maintaining optimal performance',
-        type: 'lead_processing',
-        details: { status: 'active', performance: 'optimal', timestamp: currentTime }
-      },
-      {
-        timestamp: currentTime,
-        agent: 'Marcus Chen (Sales)',
-        activity: 'Sales operations continuing - AI team performing efficiently',
-        type: 'lead_processing',
-        details: { status: 'active', efficiency: 'high', timestamp: currentTime }
-      },
-      {
-        timestamp: currentTime,
-        agent: 'Emily Watson (Customer Success)',
-        activity: 'Customer service active - maintaining high satisfaction',
-        type: 'customer_service',
-        details: { status: 'active', satisfaction: 'optimal', timestamp: currentTime }
-      },
-      {
-        timestamp: currentTime,
-        agent: 'David Kumar (Operations)',
-        activity: 'Operations monitoring - route optimization systems active',
-        type: 'operations',
-        details: { status: 'active', optimization: 'efficient', timestamp: currentTime }
-      }
-    ];
   }
 
   // Helper function for time ago

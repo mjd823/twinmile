@@ -104,19 +104,19 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
   // Calculate real-time insights
   const getSystemHealthColor = (health: string) => {
     switch (health) {
-      case 'excellent': return 'text-green-600 bg-green-100';
-      case 'good': return 'text-blue-600 bg-blue-100';
-      case 'warning': return 'text-yellow-600 bg-yellow-100';
-      case 'critical': return 'text-red-600 bg-red-100';
-      default: return 'text-gray-600 bg-gray-100';
+      case 'excellent': return 'text-green-400 bg-green-500/15';
+      case 'good': return 'text-blue-400 bg-blue-500/15';
+      case 'warning': return 'text-yellow-400 bg-yellow-500/15';
+      case 'critical': return 'text-red-400 bg-red-500/15';
+      default: return 'text-muted-foreground bg-muted';
     }
   };
 
   const getSentimentColor = (sentiment: string) => {
     switch (sentiment) {
-      case 'positive': return 'text-green-600';
-      case 'negative': return 'text-red-600';
-      default: return 'text-gray-600';
+      case 'positive': return 'text-green-400';
+      case 'negative': return 'text-red-400';
+      default: return 'text-muted-foreground';
     }
   };
 
@@ -138,7 +138,7 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-3xl font-bold flex items-center gap-2">
-              <Brain className="h-8 w-8 text-purple-600" />
+              <Brain className="h-8 w-8 text-purple-400" />
               AI Business Oversight
             </h2>
             <p className="text-muted-foreground">
@@ -162,7 +162,7 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
           <Card className="border-purple-500/30 bg-purple-500/5">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Activity className="h-4 w-4 text-purple-600" />
+                <Activity className="h-4 w-4 text-purple-400" />
                 System Health
               </CardTitle>
             </CardHeader>
@@ -179,12 +179,12 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
           <Card className="border-green-500/30 bg-green-500/5">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Users className="h-4 w-4 text-green-600" />
+                <Users className="h-4 w-4 text-green-400" />
                 Active Agents
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">
+              <div className="text-2xl font-bold text-green-400">
                 {metrics.activeAgents}/{metrics.totalAgents}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -196,12 +196,12 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
           <Card className="border-blue-500/30 bg-blue-500/5">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <TrendingUp className="h-4 w-4 text-blue-600" />
+                <TrendingUp className="h-4 w-4 text-blue-400" />
                 Success Rate
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-blue-600">
+              <div className="text-2xl font-bold text-blue-400">
                 {metrics.averageSuccessRate.toFixed(1)}%
               </div>
               <p className="text-xs text-muted-foreground">
@@ -213,12 +213,12 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
           <Card className="border-orange-500/30 bg-orange-500/5">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Network className="h-4 w-4 text-orange-600" />
+                <Network className="h-4 w-4 text-orange-400" />
                 Collaborations
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-orange-600">
+              <div className="text-2xl font-bold text-orange-400">
                 {metrics.collaborationEvents}
               </div>
               <p className="text-xs text-muted-foreground">
@@ -321,7 +321,7 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">{agent.name}</CardTitle>
-                  <Badge className={agent.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}>
+                  <Badge className={agent.isActive ? 'bg-green-500/15 text-green-400' : 'bg-muted text-muted-foreground'}>
                     {agent.isActive ? 'Active' : 'Idle'}
                   </Badge>
                 </div>
@@ -337,7 +337,7 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>
                       <span className="font-medium">Success Rate:</span>
-                      <p className="text-green-600">{agent.performance.successRate.toFixed(1)}%</p>
+                      <p className="text-green-400">{agent.performance.successRate.toFixed(1)}%</p>
                     </div>
                     <div>
                       <span className="font-medium">Tasks:</span>
@@ -392,10 +392,10 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
                     </p>
                   </div>
                   <Badge className={
-                    workflow.status === 'completed' ? 'bg-green-100 text-green-700' :
-                    workflow.status === 'active' ? 'bg-blue-100 text-blue-700' :
-                    workflow.status === 'failed' ? 'bg-red-100 text-red-700' :
-                    'bg-gray-100 text-gray-700'
+                    workflow.status === 'completed' ? 'bg-green-500/15 text-green-400' :
+                    workflow.status === 'active' ? 'bg-blue-500/15 text-blue-400' :
+                    workflow.status === 'failed' ? 'bg-red-500/15 text-red-400' :
+                    'bg-muted text-muted-foreground'
                   }>
                     {workflow.status}
                   </Badge>
@@ -416,7 +416,7 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
                     <p className="text-sm font-medium mb-2">Collaboration:</p>
                     <div className="flex gap-2 flex-wrap">
                       {workflow.collaboration.map((collab, index) => (
-                        <Badge key={index} variant="outline" className="text-xs bg-purple-100 text-purple-700">
+                        <Badge key={index} variant="outline" className="text-xs bg-purple-500/15 text-purple-400">
                           {collab.agent} ({collab.type})
                         </Badge>
                       ))}
@@ -466,7 +466,7 @@ export function OversightDashboard({ agents, workflows, metrics, onIntervention,
                       </div>
                       <div className="text-right">
                         <div className="text-sm font-medium">Strength: {rel.strength}/10</div>
-                        <div className="w-16 h-2 bg-gray-200 rounded-full mt-1">
+                        <div className="w-16 h-2 bg-secondary rounded-full mt-1">
                           <div 
                             className="h-2 bg-blue-500 rounded-full" 
                             style={{ width: `${rel.strength * 10}%` }}

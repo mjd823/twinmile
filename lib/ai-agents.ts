@@ -14,51 +14,15 @@ export const AGENT_CONFIG = {
     wolfram_alpha: "wolfram_alpha"
   },
   
-  // Real MCP Server Integrations for Business Operations
-  mcpServers: [
-    {
-      label: "LinkedIn",
-      url: "https://mcp.linkedin.com",
-      description: "Professional networking and lead generation",
-      tools: ["prospect_search", "profile_analysis", "message_automation", "connection_builder"]
-    },
-    {
-      label: "GoogleWorkspace", 
-      url: "https://mcp.google.com",
-      description: "Email, calendar, and document management",
-      tools: ["gmail_send", "calendar_schedule", "docs_create", "sheets_analytics"]
-    },
-    {
-      label: "Salesforce",
-      url: "https://mcp.salesforce.com", 
-      description: "CRM and customer relationship management",
-      tools: ["contact_create", "opportunity_track", "report_generate", "automation_rules"]
-    },
-    {
-      label: "Slack",
-      url: "https://mcp.slack.com",
-      description: "Team communication and collaboration",
-      tools: ["message_send", "channel_create", "file_share", "workflow_trigger"]
-    },
-    {
-      label: "HubSpot",
-      url: "https://mcp.hubspot.com",
-      description: "Marketing automation and CRM",
-      tools: ["contact_sync", "campaign_launch", "lead_nurture", "analytics_track"]
-    },
-    {
-      label: "QuickBooks",
-      url: "https://mcp.quickbooks.com",
-      description: "Accounting and financial management",
-      tools: ["invoice_create", "expense_track", "report_financial", "payroll_process"]
-    },
-    {
-      label: "Zoom",
-      url: "https://mcp.zoom.us",
-      description: "Video meetings and interviews",
-      tools: ["meeting_schedule", "recording_manage", "webinar_host", "transcript_generate"]
-    }
-  ],
+  // Future MCP Server Integrations (not yet connected — requires real server endpoints)
+  // When connecting a real MCP server, add it here with a valid URL.
+  mcpServers: [] as Array<{
+    label: string;
+    url: string;
+    description: string;
+    tools: string[];
+    status: 'connected' | 'planned';
+  }>,
   
   // Voice synthesis configuration
   voice: {
@@ -148,7 +112,7 @@ export class GroqAgentClient {
     enabledTools: string[] = Object.values(AGENT_CONFIG.tools),
     mcpServers: any[] = AGENT_CONFIG.mcpServers
   ) {
-    return await this.getClient().chat.completions.create({
+    const createParams: any = {
       model: AGENT_CONFIG.model,
       messages: [
         { role: "system", content: systemPrompt },
@@ -158,17 +122,22 @@ export class GroqAgentClient {
         tools: {
           enabled_tools: enabledTools
         }
-      },
-      // Add MCP server configuration for external tool access
-      tools: mcpServers.map(server => ({
+      }
+    };
+
+    // Only include MCP tools if there are connected servers
+    if (mcpServers.length > 0) {
+      createParams.tools = mcpServers.map((server: any) => ({
         type: "mcp",
         server_label: server.label,
         server_url: server.url,
         server_description: server.description,
         require_approval: "never",
         allowed_tools: null
-      }))
-    });
+      }));
+    }
+
+    return await this.getClient().chat.completions.create(createParams);
   }
   
   async generateSpeech(text: string, persona: keyof typeof AGENT_CONFIG.voice.personas = "professional") {
@@ -394,288 +363,7 @@ export interface PerformanceMetrics {
   innovationScore: number;
 }
 
-// Lead Processing AI Agent
-export class LeadProcessingAgent extends EnhancedAgent {
-  constructor() {
-    const personality: AgentPersonality = {
-      name: "Sarah Mitchell",
-      role: "Lead Processing Specialist",
-      department: "Sales",
-      communicationStyle: "professional",
-      decisionMakingStyle: "analytical",
-      coreValues: ["efficiency", "accuracy", "intelligence", "automation"],
-      expertise: ["lead analysis", "market research", "data processing", "automation"],
-      relationshipStyle: "collaborator",
-      workPace: "rapid",
-      emotionalIntelligence: 7,
-      riskTolerance: "medium"
-    };
-    
-    super(personality);
-    this.isActive = true;
-    this.currentTask = "Intelligent lead processing and routing";
-  }
-  
-  async process(leadData: any) {
-    this.currentTask = "Processing lead with AI intelligence";
-    
-    const { name, company, serviceType, pickupLocation, dropoffLocation, email, phone } = leadData;
-    
-    const userMessage = `Process this lead and provide comprehensive analysis:
-    
-    Lead Details:
-    - Name: ${name}
-    - Company: ${company || 'Not provided'}
-    - Service Type: ${serviceType}
-    - Pickup: ${pickupLocation}
-    - Dropoff: ${dropoffLocation}
-    - Contact: ${email}, ${phone || 'Not provided'}
-    
-    Please:
-    1. Research the company if provided
-    2. Analyze the route and market conditions
-    3. Calculate lead score and revenue potential
-    4. Determine optimal team assignment
-    5. Generate initial communication strategy
-    
-    Use web search for company research and market analysis.`;
-    
-    return await this.processWithTools(userMessage, [
-      AGENT_CONFIG.tools.web_search,
-      AGENT_CONFIG.tools.code_interpreter,
-      AGENT_CONFIG.tools.wolfram_alpha
-    ]);
-  }
-}
-
-// Owner AI Agent
-export class OwnerAgent extends EnhancedAgent {
-  constructor() {
-    const personality: AgentPersonality = {
-      name: "Michael Sterling",
-      role: "Owner",
-      department: "Executive",
-      communicationStyle: "authoritative",
-      decisionMakingStyle: "decisive",
-      coreValues: ["excellence", "growth", "quality", "leadership"],
-      expertise: ["business strategy", "premium client management", "strategic decisions", "relationship building"],
-      relationshipStyle: "leader",
-      workPace: "strategic",
-      emotionalIntelligence: 8,
-      riskTolerance: "medium"
-    };
-    
-    super(personality);
-    this.isActive = true;
-    this.currentTask = "Premium lead evaluation and strategic decisions";
-  }
-  
-  async process(premiumLead: any) {
-    this.currentTask = "Evaluating premium lead for strategic decision";
-    
-    const userMessage = `Evaluate this premium lead for strategic decision:
-    
-    Premium Lead:
-    ${JSON.stringify(premiumLead, null, 2)}
-    
-    Please provide:
-    1. Deep business intelligence analysis
-    2. Strategic opportunity assessment
-    3. Revenue potential analysis
-    4. Risk/reward evaluation
-    5. Recommended action (approve/reject/negotiate)
-    6. Strategic rationale for decision
-    
-    Use all available tools for comprehensive analysis.`;
-    
-    return await this.processWithTools(userMessage, Object.values(AGENT_CONFIG.tools));
-  }
-}
-
-// Recruiting AI Agent  
-export class RecruitingAgent extends EnhancedAgent {
-  constructor() {
-    const personality: AgentPersonality = {
-      name: "Amanda Foster",
-      role: "Recruiting Specialist",
-      department: "Human Resources",
-      communicationStyle: "friendly",
-      decisionMakingStyle: "collaborative",
-      coreValues: ["people", "quality", "growth", "relationships"],
-      expertise: ["driver recruitment", "background verification", "interviewing", "onboarding"],
-      relationshipStyle: "mentor",
-      workPace: "balanced",
-      emotionalIntelligence: 8,
-      riskTolerance: "low"
-    };
-    
-    super(personality);
-    this.isActive = true;
-    this.currentTask = "Driver recruitment and application processing";
-  }
-  
-  async process(driverApplication: any) {
-    this.currentTask = "Processing driver application with AI intelligence";
-    
-    const userMessage = `Process this driver application:
-    
-    Application Details:
-    ${JSON.stringify(driverApplication, null, 2)}
-    
-    Please:
-    1. Verify background and experience via web search
-    2. Calculate driver quality score and revenue potential
-    3. Assess equipment and experience match
-    4. Generate screening questions
-    5. Recommend next steps (hire/interview/reject)
-    6. Draft professional communication
-    
-    Use web search for verification and code execution for calculations.`;
-    
-    return await this.processWithTools(userMessage, [
-      AGENT_CONFIG.tools.web_search,
-      AGENT_CONFIG.tools.code_interpreter
-    ]);
-  }
-}
-
-// Freight Specialist AI Agent
-export class FreightAgent extends EnhancedAgent {
-  constructor() {
-    const personality: AgentPersonality = {
-      name: "Carlos Rodriguez",
-      role: "Freight Specialist",
-      department: "Operations",
-      communicationStyle: "professional",
-      decisionMakingStyle: "analytical",
-      coreValues: ["efficiency", "accuracy", "service", "optimization"],
-      expertise: ["freight quoting", "route optimization", "market analysis", "customer service"],
-      relationshipStyle: "collaborator",
-      workPace: "rapid",
-      emotionalIntelligence: 7,
-      riskTolerance: "medium"
-    };
-    
-    super(personality);
-    this.isActive = true;
-    this.currentTask = "Freight quote generation and optimization";
-  }
-  
-  async process(quoteRequest: any) {
-    this.currentTask = "Generating freight quote with market intelligence";
-    
-    const userMessage = `Generate comprehensive freight quote:
-    
-    Quote Request:
-    ${JSON.stringify(quoteRequest, null, 2)}
-    
-    Please:
-    1. Research current market rates for this route
-    2. Analyze competitor pricing
-    3. Calculate optimal pricing strategy
-    4. Determine route optimization
-    5. Generate detailed quote with options
-    6. Draft professional client communication
-    
-    Use web search for market research and browser automation for competitor analysis.`;
-    
-    return await this.processWithTools(userMessage, [
-      AGENT_CONFIG.tools.web_search,
-      AGENT_CONFIG.tools.browser_automation,
-      AGENT_CONFIG.tools.code_interpreter
-    ]);
-  }
-}
-
-// Enhanced Agent Factory
-export class AgentFactory {
-  static createAgent(agentType: 'lead-processing' | 'owner' | 'recruiting' | 'freight'): EnhancedAgent {
-    switch (agentType) {
-      case 'lead-processing':
-        return new LeadProcessingAgent();
-      case 'owner':
-        return new OwnerAgent();
-      case 'recruiting':
-        return new RecruitingAgent();
-      case 'freight':
-        return new FreightAgent();
-      default:
-        throw new Error(`Unknown agent type: ${agentType}`);
-    }
-  }
-}
-
-// Enhanced Agent Orchestrator
-export class AgentOrchestrator {
-  private agents: Map<string, EnhancedAgent> = new Map();
-  
-  constructor() {
-    // Initialize all enhanced agents
-    this.agents.set('lead-processing', AgentFactory.createAgent('lead-processing'));
-    this.agents.set('owner', AgentFactory.createAgent('owner'));
-    this.agents.set('recruiting', AgentFactory.createAgent('recruiting'));
-    this.agents.set('freight', AgentFactory.createAgent('freight'));
-  }
-  
-  async processLead(leadData: any) {
-    // Step 1: Process lead through lead processing agent
-    const leadAgent = this.agents.get('lead-processing')!;
-    const leadAnalysis = await leadAgent.process(leadData);
-    
-    // Step 2: Route to appropriate specialist agent
-    const { teamAssignment } = this.parseLeadAnalysis(leadAnalysis);
-    
-    let specialistResult;
-    switch (teamAssignment) {
-      case 'owner':
-        specialistResult = await this.agents.get('owner')!.process(leadData);
-        break;
-      case 'recruiting':
-        specialistResult = await this.agents.get('recruiting')!.process(leadData);
-        break;
-      case 'freight':
-        specialistResult = await this.agents.get('freight')!.process(leadData);
-        break;
-      default:
-        specialistResult = leadAnalysis;
-    }
-    
-    return {
-      leadAnalysis,
-      specialistResult,
-      teamAssignment
-    };
-  }
-  
-  private parseLeadAnalysis(analysis: any) {
-    // Parse the lead analysis to determine team assignment
-    const content = analysis.content || '';
-    
-    if (content.includes('premium') || content.includes('owner')) {
-      return { teamAssignment: 'owner' };
-    } else if (content.includes('driver') || content.includes('recruiting')) {
-      return { teamAssignment: 'recruiting' };
-    } else if (content.includes('freight') || content.includes('quote')) {
-      return { teamAssignment: 'freight' };
-    }
-    
-    return { teamAssignment: 'general' };
-  }
-  
-  // Get all agent statuses for oversight
-  getAgentStatuses() {
-    return Array.from(this.agents.values()).map(agent => agent.getStatus());
-  }
-  
-  // Enable agent collaboration
-  async enableCollaboration(agent1Type: string, agent2Type: string, task: string) {
-    const agent1 = this.agents.get(agent1Type);
-    const agent2 = this.agents.get(agent2Type);
-    
-    if (agent1 && agent2) {
-      return await agent1.collaborateWith(agent2, task);
-    }
-    
-    throw new Error(`Agents not found: ${agent1Type}, ${agent2Type}`);
-  }
-}
+// Note: The 8-agent business organization is defined in business-organization.ts
+// which imports EnhancedAgent, AgentPersonality, and AGENT_CONFIG from this file.
+// All agent classes (CEO, Sales Director, Lead Generation, Operations, HR, Marketing,
+// Finance, Customer Success) live in business-organization.ts as the single source of truth.

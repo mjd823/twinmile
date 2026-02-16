@@ -92,7 +92,7 @@ export class SalesDirectorAgent extends EnhancedAgent {
     4. Market expansion opportunities
     5. Client relationship development
     
-    Use LinkedIn MCP for prospecting, Salesforce for pipeline management, and analytics for performance tracking.`;
+    Use web search for prospecting and market research, and code interpreter for performance analytics.`;
     
     return await this.processWithTools(userMessage, [
       AGENT_CONFIG.tools.web_search,
@@ -129,13 +129,13 @@ export class LeadGenerationAgent extends EnhancedAgent {
     const userMessage = `Generate high-quality leads for Twin Mile LLC: ${JSON.stringify(input, null, 2)}
     
     Execute:
-    1. LinkedIn prospecting and outreach
-    2. Target account identification
-    3. Email campaign automation
-    4. Social media engagement
+    1. Web-based prospecting and outreach research
+    2. Target account identification via web search
+    3. Email campaign strategy development
+    4. Social media engagement analysis
     5. Lead qualification and scoring
     
-    Use LinkedIn MCP for prospecting, Google Workspace for email campaigns, and HubSpot for lead nurturing.`;
+    Use web search for prospect research, browser automation for outreach analysis, and code interpreter for lead scoring.`;
     
     return await this.processWithTools(userMessage, [
       AGENT_CONFIG.tools.web_search,
@@ -239,7 +239,7 @@ export class HRDirectorAgent extends EnhancedAgent {
     4. Culture initiatives
     5. Employee relations
     
-    Use Zoom for interviews, Google Workspace for documentation, and analytics for HR metrics.`;
+    Use web search for candidate background verification, and code interpreter for HR metrics analysis.`;
     
     return await this.processWithTools(userMessage, [
       AGENT_CONFIG.tools.web_search,
@@ -335,7 +335,7 @@ export class FinanceDirectorAgent extends EnhancedAgent {
     4. Reporting and compliance
     5. Strategic financial guidance
     
-    Use QuickBooks for accounting, analytics for financial modeling, and calculation tools for analysis.`;
+    Use code interpreter for financial modeling, wolfram alpha for complex calculations, and web search for market data.`;
     
     return await this.processWithTools(userMessage, [
       AGENT_CONFIG.tools.code_interpreter,

@@ -43,6 +43,8 @@ interface AIEmployee {
     successRate: number;
   };
   color: string;
+  tools: string[];
+  reportsTo?: string;
 }
 
 // Business Metrics Interface
@@ -60,97 +62,123 @@ interface AIBusinessDashboardProps {
 }
 
 export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps) {
+  const [lastUpdated, setLastUpdated] = React.useState<string>('');
+  
+  React.useEffect(() => {
+    setLastUpdated(new Date().toLocaleTimeString());
+    const interval = setInterval(() => {
+      setLastUpdated(new Date().toLocaleTimeString());
+    }, 60000); // update every minute
+    return () => clearInterval(interval);
+  }, []);
+
   const [employees, setEmployees] = React.useState<AIEmployee[]>([
     {
       id: 'ceo',
       name: 'Alexandra Sterling',
       role: 'Chief Executive Officer',
       icon: <Crown className="h-5 w-5" />,
-      status: 'active',
-      currentTask: 'Reviewing $50,000 contract proposal',
-      performance: { tasksCompleted: 12, successRate: 95 },
-      color: 'bg-purple-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-purple-500',
+      tools: ['web_search', 'code_interpreter', 'browser_automation', 'wolfram_alpha']
     },
     {
       id: 'sales',
       name: 'Marcus Chen',
       role: 'Sales Director',
       icon: <Users className="h-5 w-5" />,
-      status: 'active',
-      currentTask: 'Contacting 3 new prospects',
-      performance: { tasksCompleted: 28, successRate: 88 },
-      color: 'bg-blue-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-blue-500',
+      tools: ['web_search', 'code_interpreter'],
+      reportsTo: 'Alexandra Sterling'
     },
     {
       id: 'operations',
       name: 'David Kumar',
       role: 'Operations Director',
       icon: <Truck className="h-5 w-5" />,
-      status: 'busy',
-      currentTask: 'Optimizing 5 delivery routes',
-      performance: { tasksCompleted: 45, successRate: 92 },
-      color: 'bg-green-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-green-500',
+      tools: ['web_search', 'code_interpreter', 'wolfram_alpha'],
+      reportsTo: 'Alexandra Sterling'
     },
     {
       id: 'hr',
       name: 'Jennifer Foster',
       role: 'HR Director',
       icon: <UserCheck className="h-5 w-5" />,
-      status: 'active',
-      currentTask: 'Screening 2 driver applications',
-      performance: { tasksCompleted: 15, successRate: 90 },
-      color: 'bg-orange-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-orange-500',
+      tools: ['web_search', 'code_interpreter'],
+      reportsTo: 'Alexandra Sterling'
     },
     {
       id: 'marketing',
       name: 'Isabella Martinez',
       role: 'Marketing Director',
       icon: <Megaphone className="h-5 w-5" />,
-      status: 'active',
-      currentTask: 'Creating logistics industry blog post',
-      performance: { tasksCompleted: 22, successRate: 85 },
-      color: 'bg-pink-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-pink-500',
+      tools: ['web_search', 'browser_automation', 'code_interpreter'],
+      reportsTo: 'Alexandra Sterling'
     },
     {
       id: 'finance',
       name: 'Robert Chang',
       role: 'Finance Director',
       icon: <DollarSign className="h-5 w-5" />,
-      status: 'active',
-      currentTask: 'Processing daily revenue reports',
-      performance: { tasksCompleted: 18, successRate: 98 },
-      color: 'bg-yellow-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-yellow-500',
+      tools: ['code_interpreter', 'wolfram_alpha', 'web_search'],
+      reportsTo: 'Alexandra Sterling'
     },
     {
       id: 'customer_success',
       name: 'Emily Watson',
       role: 'Customer Success Manager',
       icon: <Heart className="h-5 w-5" />,
-      status: 'active',
-      currentTask: 'Following up with 5 customers',
-      performance: { tasksCompleted: 35, successRate: 94 },
-      color: 'bg-red-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-red-500',
+      tools: ['web_search', 'visit_website'],
+      reportsTo: 'Marcus Chen'
     },
     {
       id: 'lead_generation',
       name: 'Sofia Rodriguez',
       role: 'Lead Generation Specialist',
       icon: <Target className="h-5 w-5" />,
-      status: 'busy',
-      currentTask: 'Prospecting 20 companies on LinkedIn',
-      performance: { tasksCompleted: 52, successRate: 87 },
-      color: 'bg-indigo-500'
+      status: 'idle',
+      currentTask: 'Waiting for data…',
+      performance: { tasksCompleted: 0, successRate: 0 },
+      color: 'bg-indigo-500',
+      tools: ['web_search', 'browser_automation', 'code_interpreter'],
+      reportsTo: 'Marcus Chen'
     }
   ]);
 
   const [metrics, setMetrics] = React.useState<BusinessMetrics>({
-    leadsThisWeek: 45,
-    revenueThisMonth: 45678,
-    customerSatisfaction: 98,
-    teamProductivity: 91,
+    leadsThisWeek: 0,
+    revenueThisMonth: 0,
+    customerSatisfaction: 0,
+    teamProductivity: 0,
     monthlyGoal: 50000,
-    goalProgress: 91
+    goalProgress: 0
   });
+  const [loading, setLoading] = React.useState(true);
 
   const [lastAction, setLastAction] = React.useState<string>('');
   const [actionResult, setActionResult] = React.useState<any>(null);
@@ -167,61 +195,52 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
   const fetchRealAIData = async () => {
     try {
-      // Get real activity from the client AI engine
       const currentActivity = await clientAIActivityEngine.getCurrentActivity();
-      const feed = clientAIActivityEngine.getActivityFeed(10);
+      const feed = clientAIActivityEngine.getActivityFeed(15);
       const supervisor = clientAIActivityEngine.getSupervisorReport();
-      
-      // Update activity feed
+
       setActivityFeed(feed);
       setSupervisorReport(supervisor);
-      
-      // Update metrics with real database data
-      if (currentActivity.databaseStats) {
-        setMetrics(prev => ({
-          ...prev,
-          leadsThisWeek: currentActivity.databaseStats.totalLeads,
-          revenueThisMonth: prev.revenueThisMonth + Math.floor(Math.random() * 300),
-          customerSatisfaction: Math.min(100, prev.customerSatisfaction + (Math.random() - 0.5) * 1),
-          teamProductivity: Math.min(100, prev.teamProductivity + (Math.random() - 0.5) * 2),
-          goalProgress: Math.min(100, (prev.revenueThisMonth / prev.monthlyGoal) * 100)
-        }));
-      } else {
-        // Fallback to simulated updates
-        setMetrics(prev => ({
-          ...prev,
-          leadsThisWeek: prev.leadsThisWeek + Math.floor(Math.random() * 2),
-          revenueThisMonth: prev.revenueThisMonth + Math.floor(Math.random() * 300),
-          customerSatisfaction: Math.min(100, prev.customerSatisfaction + (Math.random() - 0.5) * 1),
-          teamProductivity: Math.min(100, prev.teamProductivity + (Math.random() - 0.5) * 2),
-          goalProgress: Math.min(100, (prev.revenueThisMonth / prev.monthlyGoal) * 100)
-        }));
+
+      // Update metrics ONLY from real database data
+      const dbStats = currentActivity.databaseStats;
+      if (dbStats) {
+        const revenue = dbStats.totalRevenue ?? 0;
+        setMetrics({
+          leadsThisWeek: dbStats.totalLeads ?? 0,
+          revenueThisMonth: revenue,
+          customerSatisfaction: dbStats.customers > 0 ? 100 : 0,
+          teamProductivity: dbStats.totalLeads > 0 ? 100 : 0,
+          monthlyGoal: 50000,
+          goalProgress: Math.min(100, (revenue / 50000) * 100),
+        });
       }
 
-      // Update employee tasks based on real activity
+      // Match each employee to their real activity from the feed
       if (currentActivity.recentActivities && currentActivity.recentActivities.length > 0) {
-        // Keep existing employees but update their tasks based on real activity
-        setEmployees(prev => prev.map((emp, index) => {
-          const matchingActivity = currentActivity.recentActivities.find((activity: any) => 
-            activity.agent.includes(emp.name.split(' ')[1]) // Match by last name
+        setEmployees(prev => prev.map(emp => {
+          const match = currentActivity.recentActivities.find((a: any) =>
+            a.agent.includes(emp.name.split(' ')[1])
           );
-          
-          if (matchingActivity) {
+          if (match) {
             return {
               ...emp,
-              currentTask: matchingActivity.activity,
+              status: 'active' as const,
+              currentTask: match.activity,
               performance: {
-                ...emp.performance,
-                tasksCompleted: emp.performance.tasksCompleted + 1
-              }
+                tasksCompleted: emp.performance.tasksCompleted + 1,
+                successRate: 100,
+              },
             };
           }
-          return emp;
+          return { ...emp, status: 'idle' as const, currentTask: 'No recent activity' };
         }));
       }
 
+      setLoading(false);
     } catch (error) {
       console.error('Failed to fetch real AI data:', error);
+      setLoading(false);
     }
   };
 
@@ -260,17 +279,17 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'active': return 'bg-green-100 text-green-800 border-green-200';
-      case 'busy': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'idle': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'active': return 'bg-green-500/15 text-green-400 border-green-500/30';
+      case 'busy': return 'bg-blue-500/15 text-blue-400 border-blue-500/30';
+      case 'idle': return 'bg-muted text-muted-foreground border-border';
+      default: return 'bg-muted text-muted-foreground border-border';
     }
   };
 
   const getHealthColor = (value: number) => {
-    if (value >= 90) return 'text-green-600';
-    if (value >= 70) return 'text-yellow-600';
-    return 'text-red-600';
+    if (value >= 90) return 'text-green-400';
+    if (value >= 70) return 'text-yellow-400';
+    return 'text-red-400';
   };
 
   const formatCurrency = (amount: number) => {
@@ -286,15 +305,15 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
     <div className="space-y-6">
       {/* Action Result Notification */}
       {actionResult && (
-        <Card className={`border-2 ${actionResult.success ? 'border-green-300 bg-green-50' : 'border-red-300 bg-red-50'}`}>
+        <Card className={`border-2 ${actionResult.success ? 'border-green-500/40 bg-green-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">{actionResult.message}</p>
-                <p className="text-sm text-gray-600">{actionResult.timestamp}</p>
+                <p className="font-medium text-foreground">{actionResult.message}</p>
+                <p className="text-sm text-muted-foreground">{actionResult.timestamp}</p>
               </div>
-              {actionResult.success && <CheckCircle className="h-5 w-5 text-green-600" />}
-              {!actionResult.success && <AlertTriangle className="h-5 w-5 text-red-600" />}
+              {actionResult.success && <CheckCircle className="h-5 w-5 text-green-400" />}
+              {!actionResult.success && <AlertTriangle className="h-5 w-5 text-red-400" />}
             </div>
           </CardContent>
         </Card>
@@ -302,19 +321,19 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
       {/* Header */}
       <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold text-gray-900 flex items-center justify-center gap-2">
-          <Activity className="h-8 w-8 text-purple-600" />
+        <h1 className="text-3xl font-bold text-foreground flex items-center justify-center gap-2">
+          <Activity className="h-8 w-8 text-primary" />
           AI Business Operations Center
         </h1>
-        <p className="text-lg text-gray-600">
+        <p className="text-lg text-muted-foreground">
           Your AI team is working 24/7 to grow your business
         </p>
         <div className="flex justify-center gap-4">
-          <Badge className="bg-green-100 text-green-800">
-            System Status: Operational • Last updated: {new Date().toLocaleTimeString()}
+          <Badge className="bg-green-500/15 text-green-400 border border-green-500/30">
+            System Status: Operational{lastUpdated && ` • Last updated: ${lastUpdated}`}
           </Badge>
           {supervisorReport && (
-            <Badge className="bg-purple-100 text-purple-800">
+            <Badge className="bg-purple-500/15 text-purple-400 border border-purple-500/30">
               <Eye className="h-3 w-3 mr-1" />
               AI Supervisor: Active • {supervisorReport.totalInterventions} interventions
             </Badge>
@@ -324,10 +343,10 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
       {/* Real Activity Feed */}
       {activityFeed.length > 0 && (
-        <Card className="border-purple-200 bg-purple-50">
+        <Card className="border-purple-500/30 bg-purple-500/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
-              <Activity className="h-6 w-6 text-purple-600" />
+              <Activity className="h-6 w-6 text-purple-400" />
               Live AI Activity Feed
             </CardTitle>
             <CardDescription>
@@ -337,7 +356,7 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
           <CardContent>
             <div className="space-y-3 max-h-64 overflow-y-auto">
               {activityFeed.map((activity, index) => (
-                <div key={`${activity.timestamp}-${index}`} className="flex items-start gap-3 p-3 rounded-lg border bg-white">
+                <div key={`${activity.timestamp}-${index}`} className="flex items-start gap-3 p-3 rounded-lg border border-border/60 bg-card">
                   <div className={`w-2 h-2 rounded-full mt-2 ${
                     activity.type === 'supervision' ? 'bg-purple-500' :
                     activity.type === 'lead_processing' ? 'bg-blue-500' :
@@ -348,12 +367,12 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
                   }`}></div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-sm">{activity.agent}</span>
+                      <span className="font-medium text-sm text-foreground">{activity.agent}</span>
                       <span className="text-xs text-muted-foreground">{activity.timeAgo}</span>
                     </div>
-                    <p className="text-sm text-gray-700">{activity.activity}</p>
+                    <p className="text-sm text-muted-foreground">{activity.activity}</p>
                     {activity.details && (
-                      <div className="mt-1 text-xs text-gray-500">
+                      <div className="mt-1 text-xs text-muted-foreground/70">
                         {Object.entries(activity.details).slice(0, 2).map(([key, value]) => (
                           <span key={key} className="mr-3">
                             {key}: {String(value)}
@@ -370,10 +389,10 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
       )}
 
       {/* Business Health Overview */}
-      <Card className="border-2 border-gray-200">
+      <Card className="border border-border/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <TrendingUp className="h-6 w-6 text-green-600" />
+            <TrendingUp className="h-6 w-6 text-green-400" />
             Business Health Overview
           </CardTitle>
           <CardDescription>
@@ -382,28 +401,28 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
         </CardHeader>
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="text-center p-4 rounded-lg bg-green-50 border border-green-200">
-              <div className="text-2xl font-bold text-green-600">{metrics.leadsThisWeek}</div>
-              <div className="text-sm text-gray-600">Leads This Week</div>
-              <div className="text-xs text-green-600 mt-1">Excellent performance</div>
+            <div className="text-center p-4 rounded-lg bg-green-500/10 border border-green-500/30">
+              <div className="text-2xl font-bold text-green-400">{metrics.leadsThisWeek}</div>
+              <div className="text-sm text-muted-foreground">Leads This Week</div>
+              <div className="text-xs text-green-400/70 mt-1">From database</div>
             </div>
             
-            <div className="text-center p-4 rounded-lg bg-blue-50 border border-blue-200">
-              <div className="text-2xl font-bold text-blue-600">{formatCurrency(metrics.revenueThisMonth)}</div>
-              <div className="text-sm text-gray-600">Revenue This Month</div>
-              <div className="text-xs text-blue-600 mt-1">On track to exceed goal</div>
+            <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+              <div className="text-2xl font-bold text-blue-400">{formatCurrency(metrics.revenueThisMonth)}</div>
+              <div className="text-sm text-muted-foreground">Revenue This Month</div>
+              <div className="text-xs text-blue-400/70 mt-1">From loads collection</div>
             </div>
             
-            <div className="text-center p-4 rounded-lg bg-purple-50 border border-purple-200">
-              <div className="text-2xl font-bold text-purple-600">{metrics.customerSatisfaction.toFixed(1)}%</div>
-              <div className="text-sm text-gray-600">Customer Satisfaction</div>
-              <div className="text-xs text-purple-600 mt-1">Industry leading</div>
+            <div className="text-center p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
+              <div className="text-2xl font-bold text-purple-400">{metrics.customerSatisfaction.toFixed(1)}%</div>
+              <div className="text-sm text-muted-foreground">Customer Satisfaction</div>
+              <div className="text-xs text-purple-400/70 mt-1">{metrics.customerSatisfaction > 0 ? 'Active customers' : 'No customers yet'}</div>
             </div>
             
-            <div className="text-center p-4 rounded-lg bg-orange-50 border border-orange-200">
-              <div className="text-2xl font-bold text-orange-600">{metrics.teamProductivity.toFixed(1)}%</div>
-              <div className="text-sm text-gray-600">AI Team Productivity</div>
-              <div className="text-xs text-orange-600 mt-1">All systems optimal</div>
+            <div className="text-center p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
+              <div className="text-2xl font-bold text-orange-400">{metrics.teamProductivity.toFixed(1)}%</div>
+              <div className="text-sm text-muted-foreground">AI Team Productivity</div>
+              <div className="text-xs text-orange-400/70 mt-1">{metrics.teamProductivity > 0 ? 'Processing leads' : 'Waiting for leads'}</div>
             </div>
           </div>
         </CardContent>
@@ -413,7 +432,7 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <Users className="h-6 w-6 text-blue-600" />
+            <Users className="h-6 w-6 text-blue-400" />
             Your AI Team - Real-Time Status
           </CardTitle>
           <CardDescription>
@@ -423,10 +442,10 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
         <CardContent>
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             {employees.map((employee) => (
-              <Card key={employee.id} className="hover:shadow-md transition-shadow">
+              <Card key={employee.id} className="border-border/60 hover:border-border transition-colors">
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between mb-3">
-                    <div className={`p-2 rounded-lg ${employee.color} bg-opacity-20`}>
+                    <div className={`p-2 rounded-lg ${employee.color}/15`}>
                       {employee.icon}
                     </div>
                     <Badge className={getStatusColor(employee.status)}>
@@ -435,19 +454,33 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
                   </div>
                   
                   <div>
-                    <h4 className="font-semibold text-gray-900">{employee.name}</h4>
-                    <p className="text-sm text-gray-600">{employee.role}</p>
+                    <h4 className="font-semibold text-foreground">{employee.name}</h4>
+                    <p className="text-sm text-muted-foreground">{employee.role}</p>
                   </div>
                   
                   <div className="mt-3">
-                    <p className="text-xs text-gray-500 mb-1">Currently:</p>
-                    <p className="text-sm text-gray-700">{employee.currentTask}</p>
+                    <p className="text-xs text-muted-foreground/70 mb-1">Currently:</p>
+                    <p className="text-sm text-muted-foreground">{employee.currentTask}</p>
                   </div>
                   
                   <div className="mt-3 flex justify-between text-xs">
-                    <span className="text-gray-500">Tasks: {employee.performance.tasksCompleted}</span>
-                    <span className="text-gray-500">Success: {employee.performance.successRate}%</span>
+                    <span className="text-muted-foreground">Tasks: {employee.performance.tasksCompleted}</span>
+                    <span className="text-muted-foreground">Success: {employee.performance.successRate}%</span>
                   </div>
+                  
+                  <div className="mt-3 flex flex-wrap gap-1">
+                    {employee.tools.map((tool) => (
+                      <Badge key={tool} variant="outline" className="text-[10px] px-1.5 py-0 bg-primary/5 text-muted-foreground border-border/60">
+                        {tool.replace(/_/g, ' ')}
+                      </Badge>
+                    ))}
+                  </div>
+                  
+                  {employee.reportsTo && (
+                    <p className="mt-2 text-[10px] text-muted-foreground/60">
+                      Reports to {employee.reportsTo}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             ))}
@@ -459,7 +492,7 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <Settings className="h-6 w-6 text-gray-600" />
+            <Settings className="h-6 w-6 text-muted-foreground" />
             Business Controls
           </CardTitle>
           <CardDescription>
@@ -529,7 +562,7 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-xl">
-            <TrendingUp className="h-6 w-6 text-green-600" />
+            <TrendingUp className="h-6 w-6 text-green-400" />
             Monthly Performance Goal
           </CardTitle>
           <CardDescription>
@@ -539,33 +572,33 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
         <CardContent>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-lg font-semibold">Monthly Revenue Goal</span>
-              <span className="text-lg font-bold text-green-600">
+              <span className="text-lg font-semibold text-foreground">Monthly Revenue Goal</span>
+              <span className="text-lg font-bold text-green-400">
                 {formatCurrency(metrics.revenueThisMonth)} / {formatCurrency(metrics.monthlyGoal)}
               </span>
             </div>
             
-            <div className="w-full bg-gray-200 rounded-full h-8">
+            <div className="w-full bg-secondary rounded-full h-8">
               <div 
-                className="bg-gradient-to-r from-green-500 to-green-600 h-8 rounded-full flex items-center justify-center text-white font-semibold"
-                style={{ width: `${metrics.goalProgress}%` }}
+                className="bg-gradient-to-r from-green-600 to-green-500 h-8 rounded-full flex items-center justify-center text-white font-semibold text-sm"
+                style={{ width: `${Math.max(metrics.goalProgress, 2)}%` }}
               >
-                {metrics.goalProgress.toFixed(0)}% Complete
+                {metrics.goalProgress.toFixed(0)}%
               </div>
             </div>
             
             <div className="grid grid-cols-3 gap-4 text-center">
               <div>
-                <div className="text-2xl font-bold text-blue-600">{formatCurrency(metrics.revenueThisMonth)}</div>
-                <div className="text-sm text-gray-600">Current Revenue</div>
+                <div className="text-2xl font-bold text-blue-400">{formatCurrency(metrics.revenueThisMonth)}</div>
+                <div className="text-sm text-muted-foreground">Current Revenue</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-orange-600">{formatCurrency(metrics.monthlyGoal - metrics.revenueThisMonth)}</div>
-                <div className="text-sm text-gray-600">Remaining to Goal</div>
+                <div className="text-2xl font-bold text-orange-400">{formatCurrency(metrics.monthlyGoal - metrics.revenueThisMonth)}</div>
+                <div className="text-sm text-muted-foreground">Remaining to Goal</div>
               </div>
               <div>
-                <div className="text-2xl font-bold text-green-600">{Math.ceil((metrics.monthlyGoal - metrics.revenueThisMonth) / 2000)}</div>
-                <div className="text-sm text-gray-600">Customers Needed</div>
+                <div className="text-2xl font-bold text-green-400">{Math.ceil((metrics.monthlyGoal - metrics.revenueThisMonth) / 2000)}</div>
+                <div className="text-sm text-muted-foreground">Customers Needed</div>
               </div>
             </div>
           </div>
@@ -574,10 +607,10 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
       {/* AI Supervisor Report */}
       {supervisorReport && (
-        <Card className="border-purple-200 bg-purple-50">
+        <Card className="border-purple-500/30 bg-purple-500/5">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-xl">
-              <Eye className="h-6 w-6 text-purple-600" />
+              <Eye className="h-6 w-6 text-purple-400" />
               AI Supervisor Report
             </CardTitle>
             <CardDescription>
@@ -587,46 +620,46 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
               <div>
-                <h4 className="font-semibold text-purple-900 mb-2">System Health</h4>
+                <h4 className="font-semibold text-purple-400 mb-2">System Health</h4>
                 <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-sm">Health Score:</span>
-                    <span className="font-medium">{supervisorReport.systemHealth.score.toFixed(0)}%</span>
+                    <span className="text-sm text-muted-foreground">Health Score:</span>
+                    <span className="font-medium text-foreground">{supervisorReport.systemHealth.score.toFixed(0)}%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm">Status:</span>
-                    <Badge className="bg-green-100 text-green-800">{supervisorReport.systemHealth.status}</Badge>
+                    <span className="text-sm text-muted-foreground">Status:</span>
+                    <Badge className="bg-green-500/15 text-green-400">{supervisorReport.systemHealth.status}</Badge>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm">Active Agents:</span>
-                    <span className="font-medium">{supervisorReport.systemHealth.activeAgents}</span>
+                    <span className="text-sm text-muted-foreground">Active Agents:</span>
+                    <span className="font-medium text-foreground">{supervisorReport.systemHealth.activeAgents}</span>
                   </div>
                 </div>
               </div>
               
               <div>
-                <h4 className="font-semibold text-purple-900 mb-2">Performance</h4>
+                <h4 className="font-semibold text-purple-400 mb-2">Performance</h4>
                 <div className="space-y-1">
                   <div className="flex justify-between">
-                    <span className="text-sm">Average Success:</span>
-                    <span className="font-medium">{supervisorReport.performance.average.toFixed(1)}%</span>
+                    <span className="text-sm text-muted-foreground">Average Success:</span>
+                    <span className="font-medium text-foreground">{supervisorReport.performance.average.toFixed(1)}%</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm">Top Performer:</span>
-                    <span className="font-medium">{supervisorReport.performance.topPerformer?.name}</span>
+                    <span className="text-sm text-muted-foreground">Top Performer:</span>
+                    <span className="font-medium text-foreground">{supervisorReport.performance.topPerformer?.name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-sm">Reviews Completed:</span>
-                    <span className="font-medium">{supervisorReport.totalInterventions}</span>
+                    <span className="text-sm text-muted-foreground">Reviews Completed:</span>
+                    <span className="font-medium text-foreground">{supervisorReport.totalInterventions}</span>
                   </div>
                 </div>
               </div>
               
               <div>
-                <h4 className="font-semibold text-purple-900 mb-2">Recommendations</h4>
+                <h4 className="font-semibold text-purple-400 mb-2">Recommendations</h4>
                 <div className="space-y-1">
                   {supervisorReport.recommendations.slice(0, 3).map((rec: string, index: number) => (
-                    <div key={index} className="text-xs text-gray-700">• {rec}</div>
+                    <div key={index} className="text-xs text-muted-foreground">• {rec}</div>
                   ))}
                 </div>
               </div>
@@ -636,13 +669,13 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
       )}
 
       {/* Emergency Contact */}
-      <Card className="border-red-200 bg-red-50">
+      <Card className="border-red-500/30 bg-red-500/5">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl text-red-700">
+          <CardTitle className="flex items-center gap-2 text-xl text-red-400">
             <AlertTriangle className="h-6 w-6" />
             Need Human Assistance?
           </CardTitle>
-          <CardDescription className="text-red-600">
+          <CardDescription className="text-red-400/70">
             If you encounter any issues or need immediate help
           </CardDescription>
         </CardHeader>
@@ -658,7 +691,7 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
             <Button 
               onClick={() => handleAction('emergency_email')}
               variant="outline"
-              className="border-red-300 text-red-700 hover:bg-red-100"
+              className="border-red-500/40 text-red-400 hover:bg-red-500/10"
             >
               <Mail className="h-4 w-4 mr-2" />
               Email Support
