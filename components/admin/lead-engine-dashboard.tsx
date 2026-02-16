@@ -3,8 +3,6 @@
 import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { aiEnhancedLeadManager } from "@/lib/ai-enhanced-lead-manager";
-import { type LeadData } from "@/lib/automated-lead-manager";
 import { OwnerDashboard } from "@/components/admin/owner-dashboard";
 import { RecruitingDashboard } from "@/components/admin/recruiting-dashboard";
 import { FreightDashboard } from "@/components/admin/freight-dashboard";
@@ -36,116 +34,52 @@ interface TeamStats {
 }
 
 export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashboardProps) {
-  const [teamStats, setTeamStats] = React.useState<TeamStats[]>([]);
-  const [processingStats, setProcessingStats] = React.useState({
-    totalLeads: 0,
-    autoQualified: 0,
-    premiumLeads: 0,
-    totalValue: 0,
+  // Leads arrive pre-scored from the server — no client-side Groq calls needed
+  const allLeads = [...quoteLeads, ...driverLeads];
+  const ownerLeads = allLeads.filter(lead => lead.routing?.assignee === 'owner');
+  const recruitingLeads = allLeads.filter(lead => lead.routing?.assignee === 'recruiting_team');
+  const freightLeads = allLeads.filter(lead => lead.routing?.assignee === 'freight_specialist' || lead.routing?.assignee === 'hotshot_team' || lead.routing?.assignee === 'general_sales');
+
+  const teamStats: TeamStats[] = [
+    {
+      name: "CEO (Alexandra Sterling)",
+      icon: <Crown className="h-5 w-5" />,
+      assignedLeads: ownerLeads.length,
+      avgQuality: ownerLeads.reduce((sum: number, lead: any) => sum + (lead.score || 0), 0) / (ownerLeads.length || 1),
+      totalValue: ownerLeads.reduce((sum: number, lead: any) => sum + (lead.estimatedValue || 0), 0),
+      priorityCount: ownerLeads.filter((lead: any) => lead.priority === 'urgent').length,
+      color: "bg-purple-500/20 text-purple-400 border-purple-500/30",
+    },
+    {
+      name: "Recruiting (Jennifer Foster)",
+      icon: <UserCheck className="h-5 w-5" />,
+      assignedLeads: recruitingLeads.length,
+      avgQuality: recruitingLeads.reduce((sum: number, lead: any) => sum + (lead.score || 0), 0) / (recruitingLeads.length || 1),
+      totalValue: recruitingLeads.reduce((sum: number, lead: any) => sum + (lead.estimatedValue || 0), 0),
+      priorityCount: recruitingLeads.filter((lead: any) => lead.priority === 'urgent').length,
+      color: "bg-blue-500/20 text-blue-400 border-blue-500/30",
+    },
+    {
+      name: "Freight (Marcus Chen)",
+      icon: <Truck className="h-5 w-5" />,
+      assignedLeads: freightLeads.length,
+      avgQuality: freightLeads.reduce((sum: number, lead: any) => sum + (lead.score || 0), 0) / (freightLeads.length || 1),
+      totalValue: freightLeads.reduce((sum: number, lead: any) => sum + (lead.estimatedValue || 0), 0),
+      priorityCount: freightLeads.filter((lead: any) => lead.priority === 'urgent').length,
+      color: "bg-green-500/20 text-green-400 border-green-500/30",
+    },
+  ];
+
+  const premiumCount = allLeads.filter((l: any) => l.quality === 'premium').length;
+  const totalValue = allLeads.reduce((sum: number, l: any) => sum + (l.estimatedValue || 0), 0);
+
+  const processingStats = {
+    totalLeads: allLeads.length,
+    autoQualified: allLeads.length,
+    premiumLeads: premiumCount,
+    totalValue,
     automationRate: 100,
-  });
-  const [processedLeads, setProcessedLeads] = React.useState({
-    ownerLeads: [] as any[],
-    recruitingLeads: [] as any[],
-    freightLeads: [] as any[],
-  });
-
-  // Process real data on mount
-  React.useEffect(() => {
-    const processData = async () => {
-      // Process all leads through the automated system
-      const processedQuoteLeads = await Promise.all(
-        quoteLeads.map(async (lead) => {
-          const leadData: LeadData = {
-            id: `quote_${lead._id}`,
-            type: 'quote',
-            name: lead.name || '',
-            email: lead.email || '',
-            phone: lead.phone || '',
-            serviceType: lead.serviceType || '',
-            pickupLocation: lead.pickupLocation || '',
-            dropoffLocation: lead.dropoffLocation || '',
-            company: lead.company || '',
-            timestamp: lead.createdAt || new Date().toISOString(),
-          };
-          return await aiEnhancedLeadManager.processIncomingLead(leadData);
-        })
-      );
-
-      const processedDriverLeads = await Promise.all(
-        driverLeads.map(async (lead) => {
-          const leadData: LeadData = {
-            id: `driver_${lead._id}`,
-            type: 'driver',
-            name: lead.fullName || '',
-            email: lead.email || '',
-            phone: lead.phone || '',
-            truckType: lead.truckType || '',
-            yearsExperience: lead.yearsExperience || '',
-            hasOwnAuthority: lead.hasOwnAuthority === 'true',
-            timestamp: lead.createdAt || new Date().toISOString(),
-          };
-          return await aiEnhancedLeadManager.processIncomingLead(leadData);
-        })
-      );
-
-      const allProcessedLeads = [...processedQuoteLeads, ...processedDriverLeads];
-      
-      // Separate leads by team assignment
-      const ownerLeads = allProcessedLeads.filter(lead => lead.routing.assignee === 'owner');
-      const recruitingLeads = allProcessedLeads.filter(lead => lead.routing.assignee === 'recruiting_team');
-      const freightLeads = allProcessedLeads.filter(lead => lead.routing.assignee === 'freight_specialist');
-
-      setProcessedLeads({ ownerLeads, recruitingLeads, freightLeads });
-      
-      // Calculate team statistics
-      const stats: TeamStats[] = [
-        {
-          name: "Owner",
-          icon: <Crown className="h-5 w-5" />,
-          assignedLeads: ownerLeads.length,
-          avgQuality: ownerLeads.reduce((sum, lead) => sum + lead.score, 0) / (ownerLeads.length || 1),
-          totalValue: ownerLeads.reduce((sum, lead) => sum + lead.estimatedValue, 0),
-          priorityCount: ownerLeads.filter(lead => lead.priority === 'urgent').length,
-          color: "bg-purple-500/20 text-purple-700 border-purple-500/30",
-        },
-        {
-          name: "Recruiting Team",
-          icon: <UserCheck className="h-5 w-5" />,
-          assignedLeads: recruitingLeads.length,
-          avgQuality: recruitingLeads.reduce((sum, lead) => sum + lead.score, 0) / (recruitingLeads.length || 1),
-          totalValue: recruitingLeads.reduce((sum, lead) => sum + lead.estimatedValue, 0),
-          priorityCount: recruitingLeads.filter(lead => lead.priority === 'urgent').length,
-          color: "bg-blue-500/20 text-blue-700 border-blue-500/30",
-        },
-        {
-          name: "Freight Specialists",
-          icon: <Truck className="h-5 w-5" />,
-          assignedLeads: freightLeads.length,
-          avgQuality: freightLeads.reduce((sum, lead) => sum + lead.score, 0) / (freightLeads.length || 1),
-          totalValue: freightLeads.reduce((sum, lead) => sum + lead.estimatedValue, 0),
-          priorityCount: freightLeads.filter(lead => lead.priority === 'urgent').length,
-          color: "bg-green-500/20 text-green-700 border-green-500/30",
-        },
-      ];
-
-      setTeamStats(stats);
-
-      // Calculate processing statistics
-      const premiumLeads = allProcessedLeads.filter(lead => lead.quality === 'premium').length;
-      const totalValue = allProcessedLeads.reduce((sum, lead) => sum + lead.estimatedValue, 0);
-
-      setProcessingStats({
-        totalLeads: allProcessedLeads.length,
-        autoQualified: allProcessedLeads.length, // All are auto-qualified
-        premiumLeads,
-        totalValue,
-        automationRate: 100,
-      });
-    };
-
-    processData();
-  }, [quoteLeads, driverLeads]);
+  };
 
   function getQualityColor(quality: string) {
     switch (quality) {
@@ -311,7 +245,7 @@ export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashb
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <OwnerDashboard premiumLeads={processedLeads.ownerLeads} />
+            <OwnerDashboard premiumLeads={ownerLeads} />
           </CardContent>
         </Card>
 
@@ -327,7 +261,7 @@ export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashb
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <RecruitingDashboard driverLeads={processedLeads.recruitingLeads} />
+            <RecruitingDashboard driverLeads={recruitingLeads} />
           </CardContent>
         </Card>
 
@@ -343,7 +277,7 @@ export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashb
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <FreightDashboard quoteLeads={processedLeads.freightLeads} />
+            <FreightDashboard quoteLeads={freightLeads} />
           </CardContent>
         </Card>
       </div>
