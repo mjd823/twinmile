@@ -249,11 +249,40 @@ export function SiteHeader() {
                 </div>
                 <div className="border-t border-border/60 p-3">
                   {!portalHref ? (
-                    <Button asChild variant="outline" className="mt-2 w-full">
-                      <Link href="/driver/login" onClick={() => setMobileOpen(false)}>
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => setAccountOpen((v) => !v)}
+                        className="w-full inline-flex items-center justify-center rounded-md border border-border/60 bg-background px-4 py-2 text-sm font-medium shadow-sm hover:bg-accent transition-colors"
+                      >
                         Sign in
-                      </Link>
-                    </Button>
+                      </button>
+                      {accountOpen ? (
+                        <div className="mt-2 grid gap-2 rounded-lg border border-border/60 bg-card p-2">
+                          <Link
+                            className="rounded-md px-3 py-2 text-center text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            href="/driver/login"
+                            onClick={() => {
+                              setMobileOpen(false);
+                              setAccountOpen(false);
+                            }}
+                          >
+                            Driver Sign in
+                          </Link>
+                          <div className="h-px bg-border/60" />
+                          <Link
+                            className="rounded-md px-3 py-2 text-center text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                            href="/admin/login"
+                            onClick={() => {
+                              setMobileOpen(false);
+                              setAccountOpen(false);
+                            }}
+                          >
+                            Admin Sign in
+                          </Link>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                   {portalHref ? (
                     <div className="mt-2 grid gap-2">
