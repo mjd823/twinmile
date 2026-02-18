@@ -1,13 +1,15 @@
 "use client";
 
 import * as React from "react";
+import { motion } from "framer-motion";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRouter } from "next/navigation";
 import { clientAIActivityEngine } from "@/lib/client-ai-activity-engine";
 import { TOOL_DESCRIPTIONS } from "@/lib/agent-dashboard-data";
+import { LeadPipelineFlow } from "@/components/admin/lead-pipeline-flow";
+import { LiveWorkflow } from "@/components/admin/live-workflow";
 import { 
   Crown,
   Users,
@@ -19,13 +21,12 @@ import {
   Target,
   TrendingUp,
   Activity,
-  Phone,
-  Mail,
-  CheckCircle,
-  AlertTriangle,
   ChevronDown,
   ChevronUp,
-  Eye
+  Eye,
+  BarChart3,
+  Zap,
+  ArrowRight
 } from "lucide-react";
 
 // AI Employee Interface
@@ -265,232 +266,272 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="text-center space-y-2">
-        <h1 className="text-3xl font-bold text-foreground flex items-center justify-center gap-2">
-          <Activity className="h-8 w-8 text-primary" />
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="text-center space-y-3"
+      >
+        <h1 className="text-3xl font-bold text-foreground flex items-center justify-center gap-3">
+          <motion.div
+            animate={{ rotate: [0, 5, -5, 0] }}
+            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+          >
+            <Activity className="h-9 w-9 text-primary" />
+          </motion.div>
           AI Business Operations Center
         </h1>
         <p className="text-lg text-muted-foreground">
           Your AI team is working 24/7 to grow your business
         </p>
-        <div className="flex justify-center gap-4 flex-wrap">
-          <Badge className="bg-green-500/15 text-green-400 border border-green-500/30">
+        <div className="flex justify-center gap-3 flex-wrap">
+          <Badge className="bg-green-500/15 text-green-400 border border-green-500/30 px-3 py-1">
             System Status: Operational{lastUpdated && ` • ${lastUpdated}`}
           </Badge>
           {supervisorReport && (
-            <Badge className="bg-purple-500/15 text-purple-400 border border-purple-500/30">
-              <Eye className="h-3 w-3 mr-1" />
+            <Badge className="bg-purple-500/15 text-purple-400 border border-purple-500/30 px-3 py-1">
+              <Eye className="h-3 w-3 mr-1.5" />
               {supervisorReport.systemHealth.activeAgents} Agents Active
             </Badge>
           )}
         </div>
-      </div>
+      </motion.div>
 
-      {/* Business Health Overview + Goal Progress (merged) */}
-      <Card className="border border-border/60">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <TrendingUp className="h-6 w-6 text-green-400" />
-            Business Health
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <div className="text-center p-4 rounded-lg bg-green-500/10 border border-green-500/30">
-              <div className="text-2xl font-bold text-green-400">{metrics.leadsThisWeek}</div>
-              <div className="text-sm text-muted-foreground">Active Leads</div>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
-              <div className="text-2xl font-bold text-blue-400">{formatCurrency(metrics.revenueThisMonth)}</div>
-              <div className="text-sm text-muted-foreground">Revenue</div>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
-              <div className="text-2xl font-bold text-purple-400">{metrics.customerSatisfaction > 0 ? `${metrics.customerSatisfaction.toFixed(0)}%` : '—'}</div>
-              <div className="text-sm text-muted-foreground">Satisfaction</div>
-            </div>
-            <div className="text-center p-4 rounded-lg bg-orange-500/10 border border-orange-500/30">
-              <div className="text-2xl font-bold text-orange-400">{formatCurrency(metrics.monthlyGoal)}</div>
-              <div className="text-sm text-muted-foreground">Monthly Goal</div>
-            </div>
-          </div>
-          {/* Goal Progress Bar */}
-          <div>
-            <div className="flex justify-between items-center mb-2 text-sm">
-              <span className="text-muted-foreground">Monthly Goal Progress</span>
-              <span className="font-semibold text-foreground">{formatCurrency(metrics.revenueThisMonth)} / {formatCurrency(metrics.monthlyGoal)}</span>
-            </div>
-            <div className="w-full bg-secondary rounded-full h-4">
-              <div
-                className="bg-gradient-to-r from-green-600 to-green-500 h-4 rounded-full flex items-center justify-center text-white font-semibold text-[10px]"
-                style={{ width: `${Math.max(metrics.goalProgress, 2)}%` }}
-              >
-                {metrics.goalProgress.toFixed(0)}%
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Lead Pipeline - At Top */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <LeadPipelineFlow />
+      </motion.div>
 
-      {/* Live AI Activity Feed (expandable items) */}
+      {/* Live Workflow - Merged Activity + Pipeline */}
       {activityFeed.length > 0 && (
-        <Card className="border-purple-500/30 bg-purple-500/5">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-xl">
-              <Activity className="h-6 w-6 text-purple-400" />
-              Live AI Activity Feed
-            </CardTitle>
-            <CardDescription>Click an item for details</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2 max-h-72 overflow-y-auto">
-              {activityFeed.map((activity, index) => (
-                <div
-                  key={`${activity.timestamp}-${index}`}
-                  className="rounded-lg border border-border/60 bg-card hover:border-border transition-colors cursor-pointer"
-                  onClick={() => setExpandedActivity(expandedActivity === index ? null : index)}
-                >
-                  <div className="flex items-start gap-3 p-3">
-                    <div className={`w-2 h-2 rounded-full mt-2 shrink-0 ${
-                      activity.type === 'supervision' ? 'bg-purple-500' :
-                      activity.type === 'lead_processing' ? 'bg-blue-500' :
-                      activity.type === 'prospecting' ? 'bg-green-500' :
-                      activity.type === 'marketing' ? 'bg-pink-500' :
-                      activity.type === 'operations' ? 'bg-orange-500' :
-                      activity.type === 'finance' ? 'bg-yellow-500' :
-                      'bg-red-500'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm text-foreground">{activity.agent}</span>
-                        <span className="text-xs text-muted-foreground">{activity.timeAgo}</span>
-                      </div>
-                      <p className="text-sm text-muted-foreground truncate">{activity.activity}</p>
-                    </div>
-                    {activity.details && (
-                      expandedActivity === index
-                        ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-                        : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0 mt-1" />
-                    )}
-                  </div>
-                  {/* Expanded details */}
-                  {expandedActivity === index && activity.details && (
-                    <div className="px-3 pb-3 pt-0 border-t border-border/40 mx-3 mt-0">
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 pt-2">
-                        {Object.entries(activity.details).map(([key, value]) => (
-                          <div key={key} className="text-xs">
-                            <span className="text-muted-foreground">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>{' '}
-                            <span className="font-medium text-foreground">{String(value)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <LiveWorkflow employees={employees} activityFeed={activityFeed} />
+        </motion.div>
       )}
 
-      {/* AI Team — Clickable Cards with Tooltips */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl">
-            <Users className="h-6 w-6 text-blue-400" />
-            Your AI Team
-          </CardTitle>
-          <CardDescription>
-            Click any employee to open their dashboard and trigger actions
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <TooltipProvider delayDuration={300}>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              {employees.map((employee) => (
-                <Card
-                  key={employee.id}
-                  className="border-border/60 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
-                  onClick={() => openAgentPage(employee)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className={`p-2 rounded-lg ${employee.color}/15 group-hover:scale-110 transition-transform`}>
-                        {employee.icon}
-                      </div>
-                      <Badge className={getStatusColor(employee.status)}>
-                        {employee.status.charAt(0).toUpperCase() + employee.status.slice(1)}
-                      </Badge>
-                    </div>
-
-                    <div>
-                      <h4 className="font-semibold text-foreground">{employee.name}</h4>
-                      <p className="text-sm text-muted-foreground">{employee.role}</p>
-                    </div>
-
-                    <div className="mt-3">
-                      <p className="text-xs text-muted-foreground/70 mb-1">Currently:</p>
-                      <p className="text-sm text-muted-foreground line-clamp-2">{employee.currentTask}</p>
-                    </div>
-
-                    <div className="mt-3 flex justify-between text-xs">
-                      <span className="text-muted-foreground">Tasks: {employee.performance.tasksCompleted}</span>
-                      <span className="text-muted-foreground">Success: {employee.performance.successRate}%</span>
-                    </div>
-
-                    <div className="mt-3 flex flex-wrap gap-1">
-                      {employee.tools.map((tool) => {
-                        const toolInfo = TOOL_DESCRIPTIONS[tool];
-                        const usage = toolInfo?.agentUsage[employee.id] || toolInfo?.description || '';
-                        return (
-                          <Tooltip key={tool}>
-                            <TooltipTrigger asChild>
-                              <span onClick={(e) => e.stopPropagation()}>
-                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-primary/5 text-muted-foreground border-border/60 cursor-help">
-                                  {tool.replace(/_/g, ' ')}
-                                </Badge>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent side="top" className="max-w-xs">
-                              <p className="font-semibold text-xs">{toolInfo?.name || tool}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">{usage}</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })}
-                    </div>
-
-                    {employee.reportsTo && (
-                      <p className="mt-2 text-[10px] text-muted-foreground/60">
-                        Reports to {employee.reportsTo}
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
+      {/* AI Team - Enhanced with Animations */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+      >
+        <Card className="border-border/60 overflow-hidden">
+          <CardHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Users className="h-6 w-6 text-blue-400" />
+                Your AI Team
+              </CardTitle>
+              <p className="text-sm text-muted-foreground hidden sm:block">
+                Click any card to view dashboard
+              </p>
             </div>
-          </TooltipProvider>
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent>
+            <TooltipProvider delayDuration={200}>
+              <motion.div 
+                className="grid gap-5 md:grid-cols-2 lg:grid-cols-4"
+                initial="hidden"
+                animate="visible"
+                variants={{
+                  hidden: {},
+                  visible: {
+                    transition: {
+                      staggerChildren: 0.05
+                    }
+                  }
+                }}
+              >
+                {employees.map((employee, idx) => (
+                  <motion.div
+                    key={employee.id}
+                    variants={{
+                      hidden: { opacity: 0, y: 20 },
+                      visible: { opacity: 1, y: 0 }
+                    }}
+                    whileHover={{ 
+                      scale: 1.03, 
+                      transition: { type: "spring", stiffness: 400, damping: 25 }
+                    }}
+                    whileTap={{ scale: 0.98 }}
+                  >
+                    <Card
+                      className="border-border/60 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300 cursor-pointer group overflow-hidden"
+                      onClick={() => openAgentPage(employee)}
+                    >
+                      {/* Gradient top border on hover */}
+                      <div className={`h-1 w-full ${employee.color} opacity-0 group-hover:opacity-100 transition-opacity duration-300`} />
+                      
+                      <CardContent className="p-5">
+                        <div className="flex items-start justify-between mb-4">
+                          <motion.div 
+                            className={`p-3 rounded-xl ${employee.color}/10 group-hover:${employee.color}/20 transition-colors`}
+                            whileHover={{ rotate: 5 }}
+                          >
+                            <div className={`w-10 h-10 rounded-lg ${employee.color} flex items-center justify-center text-white shadow-lg`}>
+                              {employee.icon}
+                            </div>
+                          </motion.div>
+                          <StatusBadge status={employee.status} />
+                        </div>
 
-      {/* Emergency Contact (simplified footer) */}
-      <div className="flex items-center justify-between p-4 rounded-lg border border-red-500/20 bg-red-500/5">
-        <div className="flex items-center gap-2 text-sm text-red-400">
-          <AlertTriangle className="h-4 w-4" />
-          <span>Need human assistance?</span>
+                        <div className="space-y-1">
+                          <h4 className="font-semibold text-base text-foreground tracking-tight">{employee.name}</h4>
+                          <p className="text-sm text-muted-foreground leading-relaxed">{employee.role}</p>
+                        </div>
+
+                        <div className="mt-4 p-3 rounded-lg bg-muted/40 border border-border/40">
+                          <p className="text-xs text-muted-foreground/70 mb-1.5 uppercase tracking-wide font-medium">Current Task</p>
+                          <p className="text-sm text-foreground leading-snug line-clamp-2">{employee.currentTask}</p>
+                        </div>
+
+                        <div className="mt-4 flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-1.5">
+                            <BarChart3 className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-muted-foreground">
+                              <span className="font-semibold text-foreground">{employee.performance.tasksCompleted}</span> tasks
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5">
+                            <TrendingUp className="h-3.5 w-3.5 text-muted-foreground" />
+                            <span className="text-muted-foreground">
+                              <span className="font-semibold text-foreground">{employee.performance.successRate}%</span> success
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 flex flex-wrap gap-1.5">
+                          {employee.tools.slice(0, 3).map((tool) => {
+                            const toolInfo = TOOL_DESCRIPTIONS[tool];
+                            return (
+                              <Tooltip key={tool}>
+                                <TooltipTrigger asChild>
+                                  <motion.span 
+                                    onClick={(e) => e.stopPropagation()}
+                                    whileHover={{ scale: 1.05 }}
+                                    className="inline-flex"
+                                  >
+                                    <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-primary/5 text-muted-foreground border-border/60 hover:bg-primary/10 hover:text-foreground transition-colors cursor-help">
+                                      {toolInfo?.name || tool.replace(/_/g, ' ')}
+                                    </Badge>
+                                  </motion.span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="font-semibold text-xs">{toolInfo?.name || tool}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {toolInfo?.agentUsage[employee.id] || toolInfo?.description || ''}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                          {employee.tools.length > 3 && (
+                            <Badge variant="outline" className="text-[10px] px-2 py-0.5 bg-muted text-muted-foreground">
+                              +{employee.tools.length - 3}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {employee.reportsTo && (
+                          <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+                            <ArrowRight className="h-3 w-3 rotate-[-45deg]" />
+                            Reports to {employee.reportsTo}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                ))}
+              </motion.div>
+            </TooltipProvider>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Business Health - Subtle at Bottom */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+        className="flex flex-wrap items-center justify-center gap-x-6 gap-y-3 py-4 px-6 rounded-lg border border-border/40 bg-card/30 text-sm"
+      >
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-muted-foreground">
+            <span className="font-semibold text-foreground">{metrics.leadsThisWeek}</span> leads
+          </span>
         </div>
-        <div className="flex gap-2">
-          <Button size="sm" variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-8 text-xs">
-            <Phone className="h-3 w-3 mr-1" />
-            Call
-          </Button>
-          <Button size="sm" variant="outline" className="border-red-500/30 text-red-400 hover:bg-red-500/10 h-8 text-xs">
-            <Mail className="h-3 w-3 mr-1" />
-            Email
-          </Button>
+        <div className="hidden sm:block w-px h-4 bg-border" />
+        <div className="flex items-center gap-2">
+          <DollarSign className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground">
+            <span className="font-semibold text-foreground">{formatCurrency(metrics.revenueThisMonth)}</span> revenue
+          </span>
         </div>
-      </div>
+        <div className="hidden sm:block w-px h-4 bg-border" />
+        <div className="flex items-center gap-2">
+          <Target className="h-3.5 w-3.5 text-muted-foreground" />
+          <span className="text-muted-foreground">
+            <span className="font-semibold text-foreground">{metrics.customerSatisfaction > 0 ? `${metrics.customerSatisfaction.toFixed(0)}%` : '—'}</span> satisfaction
+          </span>
+        </div>
+        <div className="hidden sm:block w-px h-4 bg-border" />
+        <div className="flex items-center gap-3">
+          <span className="text-muted-foreground">
+            Goal: <span className="font-semibold text-foreground">{Math.round(metrics.goalProgress)}%</span>
+          </span>
+          <div className="w-24 h-1.5 bg-secondary rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-green-600 to-green-400 rounded-full"
+              style={{ width: `${Math.max(metrics.goalProgress, 2)}%` }}
+            />
+          </div>
+        </div>
+      </motion.div>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const config = {
+    active: { 
+      color: 'bg-green-500/15 text-green-400 border-green-500/30',
+      dot: 'bg-green-500',
+      label: 'Active'
+    },
+    busy: { 
+      color: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
+      dot: 'bg-blue-500',
+      label: 'Busy'
+    },
+    idle: { 
+      color: 'bg-muted text-muted-foreground border-border',
+      dot: 'bg-muted-foreground',
+      label: 'Idle'
+    },
+  };
+
+  const { color, dot, label } = config[status as keyof typeof config] || config.idle;
+
+  return (
+    <Badge variant="outline" className={`text-[10px] px-2 py-0.5 ${color}`}>
+      {(status === 'active' || status === 'busy') && (
+        <motion.span
+          className={`w-1.5 h-1.5 rounded-full ${dot} mr-1.5`}
+          animate={{ scale: [1, 1.3, 1] }}
+          transition={{ duration: 1.5, repeat: Infinity }}
+        />
+      )}
+      {label}
+    </Badge>
   );
 }

@@ -1,11 +1,7 @@
-"use client";
-
+import Link from "next/link";
 import * as React from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { OwnerDashboard } from "@/components/admin/owner-dashboard";
-import { RecruitingDashboard } from "@/components/admin/recruiting-dashboard";
-import { FreightDashboard } from "@/components/admin/freight-dashboard";
 import { 
   Users, 
   TrendingUp, 
@@ -220,9 +216,12 @@ export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashb
                   )}
 
                   <div className="pt-2">
-                    <button className="w-full rounded-md border border-border/60 bg-background/60 px-3 py-2 text-sm font-medium hover:bg-background/80 transition-colors">
+                    <Link
+                      href={index === 0 ? "/admin/dashboard/owner" : index === 1 ? "/admin/dashboard/recruiting" : "/admin/dashboard/freight"}
+                      className="w-full inline-flex items-center justify-center rounded-md border border-border/60 bg-background/60 px-3 py-2 text-sm font-medium hover:bg-background/80 transition-colors"
+                    >
                       Manage Team Dashboard →
-                    </button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
@@ -231,56 +230,6 @@ export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashb
         </CardContent>
       </Card>
 
-      {/* Team Dashboards */}
-      <div className="space-y-8">
-        {/* Owner Dashboard */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Crown className="h-5 w-5" />
-              Owner Dashboard
-            </CardTitle>
-            <CardDescription>
-              Premium leads requiring your immediate attention and approval
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <OwnerDashboard premiumLeads={ownerLeads} />
-          </CardContent>
-        </Card>
-
-        {/* Recruiting Team Dashboard */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <UserCheck className="h-5 w-5" />
-              Recruiting Team Dashboard
-            </CardTitle>
-            <CardDescription>
-              Driver applications automatically scored and assigned for processing
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <RecruitingDashboard driverLeads={recruitingLeads} />
-          </CardContent>
-        </Card>
-
-        {/* Freight Specialists Dashboard */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5" />
-              Freight Specialists Dashboard
-            </CardTitle>
-            <CardDescription>
-              Quote requests automatically routed for freight quote generation
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <FreightDashboard quoteLeads={freightLeads} />
-          </CardContent>
-        </Card>
-      </div>
 
       {/* Automation Rules */}
       <Card>

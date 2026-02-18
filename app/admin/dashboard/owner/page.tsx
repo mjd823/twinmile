@@ -1,14 +1,14 @@
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
-import { AIBusinessDashboard } from "@/components/admin/ai-business-dashboard";
-import { LeadEngineDashboard } from "@/components/admin/lead-engine-dashboard";
+import { OwnerDashboard } from "@/components/admin/owner-dashboard";
+import Link from "next/link";
+import { ArrowLeft, Crown } from "lucide-react";
 
 export const metadata = {
-  title: "AI Business Center - Twin Mile Admin",
+  title: "Owner Dashboard - Twin Mile Admin",
   robots: { index: false, follow: false },
 };
 
-// Serialize MongoDB docs so ObjectIds and Dates become plain strings
 function serialize(docs: any[]) {
   return docs.map((doc) => ({
     ...doc,
@@ -17,7 +17,6 @@ function serialize(docs: any[]) {
   }));
 }
 
-// Pure server-side lead scoring (no Groq / no browser deps)
 function scoreLead(lead: any, type: 'quote' | 'driver') {
   let score = 50;
   let estimatedValue = 0;
@@ -27,7 +26,6 @@ function scoreLead(lead: any, type: 'quote' | 'driver') {
     if (lead.serviceType === 'freight') { score += 20; estimatedValue += 1000; }
     if (lead.serviceType === 'hotshot') { score += 15; estimatedValue += 800; }
     if (lead.serviceType === 'flatbed') { score += 15; estimatedValue += 900; }
-    if (lead.serviceType === 'last_mile') { score += 10; estimatedValue += 500; }
     if (lead.pickupLocation && lead.dropoffLocation) { score += 15; estimatedValue += 500; }
     if (lead.company) { score += 10; estimatedValue += 300; autoActions.push('business_client_priority'); }
     if (lead.urgency === 'rush' || lead.urgency === 'urgent') { score += 10; }
@@ -80,65 +78,42 @@ function processLeads(rawLeads: any[], type: 'quote' | 'driver') {
   });
 }
 
-export default async function LeadEnginePage() {
+export default async function OwnerDashboardPage() {
   const user = await requireRole("admin");
   if (!user) return null;
 
   const client = await clientPromise!;
   const db = client.db();
 
-  // Fetch real data from database
   const [quoteLeads, driverLeads] = await Promise.all([
-    db
-      .collection("leads_quotes")
-      .find({ isArchived: { $ne: true } })
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .toArray(),
-    db
-      .collection("leads_drivers")
-      .find({ isArchived: { $ne: true } })
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .toArray(),
+    db.collection("leads_quotes").find({ isArchived: { $ne: true } }).sort({ createdAt: -1 }).limit(100).toArray(),
+    db.collection("leads_drivers").find({ isArchived: { $ne: true } }).sort({ createdAt: -1 }).limit(100).toArray(),
   ]);
 
-  // Score leads server-side (no Groq needed)
-  const scoredQuotes = processLeads(serialize(quoteLeads), 'quote');
-  const scoredDrivers = processLeads(serialize(driverLeads), 'driver');
+  const allLeads = [...processLeads(serialize(quoteLeads), 'quote'), ...processLeads(serialize(driverLeads), 'driver')];
+  const ownerLeads = allLeads.filter((lead: any) => lead.routing?.assignee === 'owner');
 
   return (
-    <main>
-      <section className="border-b border-border/60">
-        <div className="w-full py-6">
-          <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="text-xl font-semibold tracking-tight md:text-2xl">🤖 AI Business Center</h1>
-              <div className="mt-2 text-sm text-muted-foreground">
-                Your AI team is working 24/7 to grow your business - Monitor and control everything from here
-              </div>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {quoteLeads.length + driverLeads.length} active leads in pipeline
-            </div>
-          </div>
-        </div>
-      </section>
+    <main className="max-w-6xl mx-auto">
+      <Link
+        href="/admin/lead-engine"
+        className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"
+      >
+        <ArrowLeft className="h-4 w-4" />
+        Back to AI Business Center
+      </Link>
 
-      <section>
-        <div className="w-full py-6">
-          <AIBusinessDashboard />
+      <div className="flex items-center gap-4 mb-8">
+        <div className="p-4 rounded-xl bg-purple-500/15">
+          <Crown className="h-8 w-8 text-purple-400" />
         </div>
-      </section>
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Owner Dashboard</h1>
+          <p className="text-muted-foreground">Premium leads requiring your immediate attention</p>
+        </div>
+      </div>
 
-      <section className="border-t border-border/60">
-        <div className="w-full py-6">
-          <LeadEngineDashboard
-            quoteLeads={scoredQuotes}
-            driverLeads={scoredDrivers}
-          />
-        </div>
-      </section>
+      <OwnerDashboard premiumLeads={ownerLeads} />
     </main>
   );
 }
