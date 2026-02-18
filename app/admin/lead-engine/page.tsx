@@ -1,6 +1,7 @@
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
 import { AIBusinessDashboard } from "@/components/admin/ai-business-dashboard";
+import { LeadPipelineFlow } from "@/components/admin/lead-pipeline-flow";
 import { LeadEngineDashboard } from "@/components/admin/lead-engine-dashboard";
 
 export const metadata = {
@@ -128,6 +129,12 @@ export default async function LeadEnginePage() {
       <section>
         <div className="w-full py-6">
           <AIBusinessDashboard />
+        </div>
+      </section>
+
+      <section className="border-t border-border/60">
+        <div className="w-full py-6">
+          <LeadPipelineFlow />
         </div>
       </section>
 

@@ -5,8 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useRouter } from "next/navigation";
 import { clientAIActivityEngine } from "@/lib/client-ai-activity-engine";
-import { AgentModal } from "@/components/admin/agent-modal";
 import { TOOL_DESCRIPTIONS } from "@/lib/agent-dashboard-data";
 import { 
   Crown,
@@ -180,9 +180,8 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
   const [activityFeed, setActivityFeed] = React.useState<any[]>([]);
   const [supervisorReport, setSupervisorReport] = React.useState<any>(null);
-  const [selectedEmployee, setSelectedEmployee] = React.useState<AIEmployee | null>(null);
-  const [modalOpen, setModalOpen] = React.useState(false);
   const [expandedActivity, setExpandedActivity] = React.useState<number | null>(null);
+  const router = useRouter();
 
   // Fetch real AI data on component mount
   React.useEffect(() => {
@@ -243,9 +242,8 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
     }
   };
 
-  const openAgentModal = (employee: AIEmployee) => {
-    setSelectedEmployee(employee);
-    setModalOpen(true);
+  const openAgentPage = (employee: AIEmployee) => {
+    router.push(`/admin/lead-engine/agent/${employee.id}`);
   };
 
   const getStatusColor = (status: string) => {
@@ -268,15 +266,6 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
 
   return (
     <div className="space-y-6">
-      {/* Agent Modal */}
-      <AgentModal
-        employee={selectedEmployee}
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        activityFeed={activityFeed}
-        onActionComplete={fetchRealAIData}
-      />
-
       {/* Header */}
       <div className="text-center space-y-2">
         <h1 className="text-3xl font-bold text-foreground flex items-center justify-center gap-2">
@@ -423,7 +412,7 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
                 <Card
                   key={employee.id}
                   className="border-border/60 hover:border-primary/40 hover:shadow-md transition-all cursor-pointer group"
-                  onClick={() => openAgentModal(employee)}
+                  onClick={() => openAgentPage(employee)}
                 >
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-3">

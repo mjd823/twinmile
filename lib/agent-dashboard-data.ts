@@ -106,6 +106,104 @@ export const AGENT_ACTIONS: Record<string, { action: string; label: string; desc
   },
 };
 
+// Ordered workflow steps for each agent — what they do in the lead pipeline
+export interface WorkflowStep {
+  step: number;
+  label: string;
+  description: string;
+  leadTypes: ('quote' | 'driver')[];
+  tools?: string[];
+}
+
+export const AGENT_WORKFLOWS: Record<string, WorkflowStep[]> = {
+  lead_generation: [
+    { step: 1, label: "Receive Incoming Lead", description: "Capture lead data from website form, referral, or outbound prospecting campaign.", leadTypes: ["quote", "driver"] },
+    { step: 2, label: "Score & Qualify", description: "Run weighted scoring algorithm: service type, location, experience, authority status, urgency.", leadTypes: ["quote", "driver"], tools: ["code_interpreter"] },
+    { step: 3, label: "Categorize Lead Type", description: "Classify as quote (freight/hotshot/flatbed/last-mile) or driver (owner-op/company/lease).", leadTypes: ["quote", "driver"] },
+    { step: 4, label: "Route to Team", description: "Premium → CEO, Driver → HR/Recruiting, Freight → Sales Director, Nurture → Marketing.", leadTypes: ["quote", "driver"] },
+    { step: 5, label: "Trigger Auto-Response", description: "Send immediate acknowledgement email/SMS to the lead based on priority level.", leadTypes: ["quote", "driver"], tools: ["browser_automation"] },
+    { step: 6, label: "Log to Pipeline", description: "Record lead, score, and routing decision in MongoDB for tracking.", leadTypes: ["quote", "driver"] },
+  ],
+  ceo: [
+    { step: 1, label: "Receive Premium Escalation", description: "Get notified when a lead scores 85+ (premium quality) from Lead Gen.", leadTypes: ["quote", "driver"] },
+    { step: 2, label: "Strategic Review", description: "Analyze lead's business value, strategic fit, and long-term potential.", leadTypes: ["quote", "driver"], tools: ["web_search", "code_interpreter"] },
+    { step: 3, label: "Approve / Redirect", description: "Approve for fast-track onboarding or redirect to appropriate department head.", leadTypes: ["quote", "driver"] },
+    { step: 4, label: "Set Priority & Resources", description: "Allocate resources, set SLA timelines, and assign account ownership.", leadTypes: ["quote", "driver"] },
+    { step: 5, label: "Monitor Outcome", description: "Track conversion and revenue impact, feed results back to strategy.", leadTypes: ["quote", "driver"], tools: ["wolfram_alpha"] },
+  ],
+  sales: [
+    { step: 1, label: "Receive Qualified Quote Lead", description: "Get freight/hotshot/flatbed leads that scored medium-to-high from Lead Gen.", leadTypes: ["quote"] },
+    { step: 2, label: "Research Prospect", description: "Look up company info, shipping history, and decision-makers.", leadTypes: ["quote"], tools: ["web_search"] },
+    { step: 3, label: "Build Custom Quote", description: "Calculate pricing based on route, load type, urgency, and market rates.", leadTypes: ["quote"], tools: ["code_interpreter"] },
+    { step: 4, label: "Present & Negotiate", description: "Send quote proposal, handle objections, negotiate terms.", leadTypes: ["quote"] },
+    { step: 5, label: "Close & Hand Off", description: "Finalize contract, hand off to Operations for scheduling and Customer Success for onboarding.", leadTypes: ["quote"] },
+  ],
+  hr: [
+    { step: 1, label: "Receive Driver Application", description: "Get scored driver leads routed from Lead Gen.", leadTypes: ["driver"] },
+    { step: 2, label: "Review Application", description: "Verify CDL, endorsements, experience, and authority status.", leadTypes: ["driver"], tools: ["web_search"] },
+    { step: 3, label: "Background & Compliance", description: "Run background check, verify MVR, check FMCSA compliance.", leadTypes: ["driver"], tools: ["web_search"] },
+    { step: 4, label: "Interview & Assess", description: "Conduct screening interview, assess cultural fit and reliability.", leadTypes: ["driver"] },
+    { step: 5, label: "Onboard Driver", description: "Process paperwork, assign to Operations for fleet placement, set up payroll with Finance.", leadTypes: ["driver"], tools: ["code_interpreter"] },
+  ],
+  operations: [
+    { step: 1, label: "Receive Closed Deal / New Driver", description: "Get handoff from Sales (new load) or HR (new driver) for scheduling.", leadTypes: ["quote", "driver"] },
+    { step: 2, label: "Route Planning", description: "Calculate optimal route, fuel stops, and delivery timeline.", leadTypes: ["quote"], tools: ["wolfram_alpha", "code_interpreter"] },
+    { step: 3, label: "Fleet Assignment", description: "Match available truck + driver to the load based on location and equipment.", leadTypes: ["quote", "driver"], tools: ["code_interpreter"] },
+    { step: 4, label: "Schedule & Dispatch", description: "Set pickup/delivery windows, dispatch driver, send BOL.", leadTypes: ["quote"] },
+    { step: 5, label: "Track & Monitor", description: "Real-time GPS tracking, ETA updates, exception handling.", leadTypes: ["quote"], tools: ["web_search"] },
+  ],
+  finance: [
+    { step: 1, label: "Receive Pricing Request / Payroll Setup", description: "Get request from Sales (quote pricing) or HR (new driver payroll).", leadTypes: ["quote", "driver"] },
+    { step: 2, label: "Cost Analysis", description: "Calculate fuel, tolls, insurance, driver pay, and margin for the load.", leadTypes: ["quote"], tools: ["wolfram_alpha", "code_interpreter"] },
+    { step: 3, label: "Generate Invoice", description: "Create and send invoice to customer after delivery confirmation.", leadTypes: ["quote"], tools: ["code_interpreter"] },
+    { step: 4, label: "Process Payment", description: "Track payment status, handle collections, reconcile accounts.", leadTypes: ["quote"] },
+    { step: 5, label: "Driver Payroll", description: "Calculate driver settlements, deductions, and process weekly pay.", leadTypes: ["driver"], tools: ["code_interpreter", "wolfram_alpha"] },
+  ],
+  marketing: [
+    { step: 1, label: "Receive Nurture Leads", description: "Get low/medium-scored leads that need warming before they convert.", leadTypes: ["quote", "driver"] },
+    { step: 2, label: "Segment & Target", description: "Categorize leads by industry, service need, and engagement level.", leadTypes: ["quote", "driver"], tools: ["code_interpreter"] },
+    { step: 3, label: "Launch Drip Campaign", description: "Set up automated email/SMS sequence with relevant content.", leadTypes: ["quote", "driver"], tools: ["browser_automation"] },
+    { step: 4, label: "Monitor Engagement", description: "Track open rates, clicks, and re-score leads based on engagement.", leadTypes: ["quote", "driver"], tools: ["code_interpreter"] },
+    { step: 5, label: "Re-qualify & Escalate", description: "When engagement threshold is met, re-score and route back to Lead Gen as warm lead.", leadTypes: ["quote", "driver"] },
+  ],
+  customer_success: [
+    { step: 1, label: "Receive New Customer", description: "Get handoff from Sales after contract is signed.", leadTypes: ["quote"] },
+    { step: 2, label: "Onboarding Call", description: "Welcome call, set expectations, gather preferences, and create account profile.", leadTypes: ["quote"] },
+    { step: 3, label: "Monitor Delivery", description: "Track first load delivery, ensure smooth experience, handle any issues.", leadTypes: ["quote"], tools: ["visit_website", "web_search"] },
+    { step: 4, label: "Follow-Up & Feedback", description: "Post-delivery satisfaction check, gather feedback, resolve complaints.", leadTypes: ["quote"] },
+    { step: 5, label: "Retention & Upsell", description: "Identify repeat-shipping opportunities, propose volume contracts, prevent churn.", leadTypes: ["quote"], tools: ["web_search"] },
+  ],
+};
+
+// The master pipeline — shows the full flow across agents for each lead type
+export interface PipelineStep {
+  agentId: string;
+  agentName: string;
+  role: string;
+  color: string;
+  action: string;
+  description: string;
+}
+
+export const QUOTE_PIPELINE: PipelineStep[] = [
+  { agentId: "lead_generation", agentName: "Sofia Rodriguez", role: "Lead Gen", color: "bg-cyan-500", action: "Score & Route", description: "Qualify incoming quote, score it, and route to the right team." },
+  { agentId: "ceo", agentName: "Alexandra Sterling", role: "CEO", color: "bg-purple-500", action: "Premium Review", description: "Review premium-scored leads for strategic fit (if score ≥ 85)." },
+  { agentId: "sales", agentName: "Marcus Chen", role: "Sales Director", color: "bg-blue-500", action: "Quote & Close", description: "Build custom quote, negotiate, and close the deal." },
+  { agentId: "finance", agentName: "Robert Chang", role: "Finance", color: "bg-yellow-500", action: "Price & Invoice", description: "Cost analysis, pricing approval, and invoicing." },
+  { agentId: "operations", agentName: "David Kumar", role: "Operations", color: "bg-green-500", action: "Schedule & Dispatch", description: "Route planning, fleet assignment, and dispatch." },
+  { agentId: "customer_success", agentName: "Emily Watson", role: "Customer Success", color: "bg-red-500", action: "Onboard & Retain", description: "Customer onboarding, delivery monitoring, and retention." },
+  { agentId: "marketing", agentName: "Isabella Martinez", role: "Marketing", color: "bg-pink-500", action: "Nurture (if needed)", description: "Drip campaigns for leads that aren't ready to convert yet." },
+];
+
+export const DRIVER_PIPELINE: PipelineStep[] = [
+  { agentId: "lead_generation", agentName: "Sofia Rodriguez", role: "Lead Gen", color: "bg-cyan-500", action: "Score & Route", description: "Qualify driver application, score experience, and route." },
+  { agentId: "ceo", agentName: "Alexandra Sterling", role: "CEO", color: "bg-purple-500", action: "Premium Approval", description: "Approve premium driver candidates (if score ≥ 85)." },
+  { agentId: "hr", agentName: "Jennifer Foster", role: "HR Director", color: "bg-orange-500", action: "Review & Onboard", description: "Application review, background check, interview, and onboarding." },
+  { agentId: "operations", agentName: "David Kumar", role: "Operations", color: "bg-green-500", action: "Fleet Assignment", description: "Assign driver to truck, set routes, and schedule." },
+  { agentId: "finance", agentName: "Robert Chang", role: "Finance", color: "bg-yellow-500", action: "Payroll Setup", description: "Set up driver payroll, settlements, and deductions." },
+  { agentId: "marketing", agentName: "Isabella Martinez", role: "Marketing", color: "bg-pink-500", action: "Nurture (if needed)", description: "Re-engage drivers who didn't complete application." },
+];
+
 export const AGENT_DEPARTMENTS: Record<string, string> = {
   ceo: "Executive",
   sales: "Sales",
