@@ -20,18 +20,25 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   updateLeaseAgreementStatusAction,
   deleteLeaseAgreementAction,
+  approveAndOnboardLeaseAction,
+  setDocumentExpirationsAction,
 } from "@/app/actions/admin";
 
 export type LeaseAgreementSummary = {
   id: string;
   operatorName: string;
   operatorMcNumber: string;
+  operatorEmail: string;
+  operatorPhone: string;
   operatorAddress: string;
   operatorDate: string;
   status: string;
+  onboardingStep: string;
+  driverUserId: string | null;
   documentNames: Record<string, string>;
   createdAt: string;
 };
@@ -79,6 +86,8 @@ export function AdminLeaseAgreements({
   const [expandedId, setExpandedId] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<string>("all");
+  const [onboardId, setOnboardId] = React.useState<string | null>(null);
+  const [onboardResult, setOnboardResult] = React.useState<string | null>(null);
 
   const filtered =
     filter === "all"
@@ -232,6 +241,22 @@ export function AdminLeaseAgreements({
                       </div>
                       <div>
                         <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                          Email
+                        </span>
+                        <p className="font-medium text-foreground">
+                          {agreement.operatorEmail || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">
+                          Phone
+                        </span>
+                        <p className="font-medium text-foreground">
+                          {agreement.operatorPhone || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-muted-foreground uppercase tracking-wide">
                           Address
                         </span>
                         <p className="font-medium text-foreground">
@@ -279,22 +304,86 @@ export function AdminLeaseAgreements({
                       </div>
                     </div>
 
+                    {/* Document Expiration Dates */}
+                    {agreement.status === "approved" && (
+                      <DocExpirationForm leaseId={agreement.id} documentNames={agreement.documentNames} />
+                    )}
+
+                    {/* Onboarding Status */}
+                    {agreement.driverUserId && (
+                      <div className="rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-sm">
+                        <span className="font-medium text-green-400">Driver account created</span>
+                        <span className="text-muted-foreground ml-2">ID: {agreement.driverUserId.slice(-8)}</span>
+                        <span className="text-muted-foreground ml-2">·</span>
+                        <span className="text-muted-foreground ml-2">Driver can log in at /driver/login</span>
+                      </div>
+                    )}
+
+                    {/* Onboard Modal */}
+                    {onboardId === agreement.id && !agreement.driverUserId && (
+                      <OnboardForm
+                        agreement={agreement}
+                        loading={isLoading}
+                        onSubmit={async (data) => {
+                          setLoading(agreement.id);
+                          setOnboardResult(null);
+                          const result = await approveAndOnboardLeaseAction({
+                            leaseId: agreement.id,
+                            email: data.email,
+                            firstName: data.firstName,
+                            lastName: data.lastName,
+                          });
+                          if (result.ok) {
+                            setOnboardResult(
+                              `Account created. Temp password: ${result.tempPassword} — Send this to the driver securely.`
+                            );
+                            setAgreements((prev) =>
+                              prev.map((a) =>
+                                a.id === agreement.id
+                                  ? { ...a, status: "approved", onboardingStep: "account_created", driverUserId: result.driverUserId }
+                                  : a
+                              )
+                            );
+                          } else {
+                            setOnboardResult(result.error || "Failed to create account.");
+                          }
+                          setLoading(null);
+                        }}
+                        onCancel={() => { setOnboardId(null); setOnboardResult(null); }}
+                        result={onboardResult}
+                      />
+                    )}
+
                     {/* Actions */}
                     <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-border/40">
-                      {agreement.status !== "approved" && (
+                      {!agreement.driverUserId && agreement.status !== "approved" && (
                         <Button
                           size="sm"
                           variant="default"
+                          disabled={isLoading}
+                          onClick={() => {
+                            setOnboardId(agreement.id);
+                            setOnboardResult(null);
+                          }}
+                        >
+                          <User className="h-3.5 w-3.5 mr-1.5" />
+                          Approve & Create Account
+                        </Button>
+                      )}
+                      {!agreement.driverUserId && agreement.status !== "approved" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
                           disabled={isLoading}
                           onClick={() =>
                             handleStatusChange(agreement.id, "approved")
                           }
                         >
                           <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                          Approve
+                          Approve Only
                         </Button>
                       )}
-                      {agreement.status !== "rejected" && (
+                      {agreement.status !== "rejected" && !agreement.driverUserId && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -307,7 +396,7 @@ export function AdminLeaseAgreements({
                           Reject
                         </Button>
                       )}
-                      {agreement.status !== "pending_review" && (
+                      {agreement.status !== "pending_review" && !agreement.driverUserId && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -339,6 +428,157 @@ export function AdminLeaseAgreements({
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Onboard Form (inline) ───────────────────────────────────────────
+
+function OnboardForm({
+  agreement,
+  loading,
+  onSubmit,
+  onCancel,
+  result,
+}: {
+  agreement: LeaseAgreementSummary;
+  loading: boolean;
+  onSubmit: (data: { email: string; firstName: string; lastName: string }) => void;
+  onCancel: () => void;
+  result: string | null;
+}) {
+  const nameParts = agreement.operatorName.trim().split(/\s+/);
+  const [email, setEmail] = React.useState(agreement.operatorEmail || "");
+  const [firstName, setFirstName] = React.useState(nameParts[0] || "");
+  const [lastName, setLastName] = React.useState(
+    nameParts.length > 1 ? nameParts.slice(1).join(" ") : ""
+  );
+
+  return (
+    <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-3">
+      <div className="text-sm font-semibold text-foreground">
+        Approve & Create Driver Account
+      </div>
+      <p className="text-xs text-muted-foreground">
+        This will approve the lease, create a driver login, and generate a
+        temporary password. Send the credentials to the driver securely.
+      </p>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-1">
+          <label className="text-xs font-medium text-muted-foreground">
+            First Name
+          </label>
+          <Input
+            value={firstName}
+            onChange={(e) => setFirstName(e.currentTarget.value)}
+            className="h-8 text-sm"
+            required
+          />
+        </div>
+        <div className="grid gap-1">
+          <label className="text-xs font-medium text-muted-foreground">
+            Last Name
+          </label>
+          <Input
+            value={lastName}
+            onChange={(e) => setLastName(e.currentTarget.value)}
+            className="h-8 text-sm"
+          />
+        </div>
+      </div>
+      <div className="grid gap-1">
+        <label className="text-xs font-medium text-muted-foreground">
+          Driver Email (used for login)
+        </label>
+        <Input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.currentTarget.value)}
+          className="h-8 text-sm"
+          required
+        />
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          disabled={loading || !email || !firstName}
+          onClick={() => onSubmit({ email, firstName, lastName })}
+        >
+          {loading ? "Creating…" : "Create Account & Approve"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onCancel} disabled={loading}>
+          Cancel
+        </Button>
+      </div>
+      {result && (
+        <div className="rounded-md border border-border/60 bg-background/50 p-3 text-sm text-foreground font-mono select-all">
+          {result}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Document Expiration Form ────────────────────────────────────────
+
+function DocExpirationForm({
+  leaseId,
+  documentNames,
+}: {
+  leaseId: string;
+  documentNames: Record<string, string>;
+}) {
+  const [expirations, setExpirations] = React.useState<Record<string, string>>({});
+  const [saving, setSaving] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+
+  async function handleSave() {
+    setSaving(true);
+    setMsg(null);
+    const result = await setDocumentExpirationsAction({
+      leaseId,
+      expirations,
+    });
+    if (result.ok) {
+      setMsg("Expiration dates saved.");
+    } else {
+      setMsg(result.error || "Failed to save.");
+    }
+    setSaving(false);
+  }
+
+  const docKeys = Object.keys(documentNames);
+  if (docKeys.length === 0) return null;
+
+  return (
+    <div className="rounded-lg border border-border/60 bg-muted/20 p-3 space-y-2">
+      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+        Document Expiration Dates
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Set expiration dates for compliance tracking. You'll see alerts when documents are expiring.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {docKeys.map((key) => (
+          <div key={key} className="grid gap-1">
+            <label className="text-xs text-muted-foreground">{DOC_LABELS[key] ?? key}</label>
+            <Input
+              type="date"
+              className="h-7 text-xs"
+              value={expirations[key] ?? ""}
+              onChange={(e) =>
+                setExpirations((prev) => ({ ...prev, [key]: e.currentTarget.value }))
+              }
+            />
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button size="sm" variant="outline" disabled={saving} onClick={handleSave}>
+          {saving ? "Saving…" : "Save Expiration Dates"}
+        </Button>
+        {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
+      </div>
     </div>
   );
 }

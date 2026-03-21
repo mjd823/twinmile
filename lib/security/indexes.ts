@@ -38,6 +38,13 @@ export function ensureIndexes(db: Db) {
     await db.collection("lease_agreements").createIndex({ createdAt: -1 });
     await db.collection("lease_agreements").createIndex({ status: 1, createdAt: -1 });
 
+    await db.collection("settlements").createIndex({ driverUserId: 1, createdAt: -1 });
+    await db.collection("settlements").createIndex({ driverUserId: 1, weekStart: 1 });
+    await db.collection("settlements").createIndex({ loadId: 1 }, { unique: true });
+
+    await db.collection("routeEvents").createIndex({ truckId: 1, at: -1 });
+    await db.collection("routeEvents").createIndex({ loadId: 1, at: -1 });
+
     const days = Number(process.env.AUDIT_LOG_TTL_DAYS ?? 180);
     if (Number.isFinite(days) && days > 0) {
       await db.collection("auditLogs").createIndex(

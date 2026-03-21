@@ -123,6 +123,265 @@ export async function updateDriverProfileAction(
   }
 }
 
+// ── Load Status Updates ─────────────────────────────────────────────
+
+const VALID_TRANSITIONS: Record<string, string[]> = {
+  planned: ["accepted"],
+  accepted: ["picked_up"],
+  picked_up: ["in_transit"],
+  in_transit: ["delivered"],
+};
+
+const UpdateLoadStatusSchema = z.object({
+  loadId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  newStatus: z.enum(["accepted", "picked_up", "in_transit", "delivered"]),
+  note: z.string().max(500).optional(),
+});
+
+export async function updateLoadStatusAction(
+  input: unknown
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const driver = await requireRole("driver");
+  if (!driver) return { ok: false, error: "Unauthorized." };
+
+  const ip = await getClientIpFromHeaders();
+  const userAgent = await getUserAgentFromHeaders();
+
+  const rl = await rateLimit({
+    key: `driver:load_status:user:${String((driver as any)._id)}`,
+    limit: 60,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!rl.ok) return { ok: false, error: "Too many requests. Try again later." };
+
+  const parsed = UpdateLoadStatusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid request." };
+
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const driverUserId = String((driver as any)._id);
+
+  // Verify the load belongs to a truck assigned to this driver
+  const truck = await db.collection("trucks").findOne({
+    $or: [{ driverUserId }, { driverName: String((driver as any).email) }],
+  });
+  if (!truck) return { ok: false, error: "No truck assigned to you." };
+
+  const loadObjectId = new ObjectId(parsed.data.loadId);
+  const load = await db.collection("loads").findOne({ _id: loadObjectId });
+  if (!load) return { ok: false, error: "Load not found." };
+
+  // Verify this load is on the driver's truck
+  const loadTruckId = load.truckId ? String(load.truckId) : null;
+  const truckId = String(truck._id);
+  if (loadTruckId !== truckId) {
+    return { ok: false, error: "This load is not assigned to your truck." };
+  }
+
+  // Validate transition
+  const currentStatus = String(load.status ?? "planned");
+  const allowed = VALID_TRANSITIONS[currentStatus] ?? [];
+  if (!allowed.includes(parsed.data.newStatus)) {
+    return {
+      ok: false,
+      error: `Cannot change status from "${currentStatus}" to "${parsed.data.newStatus}".`,
+    };
+  }
+
+  const now = new Date();
+
+  // Update the load
+  const updateFields: Record<string, any> = {
+    status: parsed.data.newStatus,
+    updatedAt: now,
+  };
+  if (parsed.data.newStatus === "delivered") {
+    updateFields.deliveredAt = now;
+  }
+  if (parsed.data.newStatus === "picked_up") {
+    updateFields.pickedUpAt = now;
+  }
+
+  await db.collection("loads").updateOne(
+    { _id: loadObjectId },
+    { $set: updateFields }
+  );
+
+  // Create a route event
+  const eventMessages: Record<string, string> = {
+    accepted: "Load accepted by driver",
+    picked_up: "Freight picked up",
+    in_transit: "In transit to delivery",
+    delivered: "Delivered successfully",
+  };
+
+  await db.collection("routeEvents").insertOne({
+    truckId,
+    loadId: parsed.data.loadId,
+    driverUserId,
+    name: `load.${parsed.data.newStatus}`,
+    message: parsed.data.note
+      ? `${eventMessages[parsed.data.newStatus]}. Note: ${parsed.data.note}`
+      : eventMessages[parsed.data.newStatus],
+    at: now,
+  });
+
+  // If delivered, auto-create settlement record (80% gross)
+  if (parsed.data.newStatus === "delivered") {
+    const revenueUsd = Number(load.revenueUsd ?? 0);
+    if (revenueUsd > 0) {
+      const driverPct = 0.80;
+      const driverPayout = Math.round(revenueUsd * driverPct * 100) / 100;
+      const companyShare = Math.round(revenueUsd * (1 - driverPct) * 100) / 100;
+
+      // Determine settlement week (Monday-based)
+      const weekStart = new Date(now);
+      weekStart.setUTCHours(0, 0, 0, 0);
+      const day = weekStart.getUTCDay();
+      const diff = day === 0 ? 6 : day - 1; // Monday = 0 offset
+      weekStart.setUTCDate(weekStart.getUTCDate() - diff);
+
+      await db.collection("settlements").insertOne({
+        driverUserId,
+        loadId: parsed.data.loadId,
+        truckId,
+        revenueUsd,
+        driverPct,
+        driverPayout,
+        companyShare,
+        weekStart,
+        status: "pending",
+        createdAt: now,
+      });
+    }
+
+    // Clear truck's current load
+    await db.collection("trucks").updateOne(
+      { _id: truck._id },
+      { $set: { currentLoadId: null, updatedAt: now } }
+    );
+  }
+
+  await writeAuditEvent({
+    name: `driver.load.${parsed.data.newStatus}`,
+    at: now,
+    ip,
+    userAgent,
+    actorUserId: driverUserId,
+    actorRole: "driver",
+    meta: {
+      loadId: parsed.data.loadId,
+      truckId,
+      previousStatus: currentStatus,
+      newStatus: parsed.data.newStatus,
+      note: parsed.data.note || undefined,
+    },
+  });
+
+  return { ok: true };
+}
+
+// ── Load History ────────────────────────────────────────────────────
+
+export async function getDriverLoadHistoryAction(): Promise<
+  | { ok: true; loads: any[] }
+  | { ok: false; error: string }
+> {
+  const driver = await requireRole("driver");
+  if (!driver) return { ok: false, error: "Unauthorized." };
+
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const driverUserId = String((driver as any)._id);
+
+  const truck = await db.collection("trucks").findOne({
+    $or: [{ driverUserId }, { driverName: String((driver as any).email) }],
+  });
+  if (!truck) return { ok: true, loads: [] };
+
+  const truckId = String(truck._id);
+
+  const loads = await db
+    .collection("loads")
+    .find(
+      { truckId, status: "delivered" },
+      { sort: { deliveredAt: -1 }, limit: 50 }
+    )
+    .toArray();
+
+  return { ok: true, loads: toPlain(loads) };
+}
+
+// ── Driver Settlements ──────────────────────────────────────────────
+
+export async function getDriverSettlementsAction(): Promise<
+  | {
+      ok: true;
+      settlements: any[];
+      currentWeekTotal: number;
+      ytdTotal: number;
+    }
+  | { ok: false; error: string }
+> {
+  const driver = await requireRole("driver");
+  if (!driver) return { ok: false, error: "Unauthorized." };
+
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const driverUserId = String((driver as any)._id);
+
+  // Current week start (Monday)
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  const day = weekStart.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  weekStart.setUTCDate(weekStart.getUTCDate() - diff);
+
+  // YTD start
+  const ytdStart = new Date(now.getUTCFullYear(), 0, 1);
+
+  const [settlements, currentWeekAgg, ytdAgg] = await Promise.all([
+    db
+      .collection("settlements")
+      .find({ driverUserId }, { sort: { createdAt: -1 }, limit: 100 })
+      .toArray(),
+    db
+      .collection("settlements")
+      .aggregate([
+        { $match: { driverUserId, weekStart: { $gte: weekStart } } },
+        { $group: { _id: null, total: { $sum: "$driverPayout" } } },
+      ])
+      .toArray(),
+    db
+      .collection("settlements")
+      .aggregate([
+        { $match: { driverUserId, createdAt: { $gte: ytdStart } } },
+        { $group: { _id: null, total: { $sum: "$driverPayout" } } },
+      ])
+      .toArray(),
+  ]);
+
+  return {
+    ok: true,
+    settlements: toPlain(settlements),
+    currentWeekTotal: currentWeekAgg[0]?.total ?? 0,
+    ytdTotal: ytdAgg[0]?.total ?? 0,
+  };
+}
+
 export async function getDriverOpsAction(): Promise<
   | {
       ok: true;

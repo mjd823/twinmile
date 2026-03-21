@@ -2063,6 +2063,208 @@ export async function convertDriverLeadAction(
   return { ok: true, driverUserId: String(driver._id), email: driver.email, tempPassword };
 }
 
+// ── Admin: Driver Settlement Summary ─────────────────────────────────
+
+export async function getDriverSettlementsSummaryAction(
+  driverId: string
+): Promise<
+  | {
+      ok: true;
+      settlements: any[];
+      currentWeekTotal: number;
+      ytdTotal: number;
+      allTimeTotal: number;
+    }
+  | { ok: false; error: string }
+> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+  if (!/^[0-9a-fA-F]{24}$/.test(driverId)) return { ok: false, error: "Invalid driver id." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setUTCHours(0, 0, 0, 0);
+  const day = weekStart.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  weekStart.setUTCDate(weekStart.getUTCDate() - diff);
+
+  const ytdStart = new Date(now.getUTCFullYear(), 0, 1);
+
+  const [settlements, currentWeekAgg, ytdAgg, allTimeAgg] = await Promise.all([
+    db
+      .collection("settlements")
+      .find({ driverUserId: driverId }, { sort: { createdAt: -1 }, limit: 50 })
+      .toArray(),
+    db
+      .collection("settlements")
+      .aggregate([
+        { $match: { driverUserId: driverId, weekStart: { $gte: weekStart } } },
+        { $group: { _id: null, total: { $sum: "$driverPayout" } } },
+      ])
+      .toArray(),
+    db
+      .collection("settlements")
+      .aggregate([
+        { $match: { driverUserId: driverId, createdAt: { $gte: ytdStart } } },
+        { $group: { _id: null, total: { $sum: "$driverPayout" } } },
+      ])
+      .toArray(),
+    db
+      .collection("settlements")
+      .aggregate([
+        { $match: { driverUserId: driverId } },
+        { $group: { _id: null, total: { $sum: "$driverPayout" } } },
+      ])
+      .toArray(),
+  ]);
+
+  function toPlain(v: any): any {
+    if (v == null) return v;
+    if (Array.isArray(v)) return v.map(toPlain);
+    if (v instanceof Date) return v.toISOString();
+    if (typeof v === "object") {
+      if (typeof v.toHexString === "function") return v.toHexString();
+      const out: Record<string, any> = {};
+      for (const [k, val] of Object.entries(v)) out[k] = toPlain(val);
+      return out;
+    }
+    return v;
+  }
+
+  return {
+    ok: true,
+    settlements: toPlain(settlements),
+    currentWeekTotal: currentWeekAgg[0]?.total ?? 0,
+    ytdTotal: ytdAgg[0]?.total ?? 0,
+    allTimeTotal: allTimeAgg[0]?.total ?? 0,
+  };
+}
+
+// ── Document Expiration Tracking ─────────────────────────────────────
+
+const SetDocExpirationSchema = z.object({
+  leaseId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  expirations: z.object({
+    cdl: z.string().max(20).optional(),
+    coi: z.string().max(20).optional(),
+    registration: z.string().max(20).optional(),
+    w9: z.string().max(20).optional(),
+    dotPhysical: z.string().max(20).optional(),
+  }),
+});
+
+export async function setDocumentExpirationsAction(
+  input: unknown
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const parsed = SetDocExpirationSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid request." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const $set: Record<string, any> = { updatedAt: new Date() };
+  for (const [key, val] of Object.entries(parsed.data.expirations)) {
+    if (val) $set[`documentExpirations.${key}`] = val;
+  }
+
+  const result = await db.collection("lease_agreements").updateOne(
+    { _id: new ObjectId(parsed.data.leaseId) },
+    { $set }
+  );
+
+  if (result.matchedCount === 0) return { ok: false, error: "Agreement not found." };
+  return { ok: true };
+}
+
+export async function getExpiringDocumentsAction(): Promise<
+  | { ok: true; expiring: any[] }
+  | { ok: false; error: string }
+> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const today = new Date().toISOString().split("T")[0];
+  const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  const leases = await db
+    .collection("lease_agreements")
+    .find(
+      {
+        status: "approved",
+        documentExpirations: { $exists: true },
+      },
+      {
+        projection: {
+          "operator.name": 1,
+          "operator.email": 1,
+          driverUserId: 1,
+          documentExpirations: 1,
+        },
+      }
+    )
+    .toArray();
+
+  const DOC_LABELS: Record<string, string> = {
+    cdl: "CDL",
+    coi: "COI",
+    registration: "Registration",
+    w9: "W-9",
+    dotPhysical: "DOT Physical",
+  };
+
+  const expiring: any[] = [];
+
+  for (const lease of leases) {
+    const exps = (lease as any).documentExpirations ?? {};
+    for (const [key, expDate] of Object.entries(exps)) {
+      const date = String(expDate ?? "");
+      if (!date) continue;
+      if (date <= in90Days) {
+        const isExpired = date < today;
+        const daysUntil = Math.ceil(
+          (new Date(date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        );
+        expiring.push({
+          leaseId: String(lease._id),
+          operatorName: (lease as any).operator?.name ?? "",
+          operatorEmail: (lease as any).operator?.email ?? "",
+          driverUserId: (lease as any).driverUserId ?? null,
+          docKey: key,
+          docLabel: DOC_LABELS[key] ?? key,
+          expirationDate: date,
+          isExpired,
+          daysUntil,
+        });
+      }
+    }
+  }
+
+  expiring.sort((a, b) => a.expirationDate.localeCompare(b.expirationDate));
+
+  return { ok: true, expiring };
+}
+
 // ── Lease Agreements ──────────────────────────────────────────────────
 
 const UpdateLeaseAgreementStatusSchema = z.object({
@@ -2093,6 +2295,97 @@ export async function updateLeaseAgreementStatusAction(
 
   if (result.matchedCount === 0) return { ok: false, error: "Agreement not found." };
   return { ok: true };
+}
+
+// Approve lease and create driver account in one step
+const ApproveAndOnboardSchema = z.object({
+  leaseId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  email: z.string().email(),
+  firstName: z.string().min(1).max(80),
+  lastName: z.string().max(80).optional(),
+});
+
+export async function approveAndOnboardLeaseAction(
+  input: unknown
+): Promise<
+  | { ok: true; driverUserId: string; tempPassword: string }
+  | { ok: false; error: string }
+> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const parsed = ApproveAndOnboardSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid request." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const lease = await db.collection("lease_agreements").findOne({
+    _id: new ObjectId(parsed.data.leaseId),
+  });
+  if (!lease) return { ok: false, error: "Lease agreement not found." };
+
+  if (lease.driverUserId) {
+    return { ok: false, error: "A driver account already exists for this lease." };
+  }
+
+  const tempPassword = `TM-${crypto.randomBytes(12).toString("base64url")}`;
+
+  try {
+    const driver = await createUser({
+      email: parsed.data.email,
+      password: tempPassword,
+      firstName: parsed.data.firstName,
+      lastName: parsed.data.lastName || undefined,
+      role: "driver",
+      mustChangePassword: true,
+    });
+
+    await db.collection("users").updateOne(
+      { _id: driver._id },
+      { $set: { isOwnerOperator: true } }
+    );
+
+    await db.collection("lease_agreements").updateOne(
+      { _id: new ObjectId(parsed.data.leaseId) },
+      {
+        $set: {
+          status: "approved",
+          onboardingStep: "account_created",
+          driverUserId: String(driver._id),
+          updatedAt: new Date(),
+        },
+      }
+    );
+
+    const ip = await getClientIpFromHeaders();
+    const userAgent = await getUserAgentFromHeaders();
+    await writeAuditEvent({
+      name: "admin.driver.create",
+      at: new Date(),
+      ip,
+      userAgent,
+      actorUserId: String((auth.admin as any)._id),
+      actorRole: "admin",
+      subjectUserId: String(driver._id),
+      meta: {
+        source: "lease_onboard",
+        leaseId: parsed.data.leaseId,
+        email: parsed.data.email,
+      },
+    });
+
+    return { ok: true, driverUserId: String(driver._id), tempPassword };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Unable to create driver account.",
+    };
+  }
 }
 
 export async function deleteLeaseAgreementAction(

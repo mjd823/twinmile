@@ -74,6 +74,8 @@ export async function POST(request: NextRequest) {
     // Extract and validate text fields with length limits
     const operatorName = (formData.get("operatorName") as string)?.trim().slice(0, 200);
     const operatorMcNumber = (formData.get("operatorMcNumber") as string)?.trim().slice(0, 30);
+    const operatorEmail = (formData.get("operatorEmail") as string)?.trim().toLowerCase().slice(0, 200);
+    const operatorPhone = (formData.get("operatorPhone") as string)?.trim().slice(0, 30);
     const operatorAddress = (formData.get("operatorAddress") as string)?.trim().slice(0, 500);
     const operatorDate = (formData.get("operatorDate") as string)?.trim().slice(0, 20);
 
@@ -81,6 +83,18 @@ export async function POST(request: NextRequest) {
     if (!operatorName) {
       return NextResponse.json(
         { ok: false, error: "Owner-Operator Name is required." },
+        { status: 400 }
+      );
+    }
+    if (!operatorEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(operatorEmail)) {
+      return NextResponse.json(
+        { ok: false, error: "A valid email address is required." },
+        { status: 400 }
+      );
+    }
+    if (!operatorPhone) {
+      return NextResponse.json(
+        { ok: false, error: "Phone number is required." },
         { status: 400 }
       );
     }
@@ -169,11 +183,15 @@ export async function POST(request: NextRequest) {
       operator: {
         name: operatorName,
         mcNumber: operatorMcNumber || "",
+        email: operatorEmail,
+        phone: operatorPhone,
         address: operatorAddress,
         date: operatorDate,
       },
       documents: files,
       status: "pending_review",
+      onboardingStep: "pending_review",
+      driverUserId: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };

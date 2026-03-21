@@ -11,7 +11,11 @@ export type AuditEventName =
   | "admin.driver.reset_password"
   | "admin.driver.delete"
   | "admin.driver.update"
-  | "driver.profile.update";
+  | "driver.profile.update"
+  | "driver.load.accepted"
+  | "driver.load.picked_up"
+  | "driver.load.in_transit"
+  | "driver.load.delivered";
 
 export type AuditEvent = {
   name: AuditEventName;

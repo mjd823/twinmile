@@ -252,6 +252,36 @@ export function LeaseAgreementForm() {
           </div>
 
           <div className="grid gap-2">
+            <label className="text-sm font-semibold text-foreground/95" htmlFor="operatorEmail">
+              Email Address
+              <span className="text-destructive ml-0.5">*</span>
+            </label>
+            <Input
+              id="operatorEmail"
+              name="operatorEmail"
+              type="email"
+              placeholder="you@example.com"
+              className={fieldClassName}
+              required
+            />
+          </div>
+
+          <div className="grid gap-2">
+            <label className="text-sm font-semibold text-foreground/95" htmlFor="operatorPhone">
+              Phone Number
+              <span className="text-destructive ml-0.5">*</span>
+            </label>
+            <Input
+              id="operatorPhone"
+              name="operatorPhone"
+              type="tel"
+              placeholder="(555) 555-5555"
+              className={fieldClassName}
+              required
+            />
+          </div>
+
+          <div className="grid gap-2">
             <label className="text-sm font-semibold text-foreground/95" htmlFor="operatorAddress">
               Owner-Operator Address
               <span className="text-destructive ml-0.5">*</span>
