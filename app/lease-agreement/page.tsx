@@ -10,6 +10,8 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+export const dynamic = "force-dynamic";
+
 export default function LeaseAgreementPage() {
   const today = new Date().toLocaleDateString("en-US", {
     year: "numeric",
