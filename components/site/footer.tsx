@@ -52,9 +52,6 @@ export function SiteFooter() {
               <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/privacy-policy">
                 Privacy Policy
               </Link>
-              <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/lease-agreement">
-                Lease-On Agreement
-              </Link>
               <div className="text-muted-foreground">© {new Date().getFullYear()} Twin Mile LLC</div>
             </div>
           </div>

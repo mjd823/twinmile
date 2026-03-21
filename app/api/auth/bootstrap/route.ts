@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
+import crypto from "node:crypto";
 import { z } from "zod";
 
 import clientPromise from "@/lib/mongodb";
 import { createUser } from "@/lib/auth/users";
+import { getClientIp } from "@/lib/security/request";
+import { rateLimit } from "@/lib/security/rate-limit";
 
 const BootstrapSchema = z.object({
   token: z.string().min(10),
@@ -11,6 +14,19 @@ const BootstrapSchema = z.object({
 });
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req);
+  const rl = await rateLimit({
+    key: `auth:bootstrap:ip:${ip}`,
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again later." },
+      { status: 429 }
+    );
+  }
+
   if (!clientPromise) {
     return NextResponse.json(
       { error: "Database not configured." },
@@ -34,7 +50,13 @@ export async function POST(req: Request) {
   }
 
   const expected = process.env.BOOTSTRAP_TOKEN;
-  if (!expected || parsed.data.token !== expected) {
+  if (!expected) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  const a = Buffer.from(parsed.data.token);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
 

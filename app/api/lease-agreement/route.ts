@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
+import { getClientIp } from "@/lib/security/request";
+import { isSameOrigin } from "@/lib/security/csrf";
+import { rateLimit } from "@/lib/security/rate-limit";
 
 const MAX_FILE_SIZE = 3 * 1024 * 1024; // 3MB per file
 const ALLOWED_TYPES = [
@@ -22,8 +25,35 @@ const FILE_LABELS: Record<string, string> = {
   dotPhysical: "DOT Physical",
 };
 
+const ALLOWED_EXTENSIONS = [".pdf", ".jpg", ".jpeg", ".png", ".webp"];
+
+function getFileExtension(name: string): string {
+  const i = name.lastIndexOf(".");
+  return i >= 0 ? name.slice(i).toLowerCase() : "";
+}
+
 export async function POST(request: NextRequest) {
   try {
+    if (!isSameOrigin(request)) {
+      return NextResponse.json(
+        { ok: false, error: "Forbidden." },
+        { status: 403 }
+      );
+    }
+
+    const ip = getClientIp(request);
+    const rl = await rateLimit({
+      key: `lease-agreement:ip:${ip}`,
+      limit: 5,
+      windowMs: 60 * 60 * 1000,
+    });
+    if (!rl.ok) {
+      return NextResponse.json(
+        { ok: false, error: "Too many submissions. Please try again later." },
+        { status: 429 }
+      );
+    }
+
     if (!clientPromise) {
       return NextResponse.json(
         { ok: false, error: "Database not configured." },
@@ -41,11 +71,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Extract text fields
-    const operatorName = (formData.get("operatorName") as string)?.trim();
-    const operatorMcNumber = (formData.get("operatorMcNumber") as string)?.trim();
-    const operatorAddress = (formData.get("operatorAddress") as string)?.trim();
-    const operatorDate = (formData.get("operatorDate") as string)?.trim();
+    // Extract and validate text fields with length limits
+    const operatorName = (formData.get("operatorName") as string)?.trim().slice(0, 200);
+    const operatorMcNumber = (formData.get("operatorMcNumber") as string)?.trim().slice(0, 30);
+    const operatorAddress = (formData.get("operatorAddress") as string)?.trim().slice(0, 500);
+    const operatorDate = (formData.get("operatorDate") as string)?.trim().slice(0, 20);
 
     // Validate required fields
     if (!operatorName) {
@@ -98,6 +128,17 @@ export async function POST(request: NextRequest) {
           {
             ok: false,
             error: `${file.name} is not a supported file type. Please upload PDF, JPEG, or PNG files.`,
+          },
+          { status: 400 }
+        );
+      }
+
+      const ext = getFileExtension(file.name);
+      if (!ALLOWED_EXTENSIONS.includes(ext)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `${file.name} has an unsupported file extension. Allowed: PDF, JPEG, PNG, WebP.`,
           },
           { status: 400 }
         );

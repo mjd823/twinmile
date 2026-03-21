@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { cookies } from "next/headers";
 
-import { getAuthUser } from "@/lib/auth/session";
+import { getAuthUser, sessionCookieName } from "@/lib/auth/session";
+import { sha256Base64Url } from "@/lib/auth/crypto";
 import { findUserById, setUserPassword, verifyUserPassword } from "@/lib/auth/users";
+import clientPromise from "@/lib/mongodb";
 import { isSameOrigin } from "@/lib/security/csrf";
 import { writeAuditEvent } from "@/lib/security/audit";
 import { getClientIp, getUserAgent } from "@/lib/security/request";
@@ -11,7 +13,7 @@ import { rateLimit } from "@/lib/security/rate-limit";
 
 const Schema = z.object({
   currentPassword: z.string().min(8).max(200),
-  newPassword: z.string().min(1).max(200),
+  newPassword: z.string().min(8).max(200),
 });
 
 export async function POST(req: Request) {
@@ -111,7 +113,22 @@ export async function POST(req: Request) {
 
   await setUserPassword(user._id, parsed.data.newPassword);
 
+  // Revoke all other sessions for this user
   const jar = await cookies();
+  const currentToken = jar.get(sessionCookieName())?.value;
+  if (clientPromise && currentToken) {
+    try {
+      const currentHash = sha256Base64Url(currentToken);
+      const client = await clientPromise;
+      const db = client.db();
+      await db.collection("sessions").deleteMany({
+        userId: user._id,
+        tokenHash: { $ne: currentHash },
+      });
+    } catch {
+      // non-fatal: session cleanup best-effort
+    }
+  }
   jar.set({
     name: "tm_mcpw",
     value: "0",

@@ -35,6 +35,9 @@ export function ensureIndexes(db: Db) {
     await db.collection("leads_drivers").createIndex({ createdAt: -1 });
     await db.collection("leads_drivers").createIndex({ status: 1, createdAt: -1 });
 
+    await db.collection("lease_agreements").createIndex({ createdAt: -1 });
+    await db.collection("lease_agreements").createIndex({ status: 1, createdAt: -1 });
+
     const days = Number(process.env.AUDIT_LOG_TTL_DAYS ?? 180);
     if (Number.isFinite(days) && days > 0) {
       await db.collection("auditLogs").createIndex(

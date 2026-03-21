@@ -2062,3 +2062,59 @@ export async function convertDriverLeadAction(
 
   return { ok: true, driverUserId: String(driver._id), email: driver.email, tempPassword };
 }
+
+// ── Lease Agreements ──────────────────────────────────────────────────
+
+const UpdateLeaseAgreementStatusSchema = z.object({
+  id: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  status: z.enum(["pending_review", "approved", "rejected", "expired"]),
+});
+
+export async function updateLeaseAgreementStatusAction(
+  input: unknown
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const parsed = UpdateLeaseAgreementStatusSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid request." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const result = await db.collection("lease_agreements").updateOne(
+    { _id: new ObjectId(parsed.data.id) },
+    { $set: { status: parsed.data.status, updatedAt: new Date() } }
+  );
+
+  if (result.matchedCount === 0) return { ok: false, error: "Agreement not found." };
+  return { ok: true };
+}
+
+export async function deleteLeaseAgreementAction(
+  input: unknown
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const parsed = z.object({ id: z.string().regex(/^[0-9a-fA-F]{24}$/) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid request." };
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  const result = await db.collection("lease_agreements").deleteOne(
+    { _id: new ObjectId(parsed.data.id) }
+  );
+
+  if (result.deletedCount === 0) return { ok: false, error: "Agreement not found." };
+  return { ok: true };
+}
