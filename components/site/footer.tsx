@@ -49,6 +49,12 @@ export function SiteFooter() {
             </div>
             <div className="flex flex-col gap-2 text-sm">
               <div className="text-xs font-semibold tracking-wide text-foreground/80">Legal</div>
+              <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/privacy-policy">
+                Privacy Policy
+              </Link>
+              <Link className="text-muted-foreground transition-colors hover:text-foreground" href="/lease-agreement">
+                Lease-On Agreement
+              </Link>
               <div className="text-muted-foreground">© {new Date().getFullYear()} Twin Mile LLC</div>
             </div>
           </div>
