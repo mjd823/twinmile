@@ -1,0 +1,11 @@
+{
+  "business": "twinmile",
+  "name": "Twin Mile",
+  "operatingModel": "codex-linear",
+  "paperclip": false,
+  "linearProject": "Twin Mile Operating System",
+  "github": "mjd823/twinmile",
+  "vercelProjectId": "prj_vAXbrQ95oJygFVGMWWijJa9ay2F0",
+  "lanes": ["cto", "ops", "dispatch", "fleet", "qa"],
+  "approvalRequiredFor": ["email", "customer_record_change", "driver_record_change", "production_database_write", "production_deployment_promotion"]
+}
