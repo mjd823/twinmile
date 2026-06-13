@@ -36,6 +36,18 @@
     ".next/dev/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
-  ]
+      "node_modules",
+      "run_outbound_prospecting.ts",
+      "run_outreach.js",
+      "run_outreach.cjs",
+      "run_outreach_wrapper.js",
+      "run-cron.mjs",
+      "run-cron-wrapper.mjs",
+      "test-env.mjs",
+      "check_env_local.js",
+      "check_env_twinmile.js",
+      "check-env.mjs",
+      "check_env.js",
+      "verify_prospects.ts"
+    ]
 }
