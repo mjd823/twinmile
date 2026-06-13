@@ -93,84 +93,10 @@ function toOpsLoad(doc: any): OpsLoad {
 
 export function AdminOpsDashboard({
 }: {}) {
-  const fallbackTrucks: OpsTruck[] = React.useMemo(
-    () => [
-      {
-        id: "t-101",
-        name: "TM-101",
-        status: "active",
-        fuelPct: 62,
-        lat: 29.7604,
-        lng: -95.3698,
-        driverName: "A. Driver",
-        currentLoadId: "l-901",
-      },
-      {
-        id: "t-102",
-        name: "TM-102",
-        status: "idle",
-        fuelPct: 41,
-        lat: 32.7767,
-        lng: -96.797,
-        driverName: "B. Driver",
-      },
-      {
-        id: "t-103",
-        name: "TM-103",
-        status: "maintenance",
-        fuelPct: 12,
-        lat: 30.2672,
-        lng: -97.7431,
-      },
-      {
-        id: "t-104",
-        name: "TM-104",
-        status: "active",
-        fuelPct: 24,
-        lat: 29.9511,
-        lng: -90.0715,
-        driverName: "C. Driver",
-        currentLoadId: "l-902",
-      },
-    ],
-    []
-  );
-
-  const fallbackLoads: OpsLoad[] = React.useMemo(
-    () => [
-      {
-        id: "l-901",
-        status: "in_transit",
-        pickup: "Houston, TX",
-        dropoff: "San Antonio, TX",
-        etaHours: 4,
-        revenueUsd: 1650,
-      },
-      {
-        id: "l-902",
-        status: "delayed",
-        pickup: "New Orleans, LA",
-        dropoff: "Baton Rouge, LA",
-        etaHours: 2,
-        revenueUsd: 980,
-      },
-      {
-        id: "l-903",
-        status: "planned",
-        pickup: "Dallas, TX",
-        dropoff: "Austin, TX",
-        etaHours: 3,
-        revenueUsd: 1200,
-      },
-    ],
-    []
-  );
-
-  const [trucks, setTrucks] = React.useState<OpsTruck[]>(fallbackTrucks);
-  const [loads, setLoads] = React.useState<OpsLoad[]>(fallbackLoads);
-  const [selectedTruckId, setSelectedTruckId] = React.useState<string | null>(
-    fallbackTrucks[0]?.id ?? null
-  );
+  const [trucks, setTrucks] = React.useState<OpsTruck[]>([]);
+  const [loads, setLoads] = React.useState<OpsLoad[]>([]);
+  const [selectedTruckId, setSelectedTruckId] = React.useState<string | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
 
   React.useEffect(() => {
     const ac = new AbortController();
@@ -199,6 +125,8 @@ export function AdminOpsDashboard({
         }
       } catch {
         // ignore
+      } finally {
+        setIsLoading(false);
       }
     }
 
@@ -236,11 +164,38 @@ export function AdminOpsDashboard({
     return loads.find((l) => l.id === loadId) ?? null;
   }, [loads, selectedTruck?.currentLoadId]);
 
-  const loadById = React.useMemo(() => {
-    const m = new Map<string, OpsLoad>();
-    for (const l of loads) m.set(l.id, l);
-    return m;
   }, [loads]);
+
+  if (isLoading) {
+    return (
+      <div className="grid gap-6">
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-6">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-lg border border-border/60 bg-card p-4 animate-pulse">
+              <div className="h-4 bg-muted rounded w-1/4 mb-2" />
+              <div className="h-8 bg-muted rounded w-1/2" />
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-6 lg:grid-cols-12">
+          <div className="lg:col-span-8">
+            <div className="aspect-[4/3] rounded-lg border border-border/60 bg-muted animate-pulse" />
+          </div>
+          <div className="lg:col-span-4">
+            <div className="rounded-lg border border-border/60 bg-card p-4 animate-pulse">
+              <div className="h-4 bg-muted rounded w-1/3 mb-4" />
+              <div className="space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="h-12 bg-muted rounded" />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    );
+  }
 
   return (
     <div className="grid gap-6">
@@ -297,7 +252,13 @@ export function AdminOpsDashboard({
               </Button>
             </div>
             <div className="mt-4 grid max-h-[52vh] gap-2 overflow-auto pr-1 lg:max-h-none">
-              {trucks.map((t) => {
+              {trucks.length === 0 ? (
+                <div className="col-span-full text-center py-8 text-muted-foreground">
+                  <p className="font-medium">No trucks in fleet</p>
+                  <p className="text-sm mt-1">Add trucks from the Fleet page</p>
+                </div>
+              ) : (
+                trucks.map((t) => {
                 const isSelected = t.id === selectedTruckId;
 
                 return (
