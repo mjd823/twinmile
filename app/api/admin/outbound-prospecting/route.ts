@@ -117,7 +117,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Enrich and score each prospect
-    const enrichedProspects = structuredProspects.map((p, index) => ({
+    const enrichedProspects = structuredProspects.map((p: any, index: number) => ({
       id: `outbound_${Date.now()}_${index}`,
       name: p.name || `Prospect ${index + 1}`,
       contact: p.contact || {},
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
       // Check for duplicates (by name + location + equipment)
       const existingProspects = await db.collection('outbound_prospects')
         .find({ 
-          $or: enrichedProspects.map(p => ({
+          $or: enrichedProspects.map((p: any) => ({
             name: p.name,
             location: p.location,
             equipment: p.equipment
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest) {
         existingProspects.map(p => `${p.name}|${p.location}|${p.equipment}`.toLowerCase())
       );
 
-      const newProspects = enrichedProspects.filter(p => 
+      const newProspects = enrichedProspects.filter((p: any) => 
         !existingKeys.has(`${p.name}|${p.location}|${p.equipment}`.toLowerCase())
       );
 
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    const query = {};
+    const query: Record<string, any> = {};
     if (status) query.status = status;
 
     const [prospects, total] = await Promise.all([
@@ -252,10 +252,10 @@ export async function GET(request: NextRequest) {
 }
 
 // Helper function to parse prospects from unstructured text
-function parseProspectsFromText(text) {
+function parseProspectsFromText(text: string) {
   const prospects = [];
   const lines = text.split('\n');
-  let currentProspect = {};
+  let currentProspect: Record<string, any> = {};
   
   for (const line of lines) {
     if (!line || typeof line !== 'string') continue;
