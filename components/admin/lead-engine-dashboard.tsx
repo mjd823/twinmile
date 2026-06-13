@@ -150,7 +150,7 @@ export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashb
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">${processingStats.totalValue.toLocaleString()}</div>
+            <div className="text-2xl font-bold text-blue-600">${processingStats.totalValue.toLocaleString('en-US')}</div>
             <p className="text-xs text-muted-foreground">Estimated revenue</p>
           </CardContent>
         </Card>
@@ -204,7 +204,7 @@ export function LeadEngineDashboard({ quoteLeads, driverLeads }: LeadEngineDashb
                     </div>
                     <div>
                       <span className="font-medium">Pipeline:</span>
-                      <div className="text-lg font-semibold text-green-600">${team.totalValue.toLocaleString()}</div>
+                      <div className="text-lg font-semibold text-green-600">${team.totalValue.toLocaleString('en-US')}</div>
                     </div>
                   </div>
                   
