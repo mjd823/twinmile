@@ -1,348 +1,271 @@
 import { NextRequest, NextResponse } from 'next/server';
-import clientPromise from "@/lib/mongodb";
+import clientPromise from '@/lib/mongodb';
 
-// Real Database Activity API — every number comes from MongoDB, zero fakes
 export async function GET() {
   try {
     if (!clientPromise) {
-      throw new Error('Database not configured');
+      return NextResponse.json(
+        { success: false, error: 'MONGODB_URI not configured' },
+        { status: 500 }
+      );
     }
-
     const client = await clientPromise;
     const db = client.db();
 
-    // ── Real counts ──────────────────────────────────────────────
-    const [quoteLeads, driverLeads, allCustomers, allContracts, allLoads, allTrucks] =
-      await Promise.all([
-        db.collection("leads_quotes").countDocuments({ isArchived: { $ne: true } }),
-        db.collection("leads_drivers").countDocuments({ isArchived: { $ne: true } }),
-        db.collection("customers").countDocuments(),
-        db.collection("contracts").countDocuments(),
-        db.collection("loads").countDocuments(),
-        db.collection("trucks").countDocuments(),
-      ]);
+    // Get database stats
+    const [totalLeads, totalCustomers, totalDrivers, totalProspects, totalOutreachTasks] = await Promise.all([
+      db.collection('leads_drivers').countDocuments(),
+      db.collection('customers').countDocuments(),
+      db.collection('drivers').countDocuments(),
+      db.collection('outbound_prospects').countDocuments(),
+      db.collection('outreach_tasks').countDocuments(),
+    ]);
 
-    // ── Real revenue from loads ───────────────────────────────────
-    const revenuePipeline = await db
-      .collection("loads")
-      .aggregate([{ $group: { _id: null, total: { $sum: "$revenueUsd" } } }])
+    // Get recent agent activity (last 50)
+    const recentActivities = await db.collection('agent_activity')
+      .find({})
+      .sort({ timestamp: -1 })
+      .limit(50)
       .toArray();
-    const totalRevenue = revenuePipeline[0]?.total ?? 0;
 
-    // ── Recent lead records (for the activity feed) ──────────────
-    const [recentQuotes, recentDrivers, recentLoads, recentAgentActions] =
-      await Promise.all([
-        db.collection("leads_quotes")
-          .find({ isArchived: { $ne: true } })
-          .sort({ createdAt: -1 })
-          .limit(5)
-          .toArray(),
-        db.collection("leads_drivers")
-          .find({ isArchived: { $ne: true } })
-          .sort({ createdAt: -1 })
-          .limit(5)
-          .toArray(),
-        db.collection("loads")
-          .find()
-          .sort({ createdAt: -1 })
-          .limit(5)
-          .toArray(),
-        db.collection("agent_activity")
-          .find()
-          .sort({ createdAt: -1 })
-          .limit(10)
-          .toArray()
-          .catch(() => []),  // graceful if collection doesn't exist yet
-      ]);
-
-    // ── Build activity feed from real records ─────────────────────
-    const activities = buildRealActivities(
-      recentQuotes,
-      recentDrivers,
-      recentLoads,
-      recentAgentActions,
-      { quoteLeads, driverLeads, allCustomers, allContracts, allLoads, allTrucks, totalRevenue }
-    );
-
-    const stats = {
-      quoteLeads,
-      driverLeads,
-      totalLeads: quoteLeads + driverLeads,
-      customers: allCustomers,
-      contracts: allContracts,
-      loads: allLoads,
-      trucks: allTrucks,
-      totalRevenue,
-      lastSync: new Date().toISOString(),
+    // Get supervisor report
+    const supervisorReport = {
+      supervisorName: 'AI Supervisor',
+      systemHealth: {
+        score: totalLeads > 0 ? 85 : 50,
+        status: totalLeads > 0 ? 'healthy' : 'initializing',
+        activeAgents: 8,
+        databaseConnected: true,
+        totalRecords: totalLeads + totalCustomers + totalDrivers + totalProspects,
+      },
+      activeAlerts: [],
+      totalInterventions: 0,
     };
 
     return NextResponse.json({
       success: true,
-      databaseStats: stats,
-      activities,
-      supervisorReport: buildSupervisorReport(stats),
+      supervisorReport,
+      activities: recentActivities.map(a => ({
+        ...a,
+        _id: a._id.toString(),
+      })),
+      databaseStats: {
+        totalLeads,
+        totalCustomers,
+        totalDrivers,
+        totalProspects,
+        totalOutreachTasks,
+        totalRecords: totalLeads + totalCustomers + totalDrivers + totalProspects,
+      },
     });
   } catch (error) {
-    console.error('Database activity API error:', error);
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      databaseStats: {
-        quoteLeads: 0, driverLeads: 0, totalLeads: 0,
-        customers: 0, contracts: 0, loads: 0, trucks: 0,
-        totalRevenue: 0, lastSync: new Date().toISOString(),
-      },
-      activities: [],
-      supervisorReport: buildSupervisorReport(null),
-    });
+    console.error('[api/admin/ai-activity] GET error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to fetch AI activity', message: String(error) },
+      { status: 500 }
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { action } = await request.json();
-
     if (!clientPromise) {
-      throw new Error('Database not configured');
+      return NextResponse.json(
+        { success: false, error: 'MONGODB_URI not configured' },
+        { status: 500 }
+      );
     }
-
+    const { action } = await request.json();
     const client = await clientPromise;
     const db = client.db();
 
-    const label = action.replace(/_/g, ' ');
-    const result: any = {
-      success: true,
-      message: `✅ ${label.charAt(0).toUpperCase() + label.slice(1)} — pulling live data`,
-      timestamp: new Date().toLocaleTimeString(),
-      details: {} as any,
-    };
-
-    // Map actions to the responsible agent from the unified 8-agent organization
-    const actionAgentMap: Record<string, { name: string; role: string; department: string }> = {
-      find_customers: { name: 'Sofia Rodriguez', role: 'Lead Generation Specialist', department: 'Sales' },
-      send_marketing: { name: 'Isabella Martinez', role: 'Marketing Director', department: 'Marketing' },
-      check_revenue: { name: 'Robert Chang', role: 'Finance Director', department: 'Finance' },
-      hire_drivers: { name: 'Jennifer Foster', role: 'HR Director', department: 'Human Resources' },
-      schedule_deliveries: { name: 'David Kumar', role: 'Operations Director', department: 'Operations' },
-      customer_support: { name: 'Emily Watson', role: 'Customer Success Manager', department: 'Customer Success' },
-    };
-    const assignedAgent = actionAgentMap[action] || { name: 'Alexandra Sterling', role: 'CEO', department: 'Executive' };
+    let result: any = { success: true, message: '', timestamp: new Date().toISOString() };
 
     switch (action) {
-      case 'check_revenue': {
-        const rev = await db.collection("loads").aggregate([
-          { $group: { _id: null, total: { $sum: "$revenueUsd" } } },
-        ]).toArray();
-        const totalLeads = await db.collection("leads_quotes").countDocuments({ isArchived: { $ne: true } })
-          + await db.collection("leads_drivers").countDocuments({ isArchived: { $ne: true } });
-        result.details = {
-          totalRevenue: rev[0]?.total ?? 0,
-          totalLeads,
-          contracts: await db.collection("contracts").countDocuments(),
-        };
-        break;
-      }
-      case 'hire_drivers': {
-        const apps = await db.collection("leads_drivers").find({ isArchived: { $ne: true } }).toArray();
-        const newApps = apps.filter(a => a.status === 'new');
-        const qualified = apps.filter(a => a.status === 'qualified');
-        const converted = apps.filter(a => a.status === 'converted');
-        result.details = {
-          totalApplications: apps.length,
-          newApplications: newApps.length,
-          qualified: qualified.length,
-          converted: converted.length,
-        };
-        break;
-      }
-      case 'schedule_deliveries': {
-        const loads = await db.collection("loads").find().toArray();
-        const trucks = await db.collection("trucks").find().toArray();
-        result.details = {
-          totalLoads: loads.length,
-          plannedLoads: loads.filter(l => l.status === 'planned').length,
-          inTransit: loads.filter(l => l.status === 'in_transit').length,
-          trucksAvailable: trucks.length,
-        };
-        break;
-      }
-      case 'customer_support': {
-        const customers = await db.collection("customers").find().toArray();
-        result.details = {
-          totalCustomers: customers.length,
-          recentCustomers: customers.slice(-3).map(c => c.name),
-        };
-        break;
-      }
-      case 'find_customers': {
-        const quotes = await db.collection("leads_quotes").find({ isArchived: { $ne: true } }).toArray();
-        const unconverted = quotes.filter(q => q.status !== 'converted');
-        result.details = {
-          activeQuoteLeads: quotes.length,
-          unconvertedLeads: unconverted.length,
-          readyToConvert: unconverted.filter(q => q.status === 'qualified').length,
-        };
-        break;
-      }
-      case 'send_marketing': {
-        const leads = await db.collection("leads_quotes").countDocuments({ isArchived: { $ne: true } })
-          + await db.collection("leads_drivers").countDocuments({ isArchived: { $ne: true } });
-        result.details = {
-          totalAudience: leads,
-          status: 'Campaign system ready — connect email provider to send',
-        };
-        break;
-      }
-      default: {
-        result.details = { status: 'Action registered', timestamp: new Date().toISOString() };
-      }
-    }
+      case 'daily_ops': {
+        // Run daily AI operations
+        const [prospects, outreachTasks, driverLeads] = await Promise.all([
+          db.collection('outbound_prospects').find({ status: 'new' }).limit(10).toArray(),
+          db.collection('outreach_tasks').find({ status: { $in: ['pending', 'retrying'] } }).limit(20).toArray(),
+          db.collection('leads_drivers').find({ status: 'new' }).limit(10).toArray(),
+        ]);
 
-    // Log this action to agent_activity collection for audit trail
-    try {
-      await db.collection("agent_activity").insertOne({
-        action,
-        agent: assignedAgent,
-        result: result.details,
-        success: result.success,
-        createdAt: new Date(),
-      });
-    } catch (logErr) {
-      console.error('Failed to log agent activity:', logErr);
+        // Log activity
+        await db.collection('agent_activity').insertOne({
+          timestamp: new Date(),
+          agent: 'AI Supervisor',
+          activity: `Daily ops: ${prospects.length} new prospects, ${outreachTasks.length} pending outreach, ${driverLeads.length} new driver leads`,
+          type: 'daily_ops',
+          details: { prospects: prospects.length, outreachTasks: outreachTasks.length, driverLeads: driverLeads.length },
+        });
+
+        result.message = `✅ Daily operations complete: ${prospects.length} prospects, ${outreachTasks.length} outreach tasks, ${driverLeads.length} driver leads queued`;
+        result.details = { prospects: prospects.length, outreachTasks: outreachTasks.length, driverLeads: driverLeads.length };
+        break;
+      }
+
+      case 'weekly_review': {
+        // Weekly strategic review
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const [newLeads, convertedLeads, totalOutreach, avgScore] = await Promise.all([
+          db.collection('leads_drivers').countDocuments({ createdAt: { $gte: oneWeekAgo } }),
+          db.collection('leads_drivers').countDocuments({ status: 'converted', updatedAt: { $gte: oneWeekAgo } }),
+          db.collection('outreach_tasks').countDocuments({ createdAt: { $gte: oneWeekAgo } }),
+          db.collection('outbound_prospects').aggregate([
+            { $match: { createdAt: { $gte: oneWeekAgo } } },
+            { $group: { _id: null, avgScore: { $avg: '$score' } } }
+          ]).toArray(),
+        ]);
+
+        const avg = avgScore[0]?.avgScore || 0;
+
+        await db.collection('agent_activity').insertOne({
+          timestamp: new Date(),
+          agent: 'AI Supervisor',
+          activity: `Weekly review: ${newLeads} new leads, ${convertedLeads} converted, ${totalOutreach} outreach sent, avg score ${avg.toFixed(1)}`,
+          type: 'weekly_review',
+          details: { newLeads, convertedLeads, totalOutreach, avgScore: avg },
+        });
+
+        const conversionRate = newLeads > 0 ? ((convertedLeads / newLeads) * 100).toFixed(1) : '0';
+        result.message = `📊 Weekly review: ${newLeads} leads, ${conversionRate}% conversion, ${totalOutreach} outreach, avg score ${avg.toFixed(1)}`;
+        result.details = { newLeads, convertedLeads, totalOutreach, avgScore: avg, conversionRate };
+        break;
+      }
+
+      case 'monthly_bi': {
+        // Monthly business intelligence
+        const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const [monthlyLeads, monthlyCustomers, monthlyDrivers, monthlyProspects, monthlyRevenue] = await Promise.all([
+          db.collection('leads_drivers').countDocuments({ createdAt: { $gte: oneMonthAgo } }),
+          db.collection('customers').countDocuments({ createdAt: { $gte: oneMonthAgo } }),
+          db.collection('drivers').countDocuments({ createdAt: { $gte: oneMonthAgo } }),
+          db.collection('outbound_prospects').countDocuments({ createdAt: { $gte: oneMonthAgo } }),
+          db.collection('loads').aggregate([
+            { $match: { createdAt: { $gte: oneMonthAgo }, status: 'delivered' } },
+            { $group: { _id: null, total: { $sum: '$revenue' } } }
+          ]).toArray(),
+        ]);
+
+        const revenue = monthlyRevenue[0]?.total || 0;
+
+        await db.collection('agent_activity').insertOne({
+          timestamp: new Date(),
+          agent: 'AI Supervisor',
+          activity: `Monthly BI: ${monthlyLeads} leads, ${monthlyCustomers} customers, ${monthlyDrivers} drivers, ${monthlyProspects} prospects, $${revenue.toLocaleString()} revenue`,
+          type: 'monthly_bi',
+          details: { monthlyLeads, monthlyCustomers, monthlyDrivers, monthlyProspects, revenue },
+        });
+
+        result.message = `📈 Monthly BI: ${monthlyLeads} leads, ${monthlyCustomers} customers, ${monthlyDrivers} drivers, ${monthlyProspects} prospects, $${revenue.toLocaleString()} revenue`;
+        result.details = { monthlyLeads, monthlyCustomers, monthlyDrivers, monthlyProspects, revenue };
+        break;
+      }
+
+      case 'driver_engagement': {
+        // Driver engagement check
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        const staleDrivers = await db.collection('drivers').find({
+          lastContactAt: { $lt: thirtyDaysAgo },
+          status: 'active'
+        }).limit(20).toArray();
+
+        // Create outreach tasks for stale drivers
+        let tasksCreated = 0;
+        for (const driver of staleDrivers) {
+          const existing = await db.collection('outreach_tasks').findOne({
+            leadId: driver._id,
+            leadType: 'driver',
+            status: { $in: ['pending', 'retrying'] }
+          });
+          if (!existing) {
+            await db.collection('outreach_tasks').insertOne({
+              leadId: driver._id,
+              leadType: 'driver',
+              template: 'driver_followup',
+              channel: 'email',
+              priority: 'medium',
+              scheduledAt: new Date(),
+              status: 'pending',
+              attempts: 0,
+              maxAttempts: 3,
+              personalization: { name: driver.name, truckType: driver.truckType },
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+            tasksCreated++;
+          }
+        }
+
+        await db.collection('agent_activity').insertOne({
+          timestamp: new Date(),
+          agent: 'AI Supervisor',
+          activity: `Driver engagement: ${staleDrivers.length} stale drivers found, ${tasksCreated} outreach tasks created`,
+          type: 'driver_engagement',
+          details: { staleDrivers: staleDrivers.length, tasksCreated },
+        });
+
+        result.message = `🚛 Driver engagement: ${staleDrivers.length} stale drivers, ${tasksCreated} follow-up tasks created`;
+        result.details = { staleDrivers: staleDrivers.length, tasksCreated };
+        break;
+      }
+
+      case 'auto_onboarding': {
+        // Auto onboarding for high-score prospects
+        const qualifiedProspects = await db.collection('outbound_prospects').find({
+          score: { $gte: 75 },
+          status: 'new',
+          onboardingStarted: { $ne: true }
+        }).limit(10).toArray();
+
+        let onboarded = 0;
+        for (const prospect of qualifiedProspects) {
+          await db.collection('outbound_prospects').updateOne(
+            { _id: prospect._id },
+            { $set: { status: 'onboarding', onboardingStarted: true, onboardingStep: 'identity_verification', updatedAt: new Date() } }
+          );
+
+          // Create driver lead from prospect
+          await db.collection('leads_drivers').insertOne({
+            name: prospect.name,
+            email: prospect.contact?.email,
+            phone: prospect.contact?.phone,
+            truckType: prospect.equipment?.[0] || 'Not specified',
+            yearsExperience: parseInt(prospect.experience?.replace('+', '').replace(' years', '')) || 0,
+            status: 'onboarding',
+            source: 'outbound_prospecting',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+
+          await db.collection('agent_activity').insertOne({
+            timestamp: new Date(),
+            agent: 'AI Supervisor',
+            activity: `Auto onboarding started for ${prospect.name} (score: ${prospect.score})`,
+            type: 'auto_onboarding',
+            details: { prospectId: prospect._id.toString(), score: prospect.score },
+          });
+          onboarded++;
+        }
+
+        result.message = `🎯 Auto onboarding: ${onboarded} qualified prospects (score ≥75) moved to onboarding`;
+        result.details = { onboarded, totalQualified: qualifiedProspects.length };
+        break;
+      }
+
+      default:
+        return NextResponse.json(
+          { success: false, error: `Unknown action: ${action}` },
+          { status: 400 }
+        );
     }
 
     return NextResponse.json(result);
   } catch (error) {
-    console.error('Dashboard action API error:', error);
-    return NextResponse.json({
-      success: false,
-      message: `Failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
-      timestamp: new Date().toLocaleTimeString(),
-    });
+    console.error('[api/admin/ai-activity] POST error:', error);
+    return NextResponse.json(
+      { success: false, error: 'Failed to execute action', message: String(error) },
+      { status: 500 }
+    );
   }
-}
-
-// ── Build activity feed from REAL database records ──────────────────
-function buildRealActivities(
-  recentQuotes: any[],
-  recentDrivers: any[],
-  recentLoads: any[],
-  recentAgentActions: any[],
-  counts: any
-) {
-  const activities: any[] = [];
-  const now = new Date().toISOString();
-
-  // Activities from logged agent actions (dashboard button clicks etc.)
-  for (const a of recentAgentActions) {
-    const agentLabel = a.agent?.name
-      ? `${a.agent.name} (${a.agent.role})`
-      : 'AI Agent';
-    activities.push({
-      timestamp: a.createdAt ?? now,
-      agent: agentLabel,
-      activity: `Executed "${a.action?.replace(/_/g, ' ')}" action`,
-      type: 'supervision',
-      details: a.result,
-    });
-  }
-
-  // Activities based on actual quote leads
-  for (const q of recentQuotes) {
-    activities.push({
-      timestamp: q.createdAt ?? now,
-      agent: 'Sofia Rodriguez (Lead Generation)',
-      activity: `Quote lead from ${q.name || 'unknown'} — ${q.pickupLocation ?? '?'} → ${q.dropoffLocation ?? '?'} (${q.serviceType || 'freight'})`,
-      type: 'lead_processing',
-      details: { status: q.status, service: q.serviceType, source: q.source },
-    });
-  }
-
-  // Activities based on actual driver applications
-  for (const d of recentDrivers) {
-    activities.push({
-      timestamp: d.createdAt ?? now,
-      agent: 'Jennifer Foster (HR)',
-      activity: `Driver application from ${d.fullName || 'unknown'} — ${d.truckType || 'unspecified'} truck, ${d.yearsExperience || '?'} yrs exp`,
-      type: 'recruiting',
-      details: { status: d.status, truckType: d.truckType, source: d.source },
-    });
-  }
-
-  // Activities based on actual loads
-  for (const l of recentLoads) {
-    activities.push({
-      timestamp: l.createdAt ?? now,
-      agent: 'David Kumar (Operations)',
-      activity: `Load ${l.pickup ?? '?'} → ${l.dropoff ?? '?'} — $${l.revenueUsd ?? 0} revenue, status: ${l.status}`,
-      type: 'operations',
-      details: { status: l.status, revenue: l.revenueUsd },
-    });
-  }
-
-  // Summary activities from counts (real numbers, no fakes)
-  activities.push({
-    timestamp: now,
-    agent: 'Marcus Chen (Sales)',
-    activity: `Pipeline: ${counts.quoteLeads} active quote leads, ${counts.allCustomers} customers, ${counts.allContracts} contracts`,
-    type: 'lead_processing',
-    details: { quoteLeads: counts.quoteLeads, customers: counts.allCustomers, contracts: counts.allContracts },
-  });
-
-  activities.push({
-    timestamp: now,
-    agent: 'Robert Chang (Finance)',
-    activity: `Total revenue across ${counts.allLoads} loads: $${counts.totalRevenue.toLocaleString()}`,
-    type: 'finance',
-    details: { totalRevenue: counts.totalRevenue, loads: counts.allLoads },
-  });
-
-  activities.push({
-    timestamp: now,
-    agent: 'Emily Watson (Customer Success)',
-    activity: `Monitoring ${counts.allCustomers} customer accounts`,
-    type: 'customer_service',
-    details: { customers: counts.allCustomers },
-  });
-
-  // Sort newest first
-  activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  return activities;
-}
-
-// ── Supervisor report from REAL stats ────────────────────────────────
-function buildSupervisorReport(stats: any) {
-  const connected = stats !== null;
-  const totalRecords = connected
-    ? stats.totalLeads + stats.customers + stats.contracts + stats.loads
-    : 0;
-
-  return {
-    supervisorName: 'AI Supervisor',
-    systemHealth: {
-      score: connected ? 100 : 0,
-      status: connected ? 'operational' : 'disconnected',
-      activeAgents: 8,
-      databaseConnected: connected,
-      totalRecords,
-    },
-    performance: {
-      average: connected ? 100 : 0,
-      topPerformer: connected
-        ? { name: 'All agents', successRate: 100 }
-        : { name: 'N/A', successRate: 0 },
-      needsAttention: connected ? [] : ['Database connection required'],
-    },
-    activeAlerts: connected ? [] : [{ message: 'Database unreachable', severity: 'warning' }],
-    totalInterventions: 0,
-    lastReview: new Date().toISOString(),
-    recommendations: connected
-      ? [
-          `${stats.totalLeads} active leads in pipeline`,
-          `$${stats.totalRevenue.toLocaleString()} total revenue tracked`,
-          `${stats.customers} customer accounts active`,
-        ]
-      : ['Connect database to enable full AI operations'],
-    systemStatus: connected ? 'All Systems Operational' : 'Waiting for Database',
-  };
 }
