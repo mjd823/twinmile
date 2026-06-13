@@ -318,6 +318,7 @@ export abstract class EnhancedAgent {
   }
   
   private analyzeSentiment(content: string): 'positive' | 'neutral' | 'negative' {
+    if (!content || typeof content !== 'string') return 'neutral';
     const positiveWords = ['excellent', 'great', 'successful', 'completed', 'achieved', 'optimal'];
     const negativeWords = ['failed', 'error', 'issue', 'problem', 'concern', 'difficult'];
     
