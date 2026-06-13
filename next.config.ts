@@ -25,8 +25,8 @@ const nextConfig: NextConfig = {
           "font-src 'self' data:",
           "style-src 'self' 'unsafe-inline'",
           isProd
-            ? "script-src 'self' 'unsafe-inline'"
-            : "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+            ? "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com"
+            : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com",
           "connect-src 'self'",
           "form-action 'self'",
         ].join("; "),

@@ -32,8 +32,8 @@ export function LiveWorkflow({ employees, activityFeed }: LiveWorkflowProps) {
     const agent = employees.find((e) => e.id === step.agentId);
     const recentActivity = activityFeed.filter(
       (a) =>
-        a.agent?.includes(step.agentName.split(" ")[1]) ||
-        a.agent?.includes(step.agentName)
+        a.agent?.name?.includes(step.agentName.split(" ")[1]) ||
+        a.agent?.name?.includes(step.agentName)
     );
     return { ...step, agent, recentActivity };
   });
