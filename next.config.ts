@@ -27,7 +27,7 @@ const nextConfig: NextConfig = {
           isProd
             ? "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com"
             : "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com",
-          "connect-src 'self'",
+          "connect-src 'self' https://analytics.google.com https://www.google.com https://www.googletagmanager.com",
           "form-action 'self'",
         ].join("; "),
       },

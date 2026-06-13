@@ -219,7 +219,7 @@ export function AIBusinessDashboard({ onActionClick }: AIBusinessDashboardProps)
       if (currentActivity.recentActivities && currentActivity.recentActivities.length > 0) {
         setEmployees(prev => prev.map(emp => {
           const match = currentActivity.recentActivities.find((a: any) =>
-            a.agent.includes(emp.name.split(' ')[1])
+            a.agent?.name?.includes(emp.name.split(' ')[1])
           );
           if (match) {
             return {
