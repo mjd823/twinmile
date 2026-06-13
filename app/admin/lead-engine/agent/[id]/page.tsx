@@ -50,11 +50,41 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
   try {
     const client = await clientPromise!;
     const db = client.db();
+    // Agent activity stores agent as object with name, so we need to match by agent.name
+    const agentNames = [
+      "Sofia Rodriguez", // lead_generation
+      "Marcus Chen", // sales
+      "Alexandra Sterling", // ceo
+      "David Kumar", // operations
+      "Jennifer Foster", // hr
+      "Robert Chang", // finance
+      "Emily Watson", // customer_success
+      "Isabella Martinez", // marketing
+    ];
+    // Map agentId to the display name used in activity logs
+    const agentNameMap: Record<string, string> = {
+      lead_generation: "Sofia Rodriguez",
+      sales: "Marcus Chen",
+      ceo: "Alexandra Sterling",
+      operations: "David Kumar",
+      hr: "Jennifer Foster",
+      finance: "Robert Chang",
+      customer_success: "Emily Watson",
+      marketing: "Isabella Martinez",
+    };
+    const searchName = agentNameMap[id];
+    
     const raw = await db
       .collection("agent_activity")
-      .find({ agentId: id })
+      .find({ 
+        $or: [
+          { agent: searchName },
+          { "agent.name": searchName },
+          { agentId: id },
+        ]
+      })
       .sort({ timestamp: -1 })
-      .limit(20)
+      .limit(50)
       .toArray();
     recentActivity = raw.map((doc) => ({
       ...doc,
