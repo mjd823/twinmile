@@ -100,7 +100,8 @@ export class GroqAgentClient {
         apiKey: key,
         defaultHeaders: {
           "Groq-Model-Version": "latest"
-        }
+        },
+        timeout: 180000 // 3 minutes timeout
       });
     }
     return this.client;
