@@ -164,7 +164,6 @@ export function AdminOpsDashboard({
     return loads.find((l) => l.id === loadId) ?? null;
   }, [loads, selectedTruck?.currentLoadId]);
 
-  }, [loads]);
 
   if (isLoading) {
     return (
@@ -192,7 +191,6 @@ export function AdminOpsDashboard({
             </div>
           </div>
         </div>
-      </div>
     </div>
     );
   }

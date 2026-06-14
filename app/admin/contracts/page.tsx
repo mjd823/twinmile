@@ -27,6 +27,11 @@ export default async function AdminContractsPage() {
       .toArray(),
   ]);
 
+  // Build customer lookup map: customer ObjectId string → name
+  const customerMap = new Map(
+    customers.map((c: any) => [String(c._id), String(c.name ?? "")])
+  );
+
   return (
     <main>
       <section className="border-b border-border/60">
@@ -54,6 +59,7 @@ export default async function AdminContractsPage() {
               rateUsd: Number(c.rateUsd ?? 0),
               notes: c.notes ? String(c.notes) : "",
             }))}
+            customerMap={customerMap}
           />
         </div>
       </section>

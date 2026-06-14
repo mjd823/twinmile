@@ -21,9 +21,11 @@ type ContractRow = {
 export function AdminContractsForm({
   customers,
   contracts,
+  customerMap,
 }: {
   customers: CustomerOption[];
   contracts: ContractRow[];
+  customerMap?: Map<string, string>;
 }) {
   const [rows, setRows] = React.useState<ContractRow[]>(contracts);
   const [busy, setBusy] = React.useState(false);
@@ -195,6 +197,9 @@ export function AdminContractsForm({
   }
 
   function customerName(customerId: string) {
+    if (customerMap && customerMap.has(customerId)) {
+      return customerMap.get(customerId) ?? "—";
+    }
     return customers.find((c) => c.id === customerId)?.name ?? "—";
   }
 

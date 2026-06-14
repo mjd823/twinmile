@@ -354,48 +354,25 @@ export function AdminInbox({
       </div>
     </div>
 
-    <div className="flex flex-wrap items-center gap-3">
-      <span className="text-sm font-medium text-muted-foreground">Filter by type:</span>
-      <div className="inline-flex rounded-lg border border-border/60 bg-card/50 p-1">
-        <button
-          type="button"
-          className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-            typeFilter === "all"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-          }`}
-          onClick={() => setTypeFilter("all")}
-        >
-          All
-        </button>
-        <button
-          type="button"
-          className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-            typeFilter === "quotes"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-          }`}
-          onClick={() => setTypeFilter("quotes")}
-        >
-          Quotes
-        </button>
-        <button
-          type="button"
-          className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-            typeFilter === "drivers"
-              ? "bg-primary text-primary-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
-          }`}
-          onClick={() => setTypeFilter("drivers")}
-        >
-          Drivers
-        </button>
-      </div>
-    </div>
-
       <div className="overflow-hidden rounded-lg border border-border/60 bg-card">
         <div className="hidden grid-cols-13 gap-2 border-b border-border/60 bg-muted/40 px-4 py-2 text-xs font-semibold md:grid">
-          <div className="col-span-2">Type</div>
+          <button 
+            className="col-span-2 flex items-center gap-1.5 rounded-md px-2 py-1 hover:bg-accent/50 transition-colors"
+            onClick={() => {
+              if (typeFilter === "all") {
+                setTypeFilter("quotes");
+              } else if (typeFilter === "quotes") {
+                setTypeFilter("drivers");
+              } else {
+                setTypeFilter("all");
+              }
+            }}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
+            Type {typeFilter !== "all" && <span className="text-primary">({typeFilter === "quotes" ? "Quotes" : "Drivers"})</span>}
+          </button>
           <div className="col-span-3">Name</div>
           <div className="col-span-3">Email</div>
           <div className="col-span-3">Details</div>
