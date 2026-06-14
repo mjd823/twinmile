@@ -522,7 +522,10 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
   const pipelineValue = allLeads.reduce((sum, l) => sum + (l.estimatedValue || 0), 0);
   const avgScore = totalLeads > 0 ? Math.round(allLeads.reduce((s, l) => s + (l.score || 0), 0) / totalLeads) : 0;
   const conversionRate = totalLeads > 0 ? ((convertedLeads / totalLeads) * 100).toFixed(1) : "0";
-  
+
+  // Lease agreements count (from separate collection)
+  const leaseAgreementsCount = 0; // TODO: Fetch from lease_agreements collection
+
   const convertedWithDates = allLeads.filter(l => l.status === "converted" && l.createdAt && l.convertedAt);
   const avgSpeedToRevenue = convertedWithDates.length > 0
     ? Math.round(convertedWithDates.reduce((s, l) => {
@@ -548,6 +551,7 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
     { name: "Onboarding", key: "onboarding", count: driverLeads.filter(l => l.status === "onboarding").length, color: "bg-indigo-500", icon: <Truck className="h-4 w-4" /> },
     { name: "Compliance", key: "compliance_check", count: driverLeads.filter(l => l.status === "compliance_check").length, color: "bg-amber-500", icon: <Shield className="h-4 w-4" /> },
     { name: "Ready", key: "ready_to_dispatch", count: driverLeads.filter(l => l.status === "ready_to_dispatch").length, color: "bg-green-500", icon: <CheckCircle className="h-4 w-4" /> },
+    { name: "Lease Agreement", key: "lease_agreement", count: leaseAgreementsCount, color: "bg-purple-500", icon: <FileText className="h-4 w-4" /> },
     { name: "Rejected", key: "rejected", count: driverLeads.filter(l => l.status === "rejected").length, color: "bg-red-500", icon: <AlertTriangle className="h-4 w-4" /> },
   ];
 
