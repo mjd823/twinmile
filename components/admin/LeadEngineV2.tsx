@@ -143,9 +143,10 @@ interface PipelineDetailModalProps {
   leads: any[];
   stageKey: string;
   pipelineType: "quote" | "driver";
+  onViewDetail: (detail: { isOpen: boolean; lead: any; pipelineType: "quote" | "driver" }) => void;
 }
 
-function PipelineDetailModal({ isOpen, onClose, title, leads, stageKey, pipelineType }: PipelineDetailModalProps) {
+function PipelineDetailModal({ isOpen, onClose, title, leads, stageKey, pipelineType, onViewDetail }: PipelineDetailModalProps) {
   if (!isOpen) return null;
 
   const [search, setSearch] = React.useState("");
@@ -256,7 +257,7 @@ function PipelineDetailModal({ isOpen, onClose, title, leads, stageKey, pipeline
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map(lead => (
-                <LeadCard key={lead._id || lead.id} lead={lead} pipelineType={pipelineType} />
+                <LeadCard key={lead._id || lead.id} lead={lead} pipelineType={pipelineType} onViewDetail={onViewDetail} />
               ))}
             </div>
           )}
@@ -266,7 +267,135 @@ function PipelineDetailModal({ isOpen, onClose, title, leads, stageKey, pipeline
   );
 }
 
-function LeadCard({ lead, pipelineType }: { lead: any; pipelineType: "quote" | "driver" }) {
+function LeadDetailModal({ isOpen, onClose, lead, pipelineType }: { isOpen: boolean; onClose: () => void; lead: any; pipelineType: "quote" | "driver" }) {
+  if (!isOpen) return null;
+
+  const isDriver = pipelineType === "driver";
+  const name = isDriver ? (lead.fullName || lead.name || "—") : (lead.name || lead.company || "—");
+  const email = lead.email || "—";
+  const phone = lead.phone || "—";
+  const score = lead.score || 0;
+  const quality = lead.quality || "low";
+  const status = lead.status || "new";
+  const createdAt = lead.createdAt ? formatRelativeTime(new Date(lead.createdAt).toISOString()) : "Unknown";
+
+  const formatField = (label: string, value: string) => {
+    if (!value || value === "—" || value === "") return null;
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-xs text-muted-foreground w-24 shrink-0">{label}</span>
+        <span className="text-xs font-medium text-foreground truncate">{value}</span>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/30 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-2xl border border-border/60 bg-background shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between border-b border-border/60 px-6 py-4">
+          <div>
+            <h2 className="text-xl font-bold">{isDriver ? "🚛 Driver Application" : "📦 Quote Request"} Details</h2>
+            <p className="text-sm text-muted-foreground">{name} • {createdAt}</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={onClose} className="gap-1">
+            <ChevronLeft className="h-4 w-4" />
+            Close
+          </Button>
+        </div>
+
+        <div className="p-6 overflow-y-auto max-h-[70vh]">
+          <div className="grid gap-4">
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  {isDriver ? <UserCheck className="h-5 w-5 text-orange-500" /> : <FileText className="h-5 w-5 text-blue-500" />}
+                  Applicant Info
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {formatField("Name", isDriver ? (lead.fullName || lead.name || "—") : (lead.name || lead.company || "—"))}
+                {formatField("Email", lead.email || "—")}
+                {formatField("Phone", lead.phone || "—")}
+                {formatField("Status", status)}
+                {formatField("Quality Score", `${quality} (${score}/100)`)}
+                {formatField("Applied", lead.createdAt ? new Date(lead.createdAt).toLocaleString() : "Unknown")}
+              </CardContent>
+            </Card>
+
+            {isDriver ? (
+              <Card className="border-border/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Truck className="h-5 w-5 text-orange-500" />
+                    Driver Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {formatField("Truck Type", lead.truckType || "—")}
+                  {formatField("Experience", lead.yearsExperience || "—")}
+                  {formatField("Authority", lead.hasOwnAuthority ? "Own Authority" : (lead.authorityStatus || "Lease"))}
+                  {formatField("Endorsements", lead.endorsements?.length ? lead.endorsements.join(", ") : "—")}
+                  {formatField("Preferred Routes", lead.preferredRoutes || "—")}
+                  {formatField("Start Date", lead.startDate || "—")}
+                  {formatField("CDL Class", lead.cdlClass || "—")}
+                  {formatField("Available Date", lead.availableDate || "—")}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card className="border-border/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-blue-500" />
+                    Quote Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {formatField("Company", lead.company || "—")}
+                  {formatField("Service Type", lead.serviceType || "—")}
+                  {formatField("Route", `${lead.pickupLocation || "—"} → ${lead.dropoffLocation || "—"}`)}
+                  {formatField("Pickup Date", lead.pickupDate || "—")}
+                  {formatField("Urgency", lead.urgency || "normal")}
+                  {formatField("Estimated Weight", lead.estimatedWeight || "—")}
+                </CardContent>
+              </Card>
+            )}
+
+            {lead.notes && lead.notes.length > 0 && (
+              <Card className="border-border/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                    Notes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-sm text-muted-foreground whitespace-pre-wrap">{Array.isArray(lead.notes) ? lead.notes.join("\n") : lead.notes}</div>
+                </CardContent>
+              </Card>
+            )}
+
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-muted-foreground" />
+                  Source & Tracking
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {formatField("Source", lead.source || "web")}
+                {formatField("Source URL", lead.sourceUrl || "—")}
+                {formatField("IP Address", lead.ipAddress || "—")}
+                {formatField("User Agent", lead.userAgent || "—")}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LeadCard({ lead, pipelineType, onViewDetail }: { lead: any; pipelineType: "quote" | "driver"; onViewDetail: (detail: { isOpen: boolean; lead: any; pipelineType: "quote" | "driver" }) => void }) {
   const isDriver = pipelineType === "driver";
   const name = isDriver ? (lead.fullName || lead.name || "—") : (lead.name || lead.company || "—");
   const email = lead.email || "—";
@@ -277,10 +406,14 @@ function LeadCard({ lead, pipelineType }: { lead: any; pipelineType: "quote" | "
   
   // Driver-specific
   const truckType = lead.truckType || "—";
-  const yearsExp = lead.yearsExperience || "—";
+  const yearsExpRaw = lead.yearsExperience || "—";
+  const yearsExp = yearsExpRaw.toString().toLowerCase().includes("yr") || yearsExpRaw.toString().toLowerCase().includes("year") 
+    ? yearsExpRaw 
+    : `${yearsExpRaw} yrs`;
   const authority = lead.hasOwnAuthority ? "Own Authority" : lead.authorityStatus || "Lease";
   const endorsements = lead.endorsements?.length ? lead.endorsements.join(", ") : "—";
-  const preferredRoutes = lead.preferredRoutes || "—";
+  const preferredRoutesRaw = lead.preferredRoutes || "";
+  const preferredRoutes = preferredRoutesRaw.trim() ? preferredRoutesRaw : "—";
   
   // Quote-specific
   const company = lead.company || "—";
@@ -303,9 +436,9 @@ function LeadCard({ lead, pipelineType }: { lead: any; pipelineType: "quote" | "
               <div className="text-xs text-muted-foreground">{email}</div>
             </div>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 flex-wrap">
             {getStatusBadge(status)}
-            <Badge variant="outline" className={`text-[10px] ${
+            <Badge variant="outline" className={`text-[10px] whitespace-nowrap ${
               quality === "premium" ? "border-purple-500/30 text-purple-700" :
               quality === "high" ? "border-green-500/30 text-green-700" :
               quality === "medium" ? "border-blue-500/30 text-blue-700" :
@@ -345,7 +478,7 @@ function LeadCard({ lead, pipelineType }: { lead: any; pipelineType: "quote" | "
             {lead.createdAt ? formatRelativeTime(new Date(lead.createdAt).toISOString()) : "Unknown"}
           </span>
           <div className="flex gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8" title="View details" onClick={() => alert("View details for " + name)}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="View details" onClick={() => onViewDetail({ isOpen: true, lead, pipelineType })}>
               <Eye className="h-4 w-4" />
             </Button>
             <Button variant="ghost" size="icon" className="h-8 w-8" title="Email" onClick={() => window.open(`mailto:${email}`)}>
@@ -371,6 +504,13 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
     title: string;
     leads: any[];
     stageKey: string;
+    pipelineType: "quote" | "driver";
+  } | null>(null);
+
+  // Lead detail modal state
+  const [leadDetail, setLeadDetail] = React.useState<{
+    isOpen: boolean;
+    lead: any;
     pipelineType: "quote" | "driver";
   } | null>(null);
 
@@ -713,6 +853,17 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
           leads={pipelineDetail.leads}
           stageKey={pipelineDetail.stageKey}
           pipelineType={pipelineDetail.pipelineType}
+          onViewDetail={setLeadDetail}
+        />
+      )}
+
+      {/* LEAD DETAIL MODAL */}
+      {leadDetail && (
+        <LeadDetailModal
+          isOpen={leadDetail.isOpen}
+          onClose={() => setLeadDetail(null)}
+          lead={leadDetail.lead}
+          pipelineType={leadDetail.pipelineType}
         />
       )}
     </div>
