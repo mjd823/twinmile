@@ -121,6 +121,54 @@ function LoadingSkeleton() {
   );
 }
 
+function TruckListItem({ truck, isSelected, onClick, driverLabel }: {
+  truck: OpsTruck;
+  isSelected: boolean;
+  onClick: () => void;
+  driverLabel: (t: OpsTruck) => string;
+}) {
+  return (
+    <div className="grid gap-2">
+      <button
+        type="button"
+        onClick={onClick}
+        className={
+          "flex w-full items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/40 " +
+          (isSelected ? "bg-accent/35" : "bg-background/20")
+        }
+      >
+        <div className="grid">
+          <div className="font-medium">{truck.name}</div>
+          <div className="text-xs text-muted-foreground">{driverLabel(truck)}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant={
+              truck.status === "maintenance" || truck.fuelPct < 15
+                ? "destructive"
+                : truck.status === "active"
+                ? "default"
+                : "outline"
+            }
+          >
+            {truck.status}
+          </Badge>
+          <Badge variant={truck.fuelPct < 15 ? "destructive" : "outline"}>{truck.fuelPct}%</Badge>
+        </div>
+      </button>
+    </div>
+  );
+}
+
+function EmptyFleetMessage() {
+  return (
+    <div className="col-span-full text-center py-8 text-muted-foreground">
+      <p className="font-medium">No trucks in fleet</p>
+      <p className="text-sm mt-1">Add trucks from the Fleet page</p>
+    </div>
+  );
+}
+
 export function AdminOpsDashboard({}: {}) {
   const [trucks, setTrucks] = React.useState<OpsTruck[]>([]);
   const [loads, setLoads] = React.useState<OpsLoad[]>([]);
@@ -203,6 +251,16 @@ export function AdminOpsDashboard({}: {}) {
     return <LoadingSkeleton />;
   }
 
+  const truckItems = trucks.map((t) => (
+    <TruckListItem
+      key={t.id}
+      truck={t}
+      isSelected={t.id === selectedTruckId}
+      onClick={() => setSelectedTruckId(t.id)}
+      driverLabel={driverLabel}
+    />
+  ));
+
   return (
     <div className="grid gap-6">
       <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-6">
@@ -259,46 +317,9 @@ export function AdminOpsDashboard({}: {}) {
             </div>
             <div className="mt-4 grid max-h-[52vh] gap-2 overflow-auto pr-1 lg:max-h-none">
               {trucks.length === 0 ? (
-                <div className="col-span-full text-center py-8 text-muted-foreground">
-                  <p className="font-medium">No trucks in fleet</p>
-                  <p className="text-sm mt-1">Add trucks from the Fleet page</p>
-                </div>
+                <EmptyFleetMessage />
               ) : (
-                trucks.map((t) => {
-                  const isSelected = t.id === selectedTruckId;
-
-                  return (
-                    <div key={t.id} className="grid gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTruckId(t.id)}
-                        className={
-                          "flex w-full items-center justify-between gap-3 rounded-md border border-border/60 px-3 py-2 text-left text-sm transition-colors hover:bg-accent/40 " +
-                          (isSelected ? "bg-accent/35" : "bg-background/20")
-                        }
-                      >
-                        <div className="grid">
-                          <div className="font-medium">{t.name}</div>
-                          <div className="text-xs text-muted-foreground">{driverLabel(t)}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge
-                            variant={
-                              t.status === "maintenance" || t.fuelPct < 15
-                                ? "destructive"
-                                : t.status === "active"
-                                ? "default"
-                                : "outline"
-                            }
-                          >
-                            {t.status}
-                          </Badge>
-                          <Badge variant={t.fuelPct < 15 ? "destructive" : "outline"}>{t.fuelPct}%</Badge>
-                        </div>
-                      </button>
-                    </div>
-                  );
-                })
+                truckItems
               )}
             </div>
           </div>
@@ -307,4 +328,3 @@ export function AdminOpsDashboard({}: {}) {
     </div>
   );
 }
-
