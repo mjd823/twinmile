@@ -180,6 +180,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       color={agent.color}
       reportsTo={agent.reportsTo}
       action={action}
+      workflow={workflow}
       tools={agentTools}
       recentActivity={recentActivity}
       metrics={agentMetrics}

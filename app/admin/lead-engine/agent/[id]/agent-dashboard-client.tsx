@@ -56,6 +56,7 @@ interface AgentDashboardClientProps {
   color: string;
   reportsTo?: string;
   action: { action: string; label: string; description: string; icon: string } | null;
+  workflow: Array<{ step: number; label: string; description: string; tools?: string[] }>;
   tools: AgentTool[];
   recentActivity: any[];
   metrics?: {
