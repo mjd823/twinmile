@@ -47,6 +47,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
 
   // Fetch recent activity for this agent from MongoDB
   let recentActivity: any[] = [];
+  let agentMetrics: any = {};
   try {
     const client = await clientPromise!;
     const db = client.db();
@@ -91,8 +92,68 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       _id: doc._id?.toString?.() ?? doc._id,
       timestamp: doc.timestamp instanceof Date ? doc.timestamp.toISOString() : doc.timestamp,
     }));
+
+    // Fetch real-time metrics for this agent
+    const processedLeads = await db
+      .collection("agent_activity")
+      .countDocuments({
+        $or: [
+          { agent: searchName },
+          { "agent.name": searchName },
+          { agentId: id },
+        ],
+        action: { $in: ["lead_processed", "lead_qualified", "lead_routed", "outbound_prospecting"] }
+      });
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todaysActions = await db
+      .collection("agent_activity")
+      .countDocuments({
+        $or: [
+          { agent: searchName },
+          { "agent.name": searchName },
+          { agentId: id },
+        ],
+        timestamp: { $gte: today }
+      });
+    
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weeksActions = await db
+      .collection("agent_activity")
+      .countDocuments({
+        $or: [
+          { agent: searchName },
+          { "agent.name": searchName },
+          { agentId: id },
+        ],
+        timestamp: { $gte: weekAgo }
+      });
+    
+    let pipelineLeads = 0;
+    if (id === "lead_generation") {
+      pipelineLeads = await db.collection("leads_drivers").countDocuments({ status: { $in: ["new", "qualified"] } });
+      pipelineLeads += await db.collection("leads_quotes").countDocuments({ status: { $in: ["new", "qualified"] } });
+    } else if (id === "sales") {
+      pipelineLeads = await db.collection("leads_quotes").countDocuments({ status: { $in: ["qualified", "quoted", "negotiating"] } });
+    } else if (id === "hr") {
+      pipelineLeads = await db.collection("leads_drivers").countDocuments({ status: { $in: ["onboarding", "compliance_check"] } });
+    } else if (id === "operations") {
+      pipelineLeads = await db.collection("leads_drivers").countDocuments({ status: "ready_to_dispatch" });
+    } else if (id === "finance") {
+      pipelineLeads = await db.collection("invoices").countDocuments({ status: { $in: ["pending", "overdue"] } }).catch(() => 0);
+    }
+    
+    agentMetrics = {
+      processedLeads,
+      todaysActions,
+      weeksActions,
+      pipelineLeads,
+    };
   } catch {
     // DB may not have agent_activity yet — that's fine
+    agentMetrics = {};
   }
 
   const workflow = AGENT_WORKFLOWS[id] || [];
@@ -121,6 +182,7 @@ export default async function AgentPage({ params }: { params: Promise<{ id: stri
       action={action}
       tools={agentTools}
       recentActivity={recentActivity}
+      metrics={agentMetrics}
     />
   );
 }
