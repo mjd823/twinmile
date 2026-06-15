@@ -1,4 +1,5 @@
 "use client";
+
 import * as React from "react";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,56 +8,558 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { clientAIActivityEngine } from "@/lib/client-ai-activity-engine";
 import {
-  ArrowLeft, ArrowRight, GitBranch, Clock, Wrench, Zap,
-  Activity, CheckCircle, AlertTriangle, Loader2, BarChart3,
-  Play, Pause, RefreshCw, Settings, Users, Truck, UserCheck,
-  DollarSign, Target, Crown, FileText, Shield, Mail, Phone,
-  Search, Filter, MoreHorizontal, ChevronDown, ChevronUp, ExternalLink
+  ArrowLeft,
+  ArrowRight,
+  GitBranch,
+  Clock,
+  Wrench,
+  Zap,
+  Activity,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
+  BarChart3,
+  Play,
+  Pause,
+  RefreshCw,
+  Settings,
+  Users,
+  Truck,
+  UserCheck,
+  DollarSign,
+  Target,
+  Crown,
+  FileText,
+  Shield,
+  Mail,
+  Phone,
+  Search,
+  Filter,
+  MoreHorizontal,
+  ChevronDown,
+  ChevronUp,
+  ExternalLink,
 } from "lucide-react";
-interface AgentTool { key: string; name: string; description: string; usage: string; }
+
+interface AgentTool {
+  key: string;
+  name: string;
+  description: string;
+  usage: string;
+}
+
 interface AgentDashboardClientProps {
-  agentId: string; name: string; role: string; department: string; color: string;
-  reportsTo?: string; action: { action: string; label: string; description: string; icon: string } | null;
-  tools: AgentTool[]; recentActivity: any[];
-  metrics?: { processedLeads?: number; todaysActions?: number; weeksActions?: number; pipelineLeads?: number; };
+  agentId: string;
+  name: string;
+  role: string;
+  department: string;
+  color: string;
+  reportsTo?: string;
+  action: { action: string; label: string; description: string; icon: string } | null;
+  tools: AgentTool[];
+  recentActivity: any[];
+  metrics?: {
+    processedLeads?: number;
+    todaysActions?: number;
+    weeksActions?: number;
+    pipelineLeads?: number;
+  };
 }
+
 const AGENT_ACTIONS_MAP: Record<string, { label: string; description: string; apiAction: string; icon: React.ReactNode; requiresConfirmation?: boolean }> = {
-  lead_generation: { label: "Run Prospecting", description: "Sofia searches FMCSA/DAT/LinkedIn for new owner-operators matching criteria", apiAction: "outbound_prospecting", icon: <Search className="h-4 w-4" /> },
-  sales: { label: "Process Quote Leads", description: "Marcus researches companies, builds quotes, and sends proposals", apiAction: "find_customers", icon: <Users className="h-4 w-4" /> },
-  ceo: { label: "Strategic Review", description: "Alexandra analyzes pipeline health, conversion rates, and strategic priorities", apiAction: "strategic_review", icon: <Crown className="h-4 w-4" /> },
-  operations: { label: "Schedule & Dispatch", description: "David optimizes routes, assigns trucks/drivers, and dispatches loads", apiAction: "schedule_deliveries", icon: <Truck className="h-4 w-4" /> },
-  hr: { label: "Review Driver Applications", description: "Jennifer qualifies drivers, runs background checks, and starts onboarding", apiAction: "hire_drivers", icon: <UserCheck className="h-4 w-4" /> },
-  finance: { label: "Financial Report", description: "Robert generates revenue reports, P&L, and driver payroll calculations", apiAction: "check_revenue", icon: <DollarSign className="h-4 w-4" /> },
-  customer_success: { label: "Customer Check-ins", description: "Emily monitors active accounts, gathers feedback, and prevents churn", apiAction: "customer_support", icon: <Target className="h-4 w-4" /> },
-  marketing: { label: "Launch Nurture Campaign", description: "Isabella sends drip emails to warm leads and re-engages stale prospects", apiAction: "send_marketing", icon: <Mail className="h-4 w-4" /> }
+  lead_generation: {
+    label: "Run Prospecting",
+    description: "Sofia searches FMCSA/DAT/LinkedIn for new owner-operators matching criteria",
+    apiAction: "outbound_prospecting",
+    icon: <Search className="h-4 w-4" />,
+  },
+  sales: {
+    label: "Process Quote Leads",
+    description: "Marcus researches companies, builds quotes, and sends proposals",
+    apiAction: "find_customers",
+    icon: <Users className="h-4 w-4" />,
+  },
+  ceo: {
+    label: "Strategic Review",
+    description: "Alexandra analyzes pipeline health, conversion rates, and strategic priorities",
+    apiAction: "strategic_review",
+    icon: <Crown className="h-4 w-4" />,
+  },
+  operations: {
+    label: "Schedule & Dispatch",
+    description: "David optimizes routes, assigns trucks/drivers, and dispatches loads",
+    apiAction: "schedule_deliveries",
+    icon: <Truck className="h-4 w-4" />,
+  },
+  hr: {
+    label: "Review Driver Applications",
+    description: "Jennifer qualifies drivers, runs background checks, and starts onboarding",
+    apiAction: "hire_drivers",
+    icon: <UserCheck className="h-4 w-4" />,
+  },
+  finance: {
+    label: "Financial Report",
+    description: "Robert generates revenue reports, P&L, and driver payroll calculations",
+    apiAction: "check_revenue",
+    icon: <DollarSign className="h-4 w-4" />,
+  },
+  customer_success: {
+    label: "Customer Check-ins",
+    description: "Emily monitors active accounts, gathers feedback, and prevents churn",
+    apiAction: "customer_support",
+    icon: <Target className="h-4 w-4" />,
+  },
+  marketing: {
+    label: "Launch Nurture Campaign",
+    description: "Isabella sends drip emails to warm leads and re-engages stale prospects",
+    apiAction: "send_marketing",
+    icon: <Mail className="h-4 w-4" />,
+  },
 };
+
 const AGENT_WORKFLOW_STEPS: Record<string, Array<{ step: number; label: string; description: string; status: "pending" | "active" | "complete" }>> = {
-  lead_generation: [ { step: 1, label: "Define Criteria", description: "Set equipment, experience, location, lanes, authority filters", status: "complete" }, { step: 2, label: "Search Sources", description: "Query FMCSA, DAT boards, LinkedIn, trucking forums, competitor reviews", status: "active" }, { step: 3, label: "Score & Qualify", description: "Apply weighted algorithm: experience, equipment, authority, safety, interest signals", status: "pending" }, { step: 4, label: "Auto-Respond", description: "Send immediate acknowledgment email/SMS based on score tier", status: "pending" }, { step: 5, label: "Route to Team", description: "Premium to CEO, Driver to HR, Freight to Sales, Nurture to Marketing", status: "pending" }, { step: 6, label: "Log & Track", description: "Save to MongoDB with score, routing, and next action timestamp", status: "pending" } ],
-  sales: [ { step: 1, label: "Receive Lead", description: "Get qualified quote lead routed from Sofia", status: "complete" }, { step: 2, label: "Research Prospect", description: "Lookup company, shipping history, decision-makers, lanes", status: "active" }, { step: 3, label: "Build Quote", description: "Calculate rate: route, load type, urgency, market rates, margin", status: "pending" }, { step: 4, label: "Present & Negotiate", description: "Send proposal, handle objections, negotiate terms", status: "pending" }, { step: 5, label: "Close & Handoff", description: "Finalize contract, handoff to Ops for scheduling, CS for onboarding", status: "pending" } ],
-  ceo: [ { step: 1, label: "Premium Alert", description: "Receive escalation for leads scoring 85+", status: "complete" }, { step: 2, label: "Strategic Analysis", description: "Evaluate business value, strategic fit, long-term potential", status: "active" }, { step: 3, label: "Approve/Redirect", description: "Fast-track onboarding or redirect to dept head", status: "pending" }, { step: 4, label: "Set Priority/SLA", description: "Allocate resources, set timelines, assign ownership", status: "pending" }, { step: 5, label: "Monitor Outcome", description: "Track conversion, revenue impact, feed back to strategy", status: "pending" } ],
-  operations: [ { step: 1, label: "Receive Handoff", description: "Get closed deal (new load) or new driver from Sales/HR", status: "complete" }, { step: 2, label: "Route Planning", description: "Optimize route, fuel stops, delivery timeline, WTW", status: "active" }, { step: 3, label: "Fleet Assignment", description: "Match truck + driver to load by location/equipment", status: "pending" }, { step: 4, label: "Schedule & Dispatch", description: "Set pickup/delivery windows, dispatch driver, send BOL", status: "pending" }, { step: 5, label: "Track & Monitor", description: "GPS tracking, ETA updates, exception handling, POD", status: "pending" } ],
-  hr: [ { step: 1, label: "Receive Application", description: "Get scored driver lead routed from Sofia", status: "complete" }, { step: 2, label: "Verify Credentials", description: "CDL, endorsements, experience, authority status, MVR", status: "active" }, { step: 3, label: "Background & Compliance", description: "Background check, FMCSA compliance, drug screen", status: "pending" }, { step: 4, label: "Interview & Assess", description: "Screening interview, cultural fit, reliability assessment", status: "pending" }, { step: 5, label: "Onboard & Place", description: "Paperwork, payroll setup, fleet assignment with Ops", status: "pending" } ],
-  finance: [ { step: 1, label: "Receive Request", description: "Pricing request from Sales OR payroll setup from HR", status: "complete" }, { step: 2, label: "Cost Analysis", description: "Fuel, tolls, insurance, driver pay, margin calculation", status: "active" }, { step: 3, label: "Generate Invoice", description: "Create invoice after delivery confirmation", status: "pending" }, { step: 4, label: "Process Payment", description: "Track collections, reconcile accounts, aging reports", status: "pending" }, { step: 5, label: "Driver Payroll", description: "Weekly settlements, deductions, tax compliance", status: "pending" } ],
-  customer_success: [ { step: 1, label: "New Customer", description: "Handoff from Sales after contract signed", status: "complete" }, { step: 2, label: "Onboarding Call", description: "Welcome, expectations, preferences, account profile", status: "active" }, { step: 3, label: "Monitor Delivery", description: "Track first load, ensure smooth experience, handle issues", status: "pending" }, { step: 4, label: "Follow-Up", description: "Post-delivery satisfaction, feedback, resolve complaints", status: "pending" }, { step: 5, label: "Retain & Upsell", description: "Volume contracts, repeat shipping, churn prevention", status: "pending" } ],
-  marketing: [ { step: 1, label: "Receive Nurture Leads", description: "Low/medium scored leads needing warming", status: "complete" }, { step: 2, label: "Segment & Target", description: "By industry, service need, engagement level", status: "active" }, { step: 3, label: "Launch Drip", description: "Automated email/SMS sequence with relevant content", status: "pending" }, { step: 4, label: "Monitor Engagement", description: "Open rates, clicks, re-score based on engagement", status: "pending" }, { step: 5, label: "Re-qualify", description: "Engagement threshold met, re-score, route back to Sofia", status: "pending" } ]
+  lead_generation: [
+    { step: 1, label: "Define Criteria", description: "Set equipment, experience, location, lanes, authority filters", status: "complete" },
+    { step: 2, label: "Search Sources", description: "Query FMCSA, DAT boards, LinkedIn, trucking forums, competitor reviews", status: "active" },
+    { step: 3, label: "Score & Qualify", description: "Apply weighted algorithm: experience, equipment, authority, safety, interest signals", status: "pending" },
+    { step: 4, label: "Auto-Respond", description: "Send immediate acknowledgment email/SMS based on score tier", status: "pending" },
+    { step: 5, label: "Route to Team", description: "Premium to CEO, Driver to HR, Freight to Sales, Nurture to Marketing", status: "pending" },
+    { step: 6, label: "Log & Track", description: "Save to MongoDB with score, routing, and next action timestamp", status: "pending" },
+  ],
+  sales: [
+    { step: 1, label: "Receive Lead", description: "Get qualified quote lead routed from Sofia", status: "complete" },
+    { step: 2, label: "Research Prospect", description: "Lookup company, shipping history, decision-makers, lanes", status: "active" },
+    { step: 3, label: "Build Quote", description: "Calculate rate: route, load type, urgency, market rates, margin", status: "pending" },
+    { step: 4, label: "Present & Negotiate", description: "Send proposal, handle objections, negotiate terms", status: "pending" },
+    { step: 5, label: "Close & Handoff", description: "Finalize contract, handoff to Ops for scheduling, CS for onboarding", status: "pending" },
+  ],
+  ceo: [
+    { step: 1, label: "Premium Alert", description: "Receive escalation for leads scoring 85+", status: "complete" },
+    { step: 2, label: "Strategic Analysis", description: "Evaluate business value, strategic fit, long-term potential", status: "active" },
+    { step: 3, label: "Approve/Redirect", description: "Fast-track onboarding or redirect to dept head", status: "pending" },
+    { step: 4, label: "Set Priority/SLA", description: "Allocate resources, set timelines, assign ownership", status: "pending" },
+    { step: 5, label: "Monitor Outcome", description: "Track conversion, revenue impact, feed back to strategy", status: "pending" },
+  ],
+  operations: [
+    { step: 1, label: "Receive Handoff", description: "Get closed deal (new load) or new driver from Sales/HR", status: "complete" },
+    { step: 2, label: "Route Planning", description: "Optimize route, fuel stops, delivery timeline, WTW", status: "active" },
+    { step: 3, label: "Fleet Assignment", description: "Match truck + driver to load by location/equipment", status: "pending" },
+    { step: 4, label: "Schedule & Dispatch", description: "Set pickup/delivery windows, dispatch driver, send BOL", status: "pending" },
+    { step: 5, label: "Track & Monitor", description: "GPS tracking, ETA updates, exception handling, POD", status: "pending" },
+  ],
+  hr: [
+    { step: 1, label: "Receive Application", description: "Get scored driver lead routed from Sofia", status: "complete" },
+    { step: 2, label: "Verify Credentials", description: "CDL, endorsements, experience, authority status, MVR", status: "active" },
+    { step: 3, label: "Background & Compliance", description: "Background check, FMCSA compliance, drug screen", status: "pending" },
+    { step: 4, label: "Interview & Assess", description: "Screening interview, cultural fit, reliability assessment", status: "pending" },
+    { step: 5, label: "Onboard & Place", description: "Paperwork, payroll setup, fleet assignment with Ops", status: "pending" },
+  ],
+  finance: [
+    { step: 1, label: "Receive Request", description: "Pricing request from Sales OR payroll setup from HR", status: "complete" },
+    { step: 2, label: "Cost Analysis", description: "Fuel, tolls, insurance, driver pay, margin calculation", status: "active" },
+    { step: 3, label: "Generate Invoice", description: "Create invoice after delivery confirmation", status: "pending" },
+    { step: 4, label: "Process Payment", description: "Track collections, reconcile accounts, aging reports", status: "pending" },
+    { step: 5, label: "Driver Payroll", description: "Weekly settlements, deductions, tax compliance", status: "pending" },
+  ],
+  customer_success: [
+    { step: 1, label: "New Customer", description: "Handoff from Sales after contract signed", status: "complete" },
+    { step: 2, label: "Onboarding Call", description: "Welcome, expectations, preferences, account profile", status: "active" },
+    { step: 3, label: "Monitor Delivery", description: "Track first load, ensure smooth experience, handle issues", status: "pending" },
+    { step: 4, label: "Follow-Up", description: "Post-delivery satisfaction, feedback, resolve complaints", status: "pending" },
+    { step: 5, label: "Retain & Upsell", description: "Volume contracts, repeat shipping, churn prevention", status: "pending" },
+  ],
+  marketing: [
+    { step: 1, label: "Receive Nurture Leads", description: "Low/medium scored leads needing warming", status: "complete" },
+    { step: 2, label: "Segment & Target", description: "By industry, service need, engagement level", status: "active" },
+    { step: 3, label: "Launch Drip", description: "Automated email/SMS sequence with relevant content", status: "pending" },
+    { step: 4, label: "Monitor Engagement", description: "Open rates, clicks, re-score based on engagement", status: "pending" },
+    { step: 5, label: "Re-qualify", description: "Engagement threshold met, re-score, route back to Sofia", status: "pending" },
+  ],
 };
+
 export function AgentDashboardClient({ agentId, name, role, department, color, reportsTo, action, tools, recentActivity, metrics }: AgentDashboardClientProps) {
-  return <main className="max-w-4xl mx-auto">
-    <Link href="/admin/lead-engine" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6"><ArrowLeft className="h-4 w-4" /> Back to Lead Engine</Link>
-    <div className="flex items-start gap-4 mb-8"><div className={"p-4 rounded-xl " + color + "/15"}><div className={"w-10 h-10 rounded-full " + color + " flex items-center justify-center text-white font-bold text-sm"}>{name.split(" ").map(n => n[0]).join("")}</div></div><div className="flex-1 min-w-0"><h1 className="text-2xl font-bold text-foreground">{name}</h1><p className="text-muted-foreground">{role} &middot; {department}</p>{reportsTo && <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground"><GitBranch className="h-3.5 w-3.5" /> Reports to <span className="font-medium text-foreground">{reportsTo}</span></div>}</div><div className="flex items-center gap-2"><Badge variant="outline" className={color + "/15 text-[10px]"}>{autoMode ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}{autoMode ? "Auto" : "Manual"}</Badge><Button variant="outline" size="sm" onClick={() => setAutoMode(!autoMode)} className="h-8">{autoMode ? "Disable Auto" : "Enable Auto"}</Button></div></div>
-    <Tabs defaultValue="action" className="space-y-6"><TabsList className="grid w-full grid-cols-2"><TabsTrigger value="action">Primary Action</TabsTrigger><TabsTrigger value="workflow">Workflow Steps</TabsTrigger><TabsTrigger value="tools">AI Tools</TabsTrigger><TabsTrigger value="activity">Activity Log</TabsTrigger><TabsTrigger value="performance">Performance</TabsTrigger></TabsList>
-    <TabsContent value="action" className="space-y-4">{agentAction && <Card className={"border-border/60 " + color + "/5"}><CardContent className="p-5"><div className="flex items-start justify-between gap-4 flex-col sm:flex-row"><div className="flex-1 min-w-0"><div className="flex items-center gap-2 mb-2"><div className={"p-2 rounded-lg " + color + "/20"}>{agentAction.icon}</div><div><div className="flex items-center gap-2"><span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Autonomous Action</span><Badge variant="secondary" className="text-[10px]">{agentId.toUpperCase()}</Badge></div><p className="font-semibold text-lg text-foreground mt-1">{agentAction.label}</p><p className="text-sm text-muted-foreground mt-1">{agentAction.description}</p></div></div><div className="flex gap-3 w-full sm:w-auto"><Button onClick={handleAction} disabled={actionLoading} size="lg" className="flex-1 sm:flex-none">{actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Play className="h-4 w-4 mr-2" />}{actionLoading ? "Executing..." : "Execute Now"}</Button>{actionResult && <Button variant="outline" size="lg" onClick={() => setActionResult(null)} className="sm:flex-none"><RefreshCw className="h-4 w-4 mr-2" />Clear</Button>}</div></div>{actionResult && <div className={"mt-4 p-4 rounded-lg border " + (actionResult.success ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5")}><div className="flex items-start gap-3">{actionResult.success ? <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />}<div className="flex-1"><p className="text-sm font-medium text-foreground">{actionResult.message}</p>{actionResult.details && <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">{Object.entries(actionResult.details).map(([key, value]) => <div key={key} className="rounded bg-background/50 p-2"><span className="text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}: </span><span className="font-medium text-foreground">{String(value)}</span></div>)}</div></div></div></div>}</CardContent></Card>}{metrics && <Card className="border-border/60"><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />Real-Time Metrics</CardTitle></CardHeader><CardContent className="p-4"><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">Processed Leads</div><div className="text-2xl font-bold text-foreground mt-1">{metrics.processedLeads || 0}</div></div><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">Today's Actions</div><div className="text-2xl font-bold text-blue-600 mt-1">{metrics.todaysActions || 0}</div></div><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">This Week</div><div className="text-2xl font-bold text-purple-600 mt-1">{metrics.weeksActions || 0}</div></div><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">Pipeline Leads</div><div className="text-2xl font-bold text-green-600 mt-1">{metrics.pipelineLeads || 0}</div></div></div></CardContent></Card>}{!agentAction && <Card className="border-border/60"><CardContent className="p-8 text-center"><AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" /><h3 className="text-lg font-medium">No Autonomous Action Configured</h3><p className="text-sm text-muted-foreground mt-2">This agent has no executable action mapped. Check AGENT_ACTIONS_MAP.</p></CardContent></Card>}</TabsContent>
-    <TabsContent value="workflow" className="space-y-4"><Card className="border-border/60"><CardHeader><CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5 text-primary" />Autonomous Workflow Steps<Badge variant="secondary" className="ml-2 text-xs">{workflowSteps.filter(s => s.status === "complete").length}/{workflowSteps.length} Complete</Badge></CardTitle></CardHeader><CardContent className="space-y-3">{workflowSteps.map((step, idx) => {const stepStatus = idx < workflowStep ? "complete" : idx === workflowStep ? "active" : "pending"; const colors = statusColors[stepStatus]; return <button key={step.step} onClick={() => idx === workflowStep && handleWorkflowAdvance()} disabled={idx > workflowStep || actionLoading} className="w-full flex items-center gap-4 p-4 rounded-lg border transition-all group text-left" style={{backgroundColor: stepStatus === "complete" ? "rgba(34, 197, 94, 0.05)" : stepStatus === "active" ? "rgba(59, 130, 246, 0.05)" : "transparent", borderColor: colors.border}}><div className={"w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 " + colors.bg.replace("/15", "")}>{stepStatus === "complete" ? <colors.icon className="h-4 w-4" /> : step.step}</div><div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="font-medium text-sm text-foreground">{step.label}</span><Badge variant="outline" className={"text-[10px] px-2 py-0.5 " + (stepStatus === "active" ? "border-blue-500/30 text-blue-700 bg-blue-500/15" : colors.border) + " " + colors.bg + " " + colors.text}>{stepStatus.charAt(0).toUpperCase() + stepStatus.slice(1)}</Badge></div><p className="text-xs text-muted-foreground mt-1">{step.description}</p></div>{idx === workflowStep && stepStatus === "active" && !actionLoading && <Button size="sm" onClick={handleWorkflowAdvance} disabled={actionLoading} className="flex-shrink-0"><ArrowRight className="h-3.5 w-3.5 mr-1.5" />Advance</Button>}{stepStatus === "complete" && <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />}></button>})}</CardContent></Card>{actionResult && workflowStep < workflowSteps.length && <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex items-center gap-3"><AlertTriangle className="h-5 w-5 text-amber-500" /><div className="text-sm"><span className="font-medium">Step completed:</span> {workflowSteps[workflowStep]?.label}<span className="ml-2 text-amber-600">→ Ready for next step</span></div></div>}</TabsContent>
-    <TabsContent value="tools" className="space-y-4"><Card className="border-border/60"><CardHeader><CardTitle className="flex items-center gap-2"><Wrench className="h-5 w-5 text-muted-foreground" />AI Tools Available</CardTitle></CardHeader><CardContent><div className="grid gap-3 sm:grid-cols-2">{tools.length > 0 ? tools.map(tool => <div key={tool.key} className="p-4 rounded-lg border border-border/60 bg-card hover:border-primary/30 transition-colors"><div className="flex items-center gap-2 mb-2"><Badge variant="outline" className="text-xs px-2 py-0.5 bg-primary/5 text-primary">{tool.name}</Badge><span className="text-xs text-muted-foreground">Tool</span></div><p className="text-xs text-muted-foreground leading-relaxed">{tool.usage || tool.description}</p></div>) : <div className="col-span-2 text-center py-8 text-muted-foreground"><Wrench className="h-12 w-12 mx-auto mb-3 opacity-30" /><p>No tools configured for this agent</p></div>}</div></CardContent></Card></TabsContent>
-    <TabsContent value="activity" className="space-y-4"><Card className="border-border/60"><CardHeader className="flex flex-row items-center justify-between"><CardTitle className="flex items-center gap-2"><Activity className="h-5 w-5 text-muted-foreground" />Recent Activity</CardTitle><div className="flex items-center gap-2"><Button variant="ghost" size="sm" onClick={handleAction}><RefreshCw className="h-4 w-4 mr-1.5" />Refresh</Button></div></CardHeader><CardContent>{recentActivity.length > 0 ? <div className="space-y-2 max-h-96 overflow-y-auto">{recentActivity.map((activity, idx) => <div key={idx} className="p-3 rounded-lg border border-border/60 bg-card"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><p className="text-sm text-foreground">{activity.action || activity.activity || activity.type || "Action performed"}</p>{activity.details && <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-muted-foreground">{Object.entries(activity.details).slice(0, 6).map(([key, value]) => <span key={key}>{key.replace(/([A-Z])/g, " $1").trim()}: <span className="font-medium text-foreground">{String(value)}</span></span>)}</div>}</div><span className="text-[10px] text-muted-foreground shrink-0">{activity.timestamp ? new Date(activity.timestamp).toLocaleString() : "Unknown"}</span></div></div>)} : <div className="text-center py-8 text-muted-foreground"><Activity className="h-12 w-12 mx-auto mb-3 opacity-30" /><p>No recent activity recorded</p></div>}</CardContent></Card></TabsContent>
-    <TabsContent value="performance" className="space-y-4"><Card className="border-border/60"><CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5 text-primary" />Performance Overview</CardTitle></CardHeader><CardContent><div className="space-y-4"><div className="grid grid-cols-2 md:grid-cols-4 gap-4"><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">Total Actions</div><div className="text-2xl font-bold text-foreground mt-1">{recentActivity.length}</div></div><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">Success Rate</div><div className="text-2xl font-bold text-green-600 mt-1">{recentActivity.length > 0 ? Math.round((recentActivity.filter(a => a.success !== false).length / recentActivity.length) * 100) : 0}%</div></div><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">This Week</div><div className="text-2xl font-bold text-purple-600 mt-1">{metrics?.weeksActions || 0}</div></div><div className="rounded-lg border border-border/60 bg-card/50 p-4"><div className="text-xs text-muted-foreground uppercase tracking-wide">Today</div><div className="text-2xl font-bold text-blue-600 mt-1">{metrics?.todaysActions || 0}</div></div></div><div className="text-xs text-muted-foreground"><p>Showing last 50 activities from agent_activity collection. Metrics computed from real-time MongoDB queries.</p></div></div></CardContent></Card></TabsContent></Tabs></main>;
+  const [actionLoading, setActionLoading] = React.useState(false);
+  const [actionResult, setActionResult] = React.useState<any>(null);
+  const [autoMode, setAutoMode] = React.useState(false);
+  const [workflowStep, setWorkflowStep] = React.useState(0);
+
+  const agentAction = AGENT_ACTIONS_MAP[agentId];
+  const workflowSteps = AGENT_WORKFLOW_STEPS[agentId] || [];
+  const statusColors = {
+    complete: { bg: "bg-green-500/15", text: "text-green-700", border: "border-green-500/30", icon: CheckCircle },
+    active: { bg: "bg-blue-500/15", text: "text-blue-700", border: "border-blue-500/30", icon: Loader2 },
+    pending: { bg: "bg-gray-500/15", text: "text-gray-700", border: "border-gray-500/30", icon: Clock }
+  };
+
+  const handleAction = async () => {
+    if (!agentAction) return;
+    setActionLoading(true);
+    setActionResult(null);
+    try {
+      const result = await clientAIActivityEngine.handleDashboardAction(agentAction.apiAction);
+      setActionResult(result);
+      if (result.success && workflowStep < workflowSteps.length - 1) setWorkflowStep(w => w + 1);
+    } catch (error) {
+      setActionResult({ success: false, message: "Failed: " + (error instanceof Error ? error.message : "Unknown") });
+    } finally { setActionLoading(false); }
+  };
+
+  const handleWorkflowAdvance = async () => {
+    if (workflowStep >= workflowSteps.length - 1) return;
+    setWorkflowStep(w => w + 1);
+    setActionLoading(true);
+    try {
+      const result = await clientAIActivityEngine.handleDashboardAction(agentAction?.apiAction || "");
+      setActionResult(result);
+    } catch (error) { setActionResult({ success: false, message: String(error) }); }
+    finally { setActionLoading(false); }
+  };
+
+  return (
+    <main className="max-w-4xl mx-auto">
+      <Link href="/admin/lead-engine" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-6">
+        <ArrowLeft className="h-4 w-4" /> Back to Lead Engine
+      </Link>
+
+      <div className="flex items-start gap-4 mb-8">
+        <div className={"p-4 rounded-xl " + color + "/15"}>
+          <div className={"w-10 h-10 rounded-full " + color + " flex items-center justify-center text-white font-bold text-sm"}>
+            {name.split(" ").map(n => n[0]).join("")}
+          </div>
+        </div>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold text-foreground">{name}</h1>
+          <p className="text-muted-foreground">{role} \xb7 {department}</p>
+          {reportsTo && (
+            <div className="flex items-center gap-1.5 mt-1 text-sm text-muted-foreground">
+              <GitBranch className="h-3.5 w-3.5" />
+              Reports to <span className="font-medium text-foreground">{reportsTo}</span>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className={color + "/15 text-[10px]"}>
+            {autoMode ? <Pause className="h-3 w-3 mr-1" /> : <Play className="h-3 w-3 mr-1" />}
+            {autoMode ? "Auto" : "Manual"}
+          </Badge>
+          <Button variant="outline" size="sm" onClick={() => setAutoMode(!autoMode)} className="h-8">
+            {autoMode ? "Disable Auto" : "Enable Auto"}
+          </Button>
+        </div>
+      </div>
+
+      <Tabs defaultValue="action" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="action">Primary Action</TabsTrigger>
+          <TabsTrigger value="workflow">Workflow Steps</TabsTrigger>
+          <TabsTrigger value="tools">AI Tools</TabsTrigger>
+          <TabsTrigger value="activity">Activity Log</TabsTrigger>
+          <TabsTrigger value="performance">Performance</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="action" className="space-y-4">
+          {agentAction && (
+            <Card className={"border-border/60 " + color + "/5"}>
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4 flex-col sm:flex-row">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={"p-2 rounded-lg " + color + "/20"}>
+                        {agentAction.icon}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Autonomous Action</span>
+                          <Badge variant="secondary" className="text-[10px]">{agentId.toUpperCase()}</Badge>
+                        </div>
+                        <p className="font-semibold text-lg text-foreground mt-1">{agentAction.label}</p>
+                        <p className="text-sm text-muted-foreground mt-1">{agentAction.description}</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-3 w-full sm:w-auto">
+                      <Button
+                        onClick={handleAction}
+                        disabled={actionLoading}
+                        size="lg"
+                        className="flex-1 sm:flex-none"
+                      >
+                        {actionLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Play className="h-4 w-4 mr-2" />}
+                        {actionLoading ? "Executing..." : "Execute Now"}
+                      </Button>
+                      {actionResult && (
+                        <Button
+                          variant="outline"
+                          size="lg"
+                          onClick={() => setActionResult(null)}
+                          className="sm:flex-none"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  {actionResult && (
+                    <div className={"mt-4 p-4 rounded-lg border " + (actionResult.success ? "border-green-500/30 bg-green-500/5" : "border-red-500/30 bg-red-500/5")}>
+                      <div className="flex items-start gap-3">
+                        {actionResult.success ? (
+                          <CheckCircle className="h-5 w-5 text-green-400 mt-0.5 flex-shrink-0" />
+                        ) : (
+                          <AlertTriangle className="h-5 w-5 text-red-400 mt-0.5 flex-shrink-0" />
+                        )}
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-foreground">{actionResult.message}</p>
+                          {actionResult.details && (
+                            <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                              {Object.entries(actionResult.details).map(([key, value]) => (
+                                <div key={key} className="rounded bg-background/50 p-2">
+                                  <span className="text-muted-foreground">{key.replace(/([A-Z])/g, " $1").trim()}:</span>{" "}
+                                  <span className="font-medium text-foreground">{String(value)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div></CardContent>
+              </Card>
+            )}
+
+            {metrics && (
+              <Card className="border-border/60">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                    Real-Time Metrics
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="p-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Processed Leads</div>
+                      <div className="text-2xl font-bold text-foreground mt-1">{metrics.processedLeads || 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Today's Actions</div>
+                      <div className="text-2xl font-bold text-blue-600 mt-1">{metrics.todaysActions || 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">This Week</div>
+                      <div className="text-2xl font-bold text-purple-600 mt-1">{metrics.weeksActions || 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Pipeline Leads</div>
+                      <div className="text-2xl font-bold text-green-600 mt-1">{metrics.pipelineLeads || 0}</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {!agentAction && (
+              <Card className="border-border/60">
+                <CardContent className="p-8 text-center">
+                  <AlertTriangle className="h-12 w-12 text-amber-500 mx-auto mb-4" />
+                  <h3 className="text-lg font-medium">No Autonomous Action Configured</h3>
+                  <p className="text-sm text-muted-foreground mt-2">This agent has no executable action mapped. Check AGENT_ACTIONS_MAP.</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="workflow" className="space-y-4">
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5 text-primary" />
+                  Autonomous Workflow Steps
+                  <Badge variant="secondary" className="ml-2 text-xs">
+                    {workflowSteps.filter(s => s.status === "complete").length}/{workflowSteps.length} Complete
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {workflowSteps.map((step, idx) => {
+                  const stepStatus = idx < workflowStep ? "complete" : idx === workflowStep ? "active" : "pending";
+                  const colors = statusColors[stepStatus];
+                  return (
+                    <button
+                      key={step.step}
+                      onClick={() => idx === workflowStep && handleWorkflowAdvance()}
+                      disabled={idx > workflowStep || actionLoading}
+                      className="w-full flex items-center gap-4 p-4 rounded-lg border transition-all group text-left"
+                      style={{
+                        backgroundColor: stepStatus === "complete" ? "rgba(34, 197, 94, 0.05)" :
+                                       stepStatus === "active" ? "rgba(59, 130, 246, 0.05)" : "transparent",
+                        borderColor: colors.border,
+                      }}
+                    >
+                      <div className={"w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 " + colors.bg.replace("/15", "")}>
+                        {stepStatus === "complete" ? <colors.icon className="h-4 w-4" /> : step.step}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm text-foreground">{step.label}</span>
+                          <Badge variant="outline" className={"text-[10px] px-2 py-0.5 " + (stepStatus === "active" ? "border-blue-500/30 text-blue-700 bg-blue-500/15" : colors.border) + " " + colors.bg + " " + colors.text}>
+                            {stepStatus.charAt(0).toUpperCase() + stepStatus.slice(1)}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{step.description}</p>
+                      </div>
+                      {idx === workflowStep && stepStatus === "active" && !actionLoading && (
+                        <Button size="sm" onClick={handleWorkflowAdvance} disabled={actionLoading} className="flex-shrink-0">
+                          <ArrowRight className="h-3.5 w-3.5 mr-1.5" />
+                          Advance
+                        </Button>
+                      )}
+                      {stepStatus === "complete" && (
+                        <CheckCircle className="h-5 w-5 text-green-400 flex-shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
+              </CardContent>
+            </Card>
+
+            {actionResult && workflowStep < workflowSteps.length && (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <div className="text-sm">
+                  <span className="font-medium">Step completed:</span> {workflowSteps[workflowStep]?.label}
+                  <span className="ml-2 text-amber-600">→ Ready for next step</span>
+                </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="tools" className="space-y-4">
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wrench className="h-5 w-5 text-muted-foreground" />
+                  AI Tools Available
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {tools.length > 0 ? (
+                    tools.map((tool) => (
+                      <div key={tool.key} className="p-4 rounded-lg border border-border/60 bg-card hover:border-primary/30 transition-colors">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="text-xs px-2 py-0.5 bg-primary/5 text-primary">
+                            {tool.name}
+                          </Badge>
+                          <span className="text-xs text-muted-foreground">Tool</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground leading-relaxed">{tool.usage || tool.description}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="col-span-2 text-center py-8 text-muted-foreground">
+                      <Wrench className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                      <p>No tools configured for this agent</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="activity" className="space-y-4">
+            <Card className="border-border/60">
+              <CardHeader className="flex flex-row items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-muted-foreground" />
+                  Recent Activity
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Button variant="ghost" size="sm" onClick={handleAction}>
+                    <RefreshCw className="h-4 w-4 mr-1.5" />
+                    Refresh
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {recentActivity.length > 0 ? (
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {recentActivity.map((activity, idx) => (
+                      <div key={idx} className="p-3 rounded-lg border border-border/60 bg-card">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-sm text-foreground">
+                              {activity.action || activity.activity || activity.type || "Action performed"}
+                            </p>
+                            {activity.details && (
+                              <div className="mt-1 flex flex-wrap gap-3 text-[10px] text-muted-foreground">
+                                {Object.entries(activity.details).slice(0, 6).map(([key, value]) => (
+                                  <span key={key}>
+                                    {key.replace(/([A-Z])/g, " $1").trim()}: <span className="font-medium text-foreground">{String(value)}</span>
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                          <span className="text-[10px] text-muted-foreground shrink-0">
+                            {activity.timestamp ? new Date(activity.timestamp).toLocaleString() : "Unknown"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Activity className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                    <p>No recent activity recorded</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="performance" className="space-y-4">
+            <Card className="border-border/60">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Performance Overview
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Total Actions</div>
+                      <div className="text-2xl font-bold text-foreground mt-1">{recentActivity.length}</div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Success Rate</div>
+                      <div className="text-2xl font-bold text-green-600 mt-1">
+                        {recentActivity.length > 0
+                          ? Math.round((recentActivity.filter(a => a.success !== false).length / recentActivity.length) * 100)
+                          : 0}%
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">This Week</div>
+                      <div className="text-2xl font-bold text-purple-600 mt-1">{metrics?.weeksActions || 0}</div>
+                    </div>
+                    <div className="rounded-lg border border-border/60 bg-card/50 p-4">
+                      <div className="text-xs text-muted-foreground uppercase tracking-wide">Today</div>
+                      <div className="text-2xl font-bold text-blue-600 mt-1">{metrics?.todaysActions || 0}</div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-muted-foreground">
+                    <p>Showing last 50 activities from agent_activity collection. Metrics computed from real-time MongoDB queries.</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </main>
+  );
 }
-const statusColors = { complete: { bg: "bg-green-500/15", text: "text-green-700", border: "border-green-500/30", icon: CheckCircle }, active: { bg: "bg-blue-500/15", text: "text-blue-700", border: "border-blue-500/30", icon: Loader2 }, pending: { bg: "bg-gray-500/15", text: "text-gray-700", border: "border-gray-500/30", icon: Clock } };
-const handleAction = async () => {};
-const handleWorkflowAdvance = async () => {};
-const [actionLoading, setActionLoading] = [false, () => {}];
-const [actionResult, setActionResult] = [null, () => {}];
-const [autoMode, setAutoMode] = [false, () => {}];
-const [workflowStep, setWorkflowStep] = [0, () => {}];
-const agentAction = AGENT_ACTIONS_MAP[agentId];
-const workflowSteps = AGENT_WORKFLOW_STEPS[agentId] || [];
