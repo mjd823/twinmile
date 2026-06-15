@@ -1,11 +1,11 @@
-import crypto from "node:crypto";
+import * as crypto from "node:crypto";
 
 export function hashPassword(password: string, saltBase64?: string) {
   const salt = saltBase64
     ? Buffer.from(saltBase64, "base64")
-    : crypto.randomBytes(16);
+    : crypto.randomBytes(32);
 
-  const derivedKey = crypto.scryptSync(password, salt, 64) as Buffer;
+  const derivedKey = crypto.pbkdf2Sync(password, salt, 100000, 64, "sha512") as Buffer;
 
   return {
     saltBase64: salt.toString("base64"),
@@ -20,7 +20,7 @@ export function verifyPassword(input: {
 }) {
   const salt = Buffer.from(input.saltBase64, "base64");
   const expected = Buffer.from(input.hashBase64, "base64");
-  const actual = crypto.scryptSync(input.password, salt, 64) as Buffer;
+  const actual = crypto.pbkdf2Sync(input.password, salt, 100000, 64, "sha512") as Buffer;
   return (
     expected.length === actual.length && crypto.timingSafeEqual(expected, actual)
   );
