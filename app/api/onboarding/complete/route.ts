@@ -10,7 +10,7 @@ export async function POST(request: NextRequest) {
     }
 
     const formData = await request.formData();
-    
+
     // Extract form data
     const firstName = formData.get('firstName') as string;
     const lastName = formData.get('lastName') as string;
@@ -35,18 +35,18 @@ export async function POST(request: NextRequest) {
     const policyNumber = formData.get('policyNumber') as string;
     const policyExpiration = formData.get('policyExpiration') as string;
     const liabilityCoverage = formData.get('liabilityCoverage') as string;
-    
+
     // Get documents
     const documents: Record<string, any> = {};
     for (const key of ['cdl', 'coi', 'registration', 'w9', 'dotPhysical', 'mvR', 'eld']) {
       const file = formData.get(key) as File;
       if (file && file.size > 0) {
+        const buffer = Buffer.from(await file.arrayBuffer());
         documents[key] = {
-          fileName: file.name,
-          mimeType: file.type,
+          name: file.name,
+          type: file.type,
           size: file.size,
-          // In production, upload to S3/Blob storage and store URL
-          // For now, store as base64 or reference
+          data: buffer.toString('base64'),
         };
       }
     }
@@ -110,8 +110,8 @@ export async function POST(request: NextRequest) {
       details: { userId: result.insertedId.toString(), email },
     });
 
-    return NextResponse.json({ 
-      ok: true, 
+    return NextResponse.json({
+      ok: true,
       tempPassword,
       driverUserId: result.insertedId.toString(),
       message: `Account created. Temporary password: ${tempPassword}`

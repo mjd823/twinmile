@@ -45,7 +45,7 @@ export async function GET() {
     for (const band of bands) {
       const bandLeads = allLeads.filter(l => l.score >= band.min && l.score <= band.max);
       const convertedLeads = bandLeads.filter(l => l.status === 'converted' || l.status === 'ready_to_dispatch');
-      
+
       // Calculate avg days to convert
       const convertedWithDates = convertedLeads.filter(l => l.createdAt && l.convertedAt);
       let avgDays = 0;
@@ -64,7 +64,7 @@ export async function GET() {
       // Recommendation logic
       let recommendation: ScoreBand['recommendation'] = 'keep';
       const rate = bandLeads.length > 0 ? (convertedLeads.length / bandLeads.length) * 100 : 0;
-      
+
       if (bandLeads.length < 10 && rate < 5) {
         recommendation = 'raise';
       } else if (bandLeads.length > 50 && rate > 25) {

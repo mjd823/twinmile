@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { 
-  TrendingUp, TrendingDown, Target, BarChart3, 
+import {
+  TrendingUp, TrendingDown, Target, BarChart3,
   AlertTriangle, CheckCircle2, Settings, RefreshCw
 } from "lucide-react";
 
@@ -266,7 +266,7 @@ export function ScoringCalibration() {
               <div>
                 <p className="font-medium">Suggested Threshold Update</p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Qualified: <strong>{data?.bands.find(b => b.range.includes('75'))?.recommendation === 'raise' ? '75 → 80' : '75 (keep)'}</strong> | 
+                  Qualified: <strong>{data?.bands.find(b => b.range.includes('75'))?.recommendation === 'raise' ? '75 → 80' : '75 (keep)'}</strong> |
                   Premium: <strong>{recommendedThreshold.premium} (keep)</strong>
                 </p>
                 <p className="text-sm text-muted-foreground mt-2">
@@ -279,8 +279,8 @@ export function ScoringCalibration() {
           <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-4">
             <p className="font-medium">Auto-Calibration Logic</p>
             <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc pl-5">
-              <li>Raise threshold if band conversion < 5% and < 10 leads</li>
-              <li>Lower threshold if band conversion > 25% and > 50 leads</li>
+              <li>Raise threshold if band conversion &lt; 5% and &lt; 10 leads</li>
+              <li>Lower threshold if band conversion &gt; 25% and &gt; 50 leads</li>
               <li>Premium threshold: maintain ≥85 for top 10% of leads</li>
               <li>Recalibrate weekly (Mondays 6 AM) or on demand</li>
             </ul>

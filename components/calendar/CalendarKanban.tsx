@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { format } from "date-fns";
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, isSameMonth, isSameDay, eachDayOfInterval } from "date-fns";
 import { ChevronLeft, ChevronRight, Calendar, Plus, Truck, UserCheck, FileText, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -73,8 +73,8 @@ export function CalendarView({ events, onEventClick }: CalendarViewProps) {
             {days.map((day) => {
               const dayEvents = getEventsForDay(day);
               const isCurrentMonth = isSameMonth(day, currentMonth);
-              const isTodayDate = isToday(day);
-              
+              const isTodayDate = isSameDay(day, new Date());
+
               return (
                 <div
                   key={day.toISOString()}
@@ -133,7 +133,7 @@ export function CalendarView({ events, onEventClick }: CalendarViewProps) {
                 <tr className="border-b border-border/60 bg-muted/30">
                   <th className="w-32 p-2 text-left text-xs font-medium text-muted-foreground">Time</th>
                   {weekDays.map((day) => (
-                    <th key={day.toISOString()} className={`p-2 text-center text-xs font-medium border-r border-border/60 ${isToday(day) ? "bg-primary/5 text-primary" : ""}`}>
+                    <th key={day.toISOString()} className={`p-2 text-center text-xs font-medium border-r border-border/60 ${isSameDay(day, new Date()) ? "bg-primary/5 text-primary" : ""}`}>
                       <div className="font-medium">{format(day, "EEE")}</div>
                       <div className="text-muted-foreground">{format(day, "d")}</div>
                     </th>
@@ -147,8 +147,8 @@ export function CalendarView({ events, onEventClick }: CalendarViewProps) {
                       {String(hour).padStart(2, "0")}:00
                     </td>
                     {weekDays.map((day) => {
-                      const dayEvents = events.filter(e => 
-                        isSameDay(e.date, day) && 
+                      const dayEvents = events.filter(e =>
+                        isSameDay(e.date, day) &&
                         e.date.getHours() === hour
                       );
                       return (
@@ -179,190 +179,12 @@ export function CalendarView({ events, onEventClick }: CalendarViewProps) {
   return null;
 }
 
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, addDays, addMonths, subMonths, isSameMonth, isSameDay, iseachDayOfInterval } from "date-fns";
-import { ChevronLeft, ChevronRight, Calendar, Plus, Truck, UserCheck, FileText, Zap } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-
-interface CalendarEvent {
-  id: string;
-  title: string;
-  date: Date;
-  type: "cron" | "agent_action" | "pipeline" | "onboarding" | "lease" | "meeting";
-  agentId?: string;
-  details?: string;
-  color: string;
-}
-
-interface CalendarViewProps {
-  events: CalendarEvent[];
-  onEventClick?: (event: CalendarEvent) => void;
-}
-
-export function CalendarView({ events, onEventClick }: CalendarViewProps) {
-  const [currentMonth, setCurrentMonth] = React.useState(new Date());
-  const [view, setView] = React.useState<"month" | "week" | "day">("month");
-
-  const monthStart = startOfMonth(currentMonth);
-  const monthEnd = endOfMonth(currentMonth);
-  const calendarStart = startOfWeek(monthStart);
-  const calendarEnd = endOfWeek(monthEnd);
-  const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
-
-  const getEventsForDay = (day: Date) => events.filter(e => isSameDay(e.date, day));
-
-  const navigateMonth = (direction: 1 | -1) => {
-    setCurrentMonth(addMonths(currentMonth, direction));
-  };
-
-  const goToToday = () => {
-    setCurrentMonth(new Date());
-  };
-
-  if (view === "month") {
-    return (
-      <Card className="border-border/60">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-primary" />
-            {format(currentMonth, "MMMM yyyy")}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={goToToday}>
-              <Calendar className="h-4 w-4 mr-1" />
-              Today
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigateMonth(-1)}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => navigateMonth(1)}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="grid grid-cols-7 border-t border-l border-border/60">
-            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-              <div key={day} className="p-2 text-center text-xs font-medium text-muted-foreground border-b border-r border-border/60 bg-muted/30">
-                {day}
-              </div>
-            ))}
-            {days.map((day) => {
-              const dayEvents = getEventsForDay(day);
-              const isCurrentMonth = isSameMonth(day, currentMonth);
-              const isTodayDate = isToday(day);
-              
-              return (
-                <div
-                  key={day.toISOString()}
-                  className={`min-h-[100px] p-2 border-b border-r border-border/60 relative ${
-                    !isCurrentMonth ? "bg-muted/20 text-muted-foreground/50" : ""
-                  } ${isTodayDate ? "bg-primary/5 ring-2 ring-primary/20" : ""}`}
-                >
-                  <div className="text-sm font-medium mb-1">{format(day, "d")}</div>
-                  <div className="space-y-1 overflow-hidden max-h-[80px]">
-                    {dayEvents.slice(0, 3).map((event) => (
-                      <div
-                        key={event.id}
-                        className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer hover:shadow-sm transition-shadow ${event.color}`}
-                        onClick={() => onEventClick?.(event)}
-                      >
-                        {event.title}
-                      </div>
-                    ))}
-                    {dayEvents.length > 3 && (
-                      <div className="text-[10px] text-muted-foreground text-center">
-                        +{dayEvents.length - 3} more
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (view === "week") {
-    const weekStart = startOfWeek(currentMonth);
-    const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-
-    return (
-      <Card className="border-border/60">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="h-5 w-5 text-primary" />
-            Week of {format(weekStart, "MMM d, yyyy")}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={goToToday}>
-              <Calendar className="h-4 w-4 mr-1" />
-              Today
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-border/60 bg-muted/30">
-                  <th className="w-32 p-2 text-left text-xs font-medium text-muted-foreground">Time</th>
-                  {weekDays.map((day) => (
-                    <th key={day.toISOString()} className={`p-2 text-center text-xs font-medium border-r border-border/60 ${isToday(day) ? "bg-primary/5 text-primary" : ""}`}>
-                      <div className="font-medium">{format(day, "EEE")}</div>
-                      <div className="text-muted-foreground">{format(day, "d")}</div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 24 }, (_, hour) => (
-                  <tr key={hour} className="border-b border-border/60">
-                    <td className="w-32 p-1 text-right text-xs text-muted-foreground pr-2">
-                      {String(hour).padStart(2, "0")}:00
-                    </td>
-                    {weekDays.map((day) => {
-                      const dayEvents = events.filter(e => 
-                        isSameDay(e.date, day) && 
-                        e.date.getHours() === hour
-                      );
-                      return (
-                        <td key={day.toISOString()} className="p-1 border-r border-border/60 relative min-h-[60px]">
-                          {dayEvents.map((event) => (
-                            <div
-                              key={event.id}
-                              className={`absolute w-full px-1 py-0.5 text-[10px] rounded cursor-pointer ${event.color}`}
-                              style={{ top: 0 }}
-                              onClick={() => onEventClick?.(event)}
-                            >
-                              {event.title}
-                            </div>
-                          ))}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
-  return null;
-}
-
-export function KanbanView({ 
-  quoteLeads, 
-  driverLeads, 
+export function KanbanView({
+  quoteLeads,
+  driverLeads,
   leaseAgreements,
-  onLeadClick 
-}: { 
+  onLeadClick
+}: {
   quoteLeads: any[];
   driverLeads: any[];
   leaseAgreements: any[];

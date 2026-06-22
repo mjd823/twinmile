@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { 
-  CheckCircle2, XCircle, AlertCircle, Loader2, 
-  User, Shield, FileText, Signature, 
+import {
+  CheckCircle2, XCircle, AlertCircle, Loader2,
+  User, Shield, FileText, Signature,
   CreditCard, Truck, UserCheck, Mail,
-  ChevronRight, ChevronLeft, Eye, Download
+  ChevronRight, ChevronLeft, Eye, Download, Upload
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,7 @@ interface OnboardingStep {
   isComplete: boolean;
   isActive: boolean;
   canProceed: boolean;
+  color?: string;
 }
 
 interface Document {
@@ -178,11 +179,30 @@ export function OnboardingPortal() {
   const handleSubmit = async () => {
     setStatus("submitting");
     try {
-      // In production, submit to /api/onboarding/complete
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const formPayload = new FormData();
+      Object.entries(formData).forEach(([k, v]) => {
+        if (k !== 'documents') {
+            formPayload.append(k, String(v));
+        }
+      });
+
+      Object.entries(documents).forEach(([k, v]) => {
+        if (v.file) formPayload.append(k, v.file);
+      });
+
+      const res = await fetch('/api/onboarding/complete', {
+        method: 'POST',
+        body: formPayload,
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to submit");
+
       setStatus("success");
       setCurrentStep(7);
-    } catch {
+
+    } catch (error) {
+      console.error(error);
       setStatus("error");
     }
   };
@@ -206,14 +226,14 @@ export function OnboardingPortal() {
               <div className="text-sm text-muted-foreground">{completeCount} of {steps.length} steps complete</div>
             </div>
           </div>
-          
+
           {/* Progress Bar */}
           <div className="relative h-2 mb-6">
             <Progress value={progress} className="h-2" />
             <div className="absolute top-0 left-0 right-0 flex justify-between">
               {steps.map((step, i) => (
-                <div 
-                  key={step.key} 
+                <div
+                  key={step.key}
                   className="flex flex-col items-center"
                   style={{ left: `${(i / (steps.length - 1)) * 100}%`, transform: 'translateX(-50%)' }}
                 >
@@ -266,7 +286,7 @@ export function OnboardingPortal() {
         </CardHeader>
         <CardContent className="pt-0">
           {steps[currentStep - 1].component}
-          
+
           {/* Navigation */}
           <div className="flex justify-between mt-6 pt-4 border-t border-border/60">
             <Button variant="outline" onClick={handleBack} disabled={currentStep === 1}>
@@ -276,7 +296,7 @@ export function OnboardingPortal() {
             {currentStep < steps.length ? (
               <Button onClick={handleNext} disabled={!steps[currentStep - 1].canProceed || status === "submitting"}>
                 {status === "submitting" ? (
-                  <> <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting... </> 
+                  <> <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting... </>
                 ) : currentStep === steps.length - 1 ? (
                   <> Complete Onboarding <ChevronRight className="h-4 w-4 ml-2" /> </>
                 ) : (
@@ -309,8 +329,8 @@ export function OnboardingPortal() {
           </CardHeader>
           <CardContent className="space-y-3">
             {steps.map((step) => (
-              <div 
-                key={step.key} 
+              <div
+                key={step.key}
                 className={`flex items-center gap-3 p-3 rounded-lg transition-colors ${
                   step.isComplete ? 'bg-green-500/10 border-green-500/20' :
                   step.isActive ? 'bg-primary/10 border-primary/20' :
@@ -418,7 +438,7 @@ function FMCAStep({ formData, setFormData }: { formData: any; setFormData: any }
       </div>
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
         <p className="text-sm text-muted-foreground">
-          We'll verify your authority status with FMCSA. If you're leasing onto Twin Mile, 
+          We'll verify your authority status with FMCSA. If you're leasing onto Twin Mile,
           you'll operate under our MC1790263 authority.
         </p>
       </div>
@@ -428,13 +448,13 @@ function FMCAStep({ formData, setFormData }: { formData: any; setFormData: any }
 
 function BackgroundStep({ formData, setFormData }: { formData: any; setFormData: any }) {
   const [consent, setConsent] = React.useState(false);
-  
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
         <h3 className="font-medium mb-2">Background Check Consent</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Twin Mile requires a background check and Motor Vehicle Record (MVR) review for all 
+          Twin Mile requires a background check and Motor Vehicle Record (MVR) review for all
           owner-operators. This includes:
         </p>
         <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
@@ -463,7 +483,7 @@ function BackgroundStep({ formData, setFormData }: { formData: any; setFormData:
 function ESignStep({ formData, setFormData }: { formData: any; setFormData: any }) {
   const [signed, setSigned] = React.useState(false);
   const [signature, setSignature] = React.useState("");
-  
+
   return (
     <div className="space-y-4">
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
@@ -482,10 +502,10 @@ function ESignStep({ formData, setFormData }: { formData: any; setFormData: any 
       </div>
       <div className="space-y-3">
         <label className="text-sm font-medium">Your Signature (type full name)</label>
-        <Input 
-          value={signature} 
-          onChange={e => setSignature(e.target.value)} 
-          placeholder="Type your full legal name to sign" 
+        <Input
+          value={signature}
+          onChange={e => setSignature(e.target.value)}
+          placeholder="Type your full legal name to sign"
           className="font-medium"
         />
         <div className="flex items-center gap-3">
@@ -526,7 +546,7 @@ function DocumentsStep({ documents, setDocuments }: { documents: Record<string, 
         {REQUIRED_DOCS.map((doc) => {
           const docState = documents[doc.key];
           const isUploaded = !!docState?.file;
-          
+
           return (
             <div key={doc.key} className={`rounded-lg border-2 p-3 transition-colors ${
               isUploaded ? 'border-green-500/30 bg-green-500/5' : 'border-dashed border-border/60'
@@ -542,15 +562,15 @@ function DocumentsStep({ documents, setDocuments }: { documents: Record<string, 
                   </Badge>
                 )}
               </div>
-              
+
               {isUploaded ? (
                 <div className="flex items-center gap-2 text-sm">
                   <FileText className="h-4 w-4 text-primary" />
                   <span className="truncate flex-1">{docState.file.name}</span>
                   <span className="text-muted-foreground">({(docState.file.size / 1024).toFixed(0)} KB)</span>
-                  <button 
+                  <button
                     type="button"
-                    onClick={() => setDocuments(prev => { const n = {...prev}; delete n[doc.key]; return n; })}
+                    onClick={() => setDocuments((prev: any) => { const n = {...prev}; delete n[doc.key]; return n; })}
                     className="text-destructive hover:text-destructive/70"
                   >
                     <XCircle className="h-4 w-4" />
@@ -569,7 +589,7 @@ function DocumentsStep({ documents, setDocuments }: { documents: Record<string, 
                   />
                 </label>
               )}
-              
+
               {!doc.required && !isUploaded && (
                 <span className="text-[10px] text-muted-foreground">Optional</span>
               )}
@@ -577,7 +597,7 @@ function DocumentsStep({ documents, setDocuments }: { documents: Record<string, 
           );
         })}
       </div>
-      
+
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
         <p className="text-sm text-muted-foreground">
           <strong>Required:</strong> CDL, COI, Registration, W-9, DOT Physical, MVR (6 docs)
@@ -627,7 +647,7 @@ function CompleteStep() {
       <CheckCircle2 className="mx-auto h-16 w-16 text-green-500 mb-4" />
       <h2 className="text-2xl font-bold mb-2">Onboarding Complete!</h2>
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-        Your account has been created successfully. You'll receive an email with your 
+        Your account has been created successfully. You'll receive an email with your
         temporary login credentials within 24 hours.
       </p>
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4 max-w-md mx-auto text-left">

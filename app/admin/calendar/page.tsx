@@ -1,3 +1,5 @@
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { CalendarView, KanbanView } from '@/components/calendar/CalendarKanban';
 import clientPromise from '@/lib/mongodb';
 
@@ -188,9 +190,9 @@ export default async function CalendarPage() {
 
       {/* Kanban View - Full Width */}
       <div className="border-t border-border/60 pt-6">
-        <KanbanView 
-          quoteLeads={pipeline.quoteLeads} 
-          driverLeads={pipeline.driverLeads} 
+        <KanbanView
+          quoteLeads={pipeline.quoteLeads}
+          driverLeads={pipeline.driverLeads}
           leaseAgreements={pipeline.leaseAgreements}
         />
       </div>
