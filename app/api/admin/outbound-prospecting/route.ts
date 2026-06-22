@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       sourceUrl: p.sourceUrl || '',
       aiScore: p.score || 50,
       aiAnalysis: p.notes || '',
-      status: 'new',
+      status: (p.score || 50) >= 75 ? 'qualified' : 'new',
       type: 'outbound_driver',
       createdAt: new Date().toISOString(),
       enrichedAt: new Date().toISOString(),
