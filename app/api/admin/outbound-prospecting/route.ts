@@ -9,7 +9,7 @@ export async function POST(request: NextRequest) {
     const { 
       action = 'find_owner_operators',
       criteria = {},
-      maxResults = 20,
+      maxResults = 30,
       saveToDatabase = true
     } = body;
 

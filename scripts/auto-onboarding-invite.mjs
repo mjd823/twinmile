@@ -24,7 +24,7 @@ const RESEND_NOTIFY_TO = process.env.RESEND_NOTIFY_TO || 'admin@twinmile.com';
 const APP_URL = process.env.APP_URL || 'https://twinmile.com';
 const CRON_SECRET = process.env.CRON_SECRET; // Optional: for scheduled verification
 
-const MAX_LEADS_PER_RUN = 20;
+const MAX_LEADS_PER_RUN = 30;
 const ONBOARDING_TOKEN_HOURS = 72;
 const MIN_AI_SCORE = 75;
 const BUSINESS_HOURS_START = 8;  // 8 AM

@@ -27,7 +27,7 @@ async function runOutboundProspecting() {
       throw new Error('Lead Generation Agent not available');
     }
     
-    const maxResults = 10;
+    const maxResults = 30;
     
     // Define target criteria for owner-operators
     const targetCriteria = {
