@@ -287,8 +287,10 @@ async function processOnboardingInvites() {
 
     // 1. Find qualified leads without onboarding tokens
     // Check both outbound_prospects (status: 'qualified' or 'proposal_sent') and leads_drivers
+    // Also include 'new' status prospects with high AI scores as a safety net
+    // (the outbound route now sets 'qualified' directly, but this catches any that slip through)
     const qualifiedProspects = await db.collection('outbound_prospects').find({
-      status: { $in: ['qualified', 'proposal_sent'] },
+      status: { $in: ['qualified', 'proposal_sent', 'new'] },
       onboardingToken: { $exists: false },  // No token yet
       $or: [
         { score: { $gte: MIN_AI_SCORE } },
