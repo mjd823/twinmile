@@ -89,7 +89,7 @@ export async function GET() {
         onboardingUrl: `/onboarding?token=${s.rawToken}`,
       }));
 
-    // Recent activity feed
+    // Recent activity feed — include ALL agents, not just Sofia
     const rawActivity = await db.collection("agent_activity")
       .find({})
       .sort({ createdAt: -1 })
@@ -99,11 +99,25 @@ export async function GET() {
     const activityFeed = rawActivity.map((a: any) => ({
       id: a._id?.toString(),
       action: a.action,
-      agent: a.agent?.name,
-      agentRole: a.agent?.role,
+      agent: a.agent?.name || "System",
+      agentRole: a.agent?.role || "Automated",
       result: a.result,
       success: a.success,
       timestamp: a.createdAt,
+    }));
+
+    // Get activity counts per agent for the agent overview
+    const agentActivityCounts = await db.collection("agent_activity")
+      .aggregate([
+        { $group: { _id: "$agent.name", count: { $sum: 1 }, lastActivity: { $max: "$createdAt" } } },
+      ])
+      .toArray();
+
+    const agentStats = agentActivityCounts.map((a: any) => ({
+      name: a._id || "System",
+      activityCount: a.count,
+      lastActivity: a.lastActivity,
+      isActive: a.lastActivity && (Date.now() - new Date(a.lastActivity).getTime()) < 24 * 60 * 60 * 1000,
     }));
 
     return NextResponse.json({
@@ -121,6 +135,7 @@ export async function GET() {
         recentProspects,
         onboardingSessions,
         activityFeed,
+        agentStats,
       },
     });
   } catch (error) {

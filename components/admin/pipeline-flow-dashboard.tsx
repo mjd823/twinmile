@@ -65,6 +65,24 @@ interface ActivityItem {
   timestamp: string;
 }
 
+interface AgentStat {
+  name: string;
+  activityCount: number;
+  lastActivity: string;
+  isActive: boolean;
+}
+
+const ALL_AGENTS = [
+  { name: "Sofia Rodriguez", role: "Lead Generation", dept: "Sales", icon: "🔍", color: "cyan" },
+  { name: "Marcus Chen", role: "Sales Director", dept: "Sales", icon: "💼", color: "blue" },
+  { name: "Alexandra Sterling", role: "CEO", dept: "Executive", icon: "👑", color: "purple" },
+  { name: "David Kumar", role: "Operations", dept: "Operations", icon: "🚛", color: "green" },
+  { name: "Jennifer Foster", role: "HR Director", dept: "HR", icon: "👤", color: "amber" },
+  { name: "Isabella Martinez", role: "Marketing", dept: "Marketing", icon: "📢", color: "pink" },
+  { name: "Robert Chang", role: "Finance", dept: "Finance", icon: "💰", color: "indigo" },
+  { name: "Emily Watson", role: "Customer Success", dept: "CS", icon: "❤️", color: "rose" },
+];
+
 const STAGES = [
   { key: "totalProspects", label: "Prospects Found", icon: Search, color: "blue", description: "Real carriers from FMCSA" },
   { key: "qualified", label: "Qualified (≥75)", icon: CheckCircle2, color: "green", description: "AI scored and qualified" },
@@ -81,6 +99,7 @@ export function PipelineFlowDashboard() {
   const [prospects, setProspects] = React.useState<Prospect[]>([]);
   const [sessions, setSessions] = React.useState<OnboardingSession[]>([]);
   const [activity, setActivity] = React.useState<ActivityItem[]>([]);
+  const [agentStats, setAgentStats] = React.useState<AgentStat[]>([]);
   const [expandedProspect, setExpandedProspect] = React.useState<string | null>(null);
   const [filterStage, setFilterStage] = React.useState<string>("all");
   const [lastRefresh, setLastRefresh] = React.useState(new Date());
@@ -95,6 +114,7 @@ export function PipelineFlowDashboard() {
       setProspects(data.data?.recentProspects || []);
       setSessions(data.data?.onboardingSessions || []);
       setActivity(data.data?.activityFeed || []);
+      setAgentStats(data.data?.agentStats || []);
       setLastRefresh(new Date());
     } catch (err) {
       console.error(err);
@@ -200,6 +220,55 @@ export function PipelineFlowDashboard() {
           );
         })}
       </div>
+
+      {/* Agent Overview — All 8 Agents Working */}
+      <Card className="border-border/60">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Users className="h-5 w-5 text-primary" />
+            AI Agent Team Overview ({agentStats.filter(a => a.isActive).length} active)
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {ALL_AGENTS.map((agent) => {
+              const stat = agentStats.find(s => s.name === agent.name);
+              const isActive = stat?.isActive || false;
+              const count = stat?.activityCount || 0;
+              const lastActivity = stat?.lastActivity;
+
+              return (
+                <div
+                  key={agent.name}
+                  className={`rounded-lg border p-3 transition-all hover:shadow-md ${
+                    isActive
+                      ? "border-green-500/30 bg-green-500/5"
+                      : "border-border/60 bg-muted/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-2xl">{agent.icon}</span>
+                    <div className={`w-2 h-2 rounded-full ${isActive ? "bg-green-500 animate-pulse" : "bg-muted-foreground/40"}`} />
+                  </div>
+                  <p className="text-sm font-medium truncate">{agent.name}</p>
+                  <p className="text-[10px] text-muted-foreground truncate">{agent.role}</p>
+                  <div className="mt-2 flex items-center justify-between text-[10px]">
+                    <Badge variant={isActive ? "default" : "secondary"} className="text-[9px]">
+                      {isActive ? "Active" : "Idle"}
+                    </Badge>
+                    <span className="text-muted-foreground">{count} tasks</span>
+                  </div>
+                  {lastActivity && (
+                    <p className="text-[9px] text-muted-foreground mt-1">
+                      Last: {new Date(lastActivity).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Recent Prospects */}
       <Card className="border-border/60">

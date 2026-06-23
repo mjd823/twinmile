@@ -343,12 +343,23 @@ async function processOnboardingInvites() {
         const tokenHash = hashToken(rawToken);
         const expiresAt = new Date(now.getTime() + ONBOARDING_TOKEN_HOURS * 60 * 60 * 1000);
 
+        // Normalize email — FMCSA prospects store email in contact.email
+        const leadEmail = lead.email || lead.contact?.email || null;
+        const leadPhone = lead.phone || lead.contact?.phone || '';
+
+        // Skip if no email AND no phone (can't contact them)
+        if (!leadEmail && !leadPhone) {
+          console.log(`[auto-onboarding-invite] Skipping ${lead.name}: no email or phone available`);
+          failedCount++;
+          continue;
+        }
+
         const onboardingSession = {
           leadId: lead._id,
           leadType: lead.leadType,
           tokenHash,
           rawToken: rawToken, // Only stored briefly for email sending, then cleared
-          email: lead.email,
+          email: leadEmail,
           name: lead.name,
           status: 'pending',
           createdAt: now,
@@ -356,8 +367,8 @@ async function processOnboardingInvites() {
           completedAt: null,
           preFilledData: {
             name: lead.name,
-            email: lead.email,
-            phone: lead.phone || lead.contact?.phone || '',
+            email: leadEmail,
+            phone: leadPhone,
             company: lead.company || lead.contact?.company || '',
             truckType: lead.truckType || lead.equipment || '',
             yearsExperience: lead.yearsExperience || lead.experience || '',
@@ -400,8 +411,10 @@ async function processOnboardingInvites() {
           }
         );
 
-        // Send onboarding email
-        const emailResult = await sendOnboardingEmail(lead, rawToken, onboardingUrl);
+        // Send onboarding email (use normalized email)
+        const emailResult = leadEmail
+          ? await sendOnboardingEmail({ ...lead, email: leadEmail }, rawToken, onboardingUrl)
+          : { success: false, skipped: true, reason: 'no_email' };
 
         // Log activity
         await logActivity(db, {

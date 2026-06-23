@@ -16,10 +16,12 @@ interface CronJob {
   schedule: string;
   lastRun: string | null;
   lastStatus: string | null;
+  lastResult?: any;
   nextRun: string | null;
   enabled: boolean;
   model: string | null;
   provider: string | null;
+  todayCount?: number;
   promptPreview?: string;
   skill?: string;
   workdir?: string;
@@ -88,9 +90,11 @@ export function CronMonitorDashboard() {
           schedule: def.schedule,
           description: def.description,
           skill: def.skill,
-          lastRun: live?.last_run_at || live?.lastRun || null,
-          lastStatus: live?.last_status || live?.lastStatus || null,
-          nextRun: live?.next_run_at || live?.nextRun || null,
+          lastRun: live?.lastRun || live?.last_run_at || null,
+          lastStatus: live?.lastStatus || live?.last_status || null,
+          lastResult: live?.lastResult || null,
+          nextRun: live?.nextRun || live?.next_run_at || null,
+          todayCount: live?.todayCount || 0,
           enabled: live?.enabled ?? true,
           model: live?.model || "glm-5.2",
           provider: live?.provider || "ollama-cloud",
@@ -356,16 +360,35 @@ function CronJobCard({ job, expanded, onToggle }: { job: any; expanded: boolean;
           )}
 
           {/* Timing */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div className="rounded-lg border border-border/60 bg-background/60 p-3">
               <p className="text-[10px] text-muted-foreground uppercase mb-1">Last Run</p>
               <p className="text-sm font-medium">{formatDate(job.lastRun)}</p>
             </div>
             <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-              <p className="text-[10px] text-muted-foreground uppercase mb-1">Next Scheduled Run</p>
+              <p className="text-[10px] text-muted-foreground uppercase mb-1">Next Scheduled</p>
               <p className="text-sm font-medium">{formatDate(job.nextRun)}</p>
             </div>
+            <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+              <p className="text-[10px] text-muted-foreground uppercase mb-1">Runs Today</p>
+              <p className="text-sm font-bold text-primary">{job.todayCount || 0}</p>
+            </div>
           </div>
+
+          {/* Last Run Results */}
+          {job.lastResult && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase">Last Run Results</h4>
+              <div className="rounded-lg border border-border/60 bg-muted/20 p-3 text-xs space-y-1">
+                {Object.entries(job.lastResult).slice(0, 8).map(([k, v]) => (
+                  <div key={k} className="flex justify-between">
+                    <span className="text-muted-foreground capitalize">{k.replace(/([A-Z])/g, " $1").trim()}:</span>
+                    <span className="font-medium">{String(v)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </Card>
@@ -422,6 +445,8 @@ function ActivityFeed({ logs }: { logs: ActivityLog[] }) {
 }
 
 function EmailLogView({ logs }: { logs: EmailLog[] }) {
+  const [expandedEmail, setExpandedEmail] = React.useState<string | null>(null);
+
   if (logs.length === 0) {
     return <EmptyState icon={<Mail className="h-12 w-12" />} message="No emails sent yet" />;
   }
@@ -430,7 +455,10 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
     <div className="space-y-2">
       {logs.map((log) => (
         <Card key={log.id} className="border-border/60 hover:border-border transition-colors">
-          <CardContent className="p-3">
+          <button
+            onClick={() => setExpandedEmail(expandedEmail === log.id ? null : log.id)}
+            className="w-full text-left p-3"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 flex-1 min-w-0">
                 <div className="mt-0.5">
@@ -445,7 +473,7 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
                     <Badge variant="outline" className="text-[10px] capitalize">{log.leadType?.replace(/_/g, " ")}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    To: {log.recipient || "No email on file"}
+                    To: {log.recipient || "No email on file — NOT SENT"}
                   </p>
                   <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
                     <span>Sent: {new Date(log.sentAt).toLocaleString("en-US")}</span>
@@ -455,11 +483,66 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
                   </div>
                 </div>
               </div>
-              <Badge variant={log.status === "completed" ? "default" : log.status === "pending" ? "secondary" : "destructive"} className="text-[10px] capitalize">
-                {log.status}
-              </Badge>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Badge variant={log.status === "completed" ? "default" : log.status === "pending" ? "secondary" : "destructive"} className="text-[10px] capitalize">
+                  {log.status}
+                </Badge>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expandedEmail === log.id ? "rotate-180" : ""}`} />
+              </div>
             </div>
-          </CardContent>
+          </button>
+
+          {expandedEmail === log.id && (
+            <div className="border-t border-border/60 p-3 bg-muted/10 space-y-3">
+              {/* Email Status */}
+              <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Delivery Status</p>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-muted-foreground">Recipient:</span>{" "}
+                    <span className="font-medium">{log.recipient || "No email — session created but email not sent"}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Session Token:</span>{" "}
+                    <code className="text-[10px] bg-muted/40 px-1 rounded">{log.sessionToken}</code>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Sent:</span>{" "}
+                    <span className="font-medium">{new Date(log.sentAt).toLocaleString("en-US")}</span>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Expires:</span>{" "}
+                    <span className="font-medium">{new Date(log.expiresAt).toLocaleString("en-US")}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Email Content Preview */}
+              <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Email Content (Resend Template)</p>
+                <div className="text-xs text-muted-foreground space-y-2 max-h-48 overflow-y-auto">
+                  <div className="border-l-2 border-primary/40 pl-3 space-y-1">
+                    <p><strong>Subject:</strong> Welcome to Twin Mile — Complete Your Onboarding (72h)</p>
+                    <p><strong>From:</strong> Twin Mile &lt;alerts@contact.twinmile.com&gt;</p>
+                    <p><strong>Body Preview:</strong></p>
+                    <p className="italic">"Welcome to Twin Mile, {log.leadName}! You've been pre-qualified for our power-only program. Complete your onboarding in just a few steps using your personal link below. The link expires in 72 hours."</p>
+                    <p className="text-[10px]">Includes: Operator details (name, company, equipment, experience, location) and a personalized onboarding button link.</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Onboarding Link */}
+              <div className="rounded-lg border border-border/60 bg-background/60 p-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Onboarding Portal Link</p>
+                <code className="text-[10px] text-primary break-all">
+                  https://twinmile.com/onboarding?token={log.sessionToken}...
+                </code>
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  This link was included in the email. The prospect clicks it to start the 7-step onboarding.
+                </p>
+              </div>
+            </div>
+          )}
         </Card>
       ))}
     </div>

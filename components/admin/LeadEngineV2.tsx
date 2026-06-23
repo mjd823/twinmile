@@ -383,15 +383,13 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
               </CardTitle>
             </CardHeader>
             <CardContent className="pt-0 space-y-2">
-              <Link href="/api/admin/outbound-prospecting" className="flex items-center gap-3 p-3 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-colors">
-                <div className="w-10 h-10 rounded-lg bg-cyan-500 flex items-center justify-center text-white">
-                  <Target className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Run Prospecting</p>
-                  <p className="text-xs text-muted-foreground">Sofia finds new owner-operators</p>
-                </div>
-              </Link>
+              <QuickActionButton
+                icon={<Target className="h-5 w-5" />}
+                color="bg-cyan-500"
+                title="Run FMCSA Prospecting"
+                subtitle="Sofia finds new real owner-operators"
+                onClick={() => triggerAction("/api/admin/fmcsa-prospecting", "POST", { maxResults: 30 })}
+              />
               <Link href="/admin/inbox?filter=new" className="flex items-center gap-3 p-3 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-colors">
                 <div className="w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center text-white">
                   <Users className="h-5 w-5" />
@@ -401,21 +399,66 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
                   <p className="text-xs text-muted-foreground">{allLeads.filter(l => l.status === "new").length} awaiting review</p>
                 </div>
               </Link>
-              <Link href="/api/admin/ai-activity" className="flex items-center gap-3 p-3 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-colors">
-                <div className="w-10 h-10 rounded-lg bg-purple-500 flex items-center justify-center text-white">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <div>
-                  <p className="font-medium text-sm">Run Daily Ops</p>
-                  <p className="text-xs text-muted-foreground">Process all pending actions</p>
-                </div>
-              </Link>
+              <QuickActionButton
+                icon={<Zap className="h-5 w-5" />}
+                color="bg-purple-500"
+                title="Run Daily Ops"
+                subtitle="Process all pending actions"
+                onClick={() => triggerAction("/api/admin/ops", "POST", { action: "daily_ops" })}
+              />
             </CardContent>
           </Card>
         </div>
       </div>
     </div>
   );
+}
+
+// Quick Action Button — actually triggers API calls, not just links
+function QuickActionButton({ icon, color, title, subtitle, onClick }: { icon: React.ReactNode; color: string; title: string; subtitle: string; onClick: () => void }) {
+  const [loading, setLoading] = React.useState(false);
+  const [result, setResult] = React.useState<string | null>(null);
+
+  const handleClick = async () => {
+    setLoading(true);
+    setResult(null);
+    try {
+      await onClick();
+      setResult("✓ Started successfully");
+    } catch (err: any) {
+      setResult(`✗ ${err.message}`);
+    } finally {
+      setLoading(false);
+      setTimeout(() => setResult(null), 3000);
+    }
+  };
+
+  return (
+    <button
+      onClick={handleClick}
+      disabled={loading}
+      className="w-full flex items-center gap-3 p-3 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50 text-left"
+    >
+      <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center text-white flex-shrink-0`}>
+        {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : icon}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm">{title}</p>
+        <p className="text-xs text-muted-foreground">{result || subtitle}</p>
+      </div>
+    </button>
+  );
+}
+
+// Helper to trigger admin API actions
+async function triggerAction(url: string, method: string, body?: any) {
+  const res = await fetch(url, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (!res.ok) throw new Error(`Action failed: ${res.status}`);
+  return res.json();
 }
 
 // Button component (inline to avoid import)
