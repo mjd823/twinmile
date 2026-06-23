@@ -21,10 +21,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Activity,
+  TrendingUp,
 } from "lucide-react";
 
 const navigation = [
   { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
+  { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
+  { name: "Automation Center", href: "/admin/automation", icon: Activity },
   { name: "Inbox", href: "/admin/inbox", icon: Inbox },
   { name: "Operations", href: "/admin", icon: BarChart3 },
   { name: "Fleet", href: "/admin/fleet", icon: Truck },
