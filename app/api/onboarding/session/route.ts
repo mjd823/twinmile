@@ -39,6 +39,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Register that the prospect clicked the link (track first click and last active)
+    const now = new Date();
+    const updateData: any = {
+      lastActiveAt: now,
+      updatedAt: now,
+    };
+
+    // Only set firstClickedAt if this is the first time they're accessing
+    if (!session.firstClickedAt) {
+      updateData.firstClickedAt = now;
+      updateData.status = session.status === "pending" ? "started" : session.status;
+
+      // Log the click as agent activity (Jennifer Foster / HR tracks this)
+      try {
+        await db.collection("agent_activity").insertOne({
+          action: "onboarding_link_clicked",
+          agent: { name: "Jennifer Foster", role: "HR Director", department: "HR" },
+          result: {
+            leadName: session.name,
+            leadEmail: session.email,
+            sessionToken: token.substring(0, 8) + "...",
+            firstClick: true,
+          },
+          success: true,
+          createdAt: now,
+        });
+      } catch (logErr) {
+        console.error("[onboarding/session] Failed to log click:", logErr);
+      }
+    }
+
+    await db.collection("onboarding_sessions").updateOne(
+      { _id: session._id },
+      { $set: updateData }
+    );
+
     // Check if expired
     if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
       return NextResponse.json(

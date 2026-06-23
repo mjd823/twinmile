@@ -217,9 +217,9 @@ export function OnboardingPortal() {
       description: "Upload all 7 required documents",
       icon: <FileText className="h-5 w-5" />,
       component: <DocumentsStep documents={documents} setDocuments={setDocuments} />,
-      isComplete: Object.keys(documents).filter(k => REQUIRED_DOCS.find(d => d.key === k)?.required).every(k => documents[k]?.file),
+      isComplete: Object.keys(documents).length > 0 && Object.keys(documents).filter(k => REQUIRED_DOCS.find(d => d.key === k)?.required).every(k => documents[k]?.file),
       isActive: currentStep === 5,
-      canProceed: Object.keys(documents).filter(k => REQUIRED_DOCS.find(d => d.key === k)?.required).every(k => documents[k]?.file),
+      canProceed: Object.keys(documents).filter(k => REQUIRED_DOCS.find(d => d.key === k)?.required).every(k => documents[k]?.file) && Object.keys(documents).length > 0,
     },
     {
       id: 6,

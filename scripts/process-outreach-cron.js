@@ -352,10 +352,10 @@ async function main() {
     if (allDueTasks.length === 0) {
       console.log('✅ No due outreach tasks to process. Exiting.');
       await db.collection('agent_activity').insertOne({
-        timestamp: new Date(),
-        agent: 'Outreach Cron',
+        createdAt: new Date(),
+        agent: { name: 'Outreach Cron', role: 'Outreach Processor', department: 'Sales' },
         activity: 'Outreach processing run: no due tasks found',
-        type: 'outreach_cron',
+        action: 'outreach_processing', type: 'outreach_cron',
         details: { tasksProcessed: 0, runTime: startTime.toISOString() },
         success: true,
       }).catch(() => {});
@@ -463,12 +463,12 @@ async function main() {
       // Step 5: Log activity to agent_activity
       try {
         await db.collection('agent_activity').insertOne({
-          timestamp: new Date(),
-          agent: 'Outreach Cron',
+          createdAt: new Date(),
+          agent: { name: 'Outreach Cron', role: 'Outreach Processor', department: 'Sales' },
           activity: sendResult.success
             ? `Outreach email sent to ${leadName} (${leadEmail}) via template "${task.template}"`
             : `Outreach email FAILED to ${leadName} — ${sendResult.error?.message}`,
-          type: 'outreach_cron',
+          action: 'outreach_processing', type: 'outreach_cron',
           taskId: task._id,
           details: {
             taskId,
@@ -509,10 +509,10 @@ async function main() {
     // Log summary to agent_activity
     try {
       await db.collection('agent_activity').insertOne({
-        timestamp: endTime,
-        agent: 'Outreach Cron',
+        createdAt: endTime,
+        agent: { name: 'Outreach Cron', role: 'Outreach Processor', department: 'Sales' },
         activity: `Outreach cron run: ${sent} sent, ${failed} failed, ${skipped} skipped (of ${allDueTasks.length} tasks in ${durationSec}s)`,
-        type: 'outreach_cron_summary',
+        action: 'outreach_summary', type: 'outreach_cron_summary',
         details: {
           totalTasks: allDueTasks.length,
           sent,
@@ -539,10 +539,10 @@ async function main() {
     try {
       const db = client.db();
       await db.collection('agent_activity').insertOne({
-        timestamp: new Date(),
-        agent: 'Outreach Cron',
+        createdAt: new Date(),
+        agent: { name: 'Outreach Cron', role: 'Outreach Processor', department: 'Sales' },
         activity: `Outreach cron FAILED: ${error.message}`,
-        type: 'outreach_cron_error',
+        action: 'outreach_error', type: 'outreach_cron_error',
         details: { error: error.message, stack: error.stack },
         success: false,
         createdAt: new Date(),

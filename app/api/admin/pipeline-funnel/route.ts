@@ -99,12 +99,12 @@ export async function GET() {
 
     const activityFeed = rawActivity.map((a: any) => ({
       id: a._id?.toString(),
-      action: a.action,
-      agent: a.agent?.name || "System",
+      action: a.action || a.type || "activity",
+      agent: a.agent?.name || (typeof a.agent === "string" ? a.agent : "System"),
       agentRole: a.agent?.role || "Automated",
-      result: a.result,
+      result: a.result || a.details || (a.activity ? { summary: a.activity } : undefined),
       success: a.success,
-      timestamp: a.createdAt,
+      timestamp: a.createdAt || a.timestamp,
     }));
 
     // Get activity counts per agent for the agent overview

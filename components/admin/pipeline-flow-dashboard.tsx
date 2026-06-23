@@ -339,32 +339,86 @@ export function PipelineFlowDashboard() {
           {activity.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-8">No activity yet</p>
           ) : (
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {activity.slice(0, 15).map((a) => (
-                <div key={a.id} className="flex items-start gap-2 p-2 rounded-lg border border-border/40 bg-muted/20">
-                  <div className={`mt-0.5 ${a.success ? "text-green-500" : "text-red-500"}`}>
-                    {a.success ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-medium">{a.agent}</span>
-                      <Badge variant="secondary" className="text-[9px]">{a.action}</Badge>
-                    </div>
-                    {a.result && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5">
-                        {Object.entries(a.result).slice(0, 3).map(([k, v]) => `${k}: ${String(v)}`).join(" • ")}
-                      </p>
-                    )}
-                    <p className="text-[9px] text-muted-foreground mt-0.5">
-                      {new Date(a.timestamp).toLocaleString("en-US")}
-                    </p>
-                  </div>
-                </div>
+            <div className="space-y-2 max-h-[500px] overflow-y-auto">
+              {activity.slice(0, 30).map((a) => (
+                <ActivityDetailRow key={a.id} activity={a} />
               ))}
             </div>
           )}
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function ActivityDetailRow({ activity: a }: { activity: ActivityItem }) {
+  const [expanded, setExpanded] = React.useState(false);
+
+  return (
+    <div className="rounded-lg border border-border/40 bg-muted/20 overflow-hidden">
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="w-full text-left p-2 hover:bg-muted/40 transition-colors"
+      >
+        <div className="flex items-start gap-2">
+          <div className={`mt-0.5 ${a.success ? "text-green-500" : "text-red-500"} flex-shrink-0`}>
+            {a.success ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium">{a.agent}</span>
+              <Badge variant="secondary" className="text-[9px]">{a.action}</Badge>
+              <span className="text-[9px] text-muted-foreground ml-auto">
+                {new Date(a.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            </div>
+            {a.result && !expanded && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                {Object.entries(a.result).slice(0, 3).map(([k, v]) => `${k}: ${String(v)}`).join(" • ")}
+              </p>
+            )}
+            {expanded && (
+              <ChevronDown className="h-3 w-3 text-muted-foreground mt-1" />
+            )}
+            {!expanded && (
+              <ChevronRight className="h-3 w-3 text-muted-foreground mt-1 inline-block" />
+            )}
+          </div>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border/40 p-3 bg-background/40 space-y-2">
+          <div className="grid grid-cols-1 gap-2">
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Agent</p>
+              <p className="text-xs">{a.agent} ({a.agentRole})</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Action</p>
+              <p className="text-xs font-mono">{a.action}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Timestamp</p>
+              <p className="text-xs">{new Date(a.timestamp).toLocaleString("en-US")}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Status</p>
+              <p className={`text-xs ${a.success ? "text-green-600" : "text-red-600"}`}>
+                {a.success ? "✓ Success" : "✗ Failed"}
+              </p>
+            </div>
+            {a.result && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Full Result Details</p>
+                <pre className="text-[10px] font-mono bg-muted/40 rounded p-2 overflow-x-auto max-h-48 overflow-y-auto">
+                  {JSON.stringify(a.result, null, 2)}
+                </pre>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -411,7 +465,7 @@ function ProspectRow({ prospect, expanded, onToggle }: { prospect: Prospect; exp
                 )}
               </div>
               <p className="text-xs text-muted-foreground truncate">
-                {prospect.location} • {prospect.equipment}
+                {prospect.location} • {prospect.equipment} • Added: {new Date(prospect.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </p>
             </div>
           </div>
@@ -489,9 +543,13 @@ function SessionRow({ session }: { session: OnboardingSession }) {
             {session.aiScore && <Badge variant="outline" className="text-[10px]">Score: {session.aiScore}</Badge>}
             <Badge variant={statusColor as any} className="text-[10px] capitalize">{session.status}</Badge>
           </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            To: {session.leadEmail || "No email"} • Created: {new Date(session.createdAt).toLocaleDateString("en-US")}
-          </p>
+          <div className="text-xs text-muted-foreground mt-0.5 space-y-0.5">
+            <p>To: {session.leadEmail || "No email"}</p>
+            <p>Created: {new Date(session.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+            {session.completedAt && (
+              <p className="text-green-600">Completed: {new Date(session.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+            )}
+          </div>
         </div>
         <a
           href={session.onboardingUrl}
