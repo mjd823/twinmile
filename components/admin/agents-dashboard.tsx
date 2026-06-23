@@ -129,6 +129,7 @@ export function AgentsDashboard() {
   const [agents, setAgents] = React.useState<Agent[]>([]);
   const [summary, setSummary] = React.useState<DashboardSummary | null>(null);
   const [expandedAgent, setExpandedAgent] = React.useState<string | null>(null);
+  const [showActivityDetail, setShowActivityDetail] = React.useState<string | null>(null);
   const [filter, setFilter] = React.useState<"all" | "active" | "idle">("all");
   const [lastRefresh, setLastRefresh] = React.useState(new Date());
 
@@ -213,6 +214,7 @@ export function AgentsDashboard() {
           value={activeCount}
           sublabel={`${agents.length} total`}
           color="green"
+          onClick={() => setShowActivityDetail(showActivityDetail === "active" ? null : "active")}
         />
         <SummaryCard
           icon={<Zap className="h-5 w-5" />}
@@ -220,6 +222,7 @@ export function AgentsDashboard() {
           value={summary?.totalTasksToday ?? 0}
           sublabel="across all agents"
           color="blue"
+          onClick={() => setShowActivityDetail(showActivityDetail === "tasks" ? null : "tasks")}
         />
         <SummaryCard
           icon={<Activity className="h-5 w-5" />}
@@ -227,6 +230,7 @@ export function AgentsDashboard() {
           value={summary?.totalActivityRecords ?? 0}
           sublabel="in database"
           color="purple"
+          onClick={() => setShowActivityDetail(showActivityDetail === "activity" ? null : "activity")}
         />
         <SummaryCard
           icon={<Clock className="h-5 w-5" />}
@@ -236,6 +240,60 @@ export function AgentsDashboard() {
           color="amber"
         />
       </div>
+
+      {/* Activity Detail Panel (shown when summary card clicked) */}
+      {showActivityDetail && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Activity className="h-5 w-5 text-primary" />
+                {showActivityDetail === "tasks" ? "Tasks Today — All Agents" :
+                 showActivityDetail === "activity" ? "All Activity Records" :
+                 "Active Agents Detail"}
+              </CardTitle>
+              <Button variant="ghost" size="sm" onClick={() => setShowActivityDetail(null)}>✕</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {agents
+                .filter(a => {
+                  if (showActivityDetail === "active") return a.status === "active" || a.status === "busy";
+                  if (showActivityDetail === "tasks") return a.tasksToday > 0;
+                  return true;
+                })
+                .map(agent => (
+                  <div key={agent.id} className="flex items-center gap-3 p-3 rounded-lg border border-border/60 bg-muted/20">
+                    <div className={`w-8 h-8 rounded-lg ${agent.color} flex items-center justify-center text-white text-xs font-bold flex-shrink-0`}>
+                      {agent.name.charAt(0)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{agent.name}</span>
+                        <Badge variant="outline" className="text-[9px]">{agent.role}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate">{agent.currentTask || "No active task"}</p>
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-lg font-bold">{agent.tasksToday}</p>
+                      <p className="text-[9px] text-muted-foreground">tasks today</p>
+                    </div>
+                  </div>
+                ))}
+              {agents.filter(a => {
+                if (showActivityDetail === "active") return a.status === "active" || a.status === "busy";
+                if (showActivityDetail === "tasks") return a.tasksToday > 0;
+                return true;
+              }).length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-4">
+                  {showActivityDetail === "tasks" ? "No tasks completed today yet" : "No matching agents"}
+                </p>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filter Tabs */}
       <div className="flex gap-1 border-b border-border/60">
@@ -294,12 +352,14 @@ function SummaryCard({
   value,
   sublabel,
   color,
+  onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   value: number;
   sublabel: string;
   color: string;
+  onClick?: () => void;
 }) {
   const colors: Record<string, string> = {
     green: "border-green-500/30 bg-green-500/5 text-green-600",
@@ -308,7 +368,10 @@ function SummaryCard({
     amber: "border-amber-500/30 bg-amber-500/5 text-amber-600",
   };
   return (
-    <Card className={`border ${colors[color]}`}>
+    <Card
+      className={`border ${colors[color]} ${onClick ? "cursor-pointer hover:shadow-md hover:scale-[1.02] transition-all" : ""}`}
+      onClick={onClick}
+    >
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>

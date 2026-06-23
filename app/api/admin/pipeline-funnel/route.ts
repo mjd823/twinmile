@@ -34,7 +34,8 @@ export async function GET() {
       db.collection("outbound_prospects").countDocuments(),
       db.collection("outbound_prospects").countDocuments({ status: "qualified" }),
       db.collection("outbound_prospects").countDocuments({ status: "onboarding_invited" }),
-      db.collection("onboarding_sessions").countDocuments({ status: "pending" }),
+      // Onboarding started = prospects who have a session AND have interacted with it
+      db.collection("onboarding_sessions").countDocuments({ currentStep: { $gt: 1 } }),
       db.collection("onboarding_sessions").countDocuments({ status: "documents_submitted" }),
       db.collection("lease_agreements").countDocuments({ status: "signed" }),
       db.collection("lease_agreements").countDocuments({ status: "approved" }),

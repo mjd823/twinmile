@@ -81,6 +81,90 @@ export function OnboardingPortal() {
   const [status, setStatus] = React.useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = React.useState("");
 
+  // Token-based session validation and resume
+  const [sessionToken, setSessionToken] = React.useState<string | null>(null);
+  const [sessionLoading, setSessionLoading] = React.useState(true);
+  const [sessionError, setSessionError] = React.useState<string | null>(null);
+  const [sessionName, setSessionName] = React.useState<string>("");
+
+  React.useEffect(() => {
+    // Get token from URL
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+
+    if (!token) {
+      setSessionLoading(false);
+      setSessionError("No onboarding token found. You need a personal invitation link to access the onboarding portal. Check your email or contact us at (281) 710-7787.");
+      return;
+    }
+
+    setSessionToken(token);
+
+    // Validate token and load session
+    fetch(`/api/onboarding/session?token=${encodeURIComponent(token)}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!data.ok) {
+          setSessionError(data.error || "Invalid onboarding link.");
+          return;
+        }
+
+        if (data.alreadyCompleted) {
+          setSessionError("You've already completed onboarding. You can sign in to your driver portal.");
+          return;
+        }
+
+        // Pre-fill form data from session
+        const pre = data.session?.preFilledData || {};
+        const saved = data.session?.formData || {};
+        setSessionName(data.session?.leadName || "");
+
+        setFormData(prev => ({
+          ...prev,
+          firstName: pre.name?.split(" ")[0] || saved.firstName || "",
+          lastName: pre.name?.split(" ").slice(1).join(" ") || saved.lastName || "",
+          email: pre.email || saved.email || data.session?.leadEmail || "",
+          phone: pre.phone || saved.phone || "",
+          truckType: pre.truckType || saved.truckType || "dry_van",
+          mcNumber: pre.mcNumber || saved.mcNumber || "",
+          usdotNumber: pre.usdotNumber || saved.usdotNumber || "",
+          authorityType: pre.authorityStatus || saved.authorityType || "own",
+          city: pre.city || saved.city || "",
+          state: pre.state || saved.state || "",
+          ...saved,
+        }));
+
+        // Resume from saved step
+        if (data.session?.currentStep && data.session.currentStep > 1) {
+          setCurrentStep(data.session.currentStep);
+        }
+
+        setSessionLoading(false);
+      })
+      .catch(() => {
+        setSessionError("Failed to load onboarding session. Please try again or contact support.");
+        setSessionLoading(false);
+      });
+  }, []);
+
+  // Save progress when step changes (debounced)
+  const saveProgress = React.useCallback((step: number, data: any) => {
+    if (!sessionToken) return;
+    fetch(`/api/onboarding/session?token=${encodeURIComponent(sessionToken)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentStep: step, formData: data }),
+    }).catch(() => {}); // Silent fail — progress saving is best-effort
+  }, [sessionToken]);
+
+  // Auto-save on step change
+  React.useEffect(() => {
+    if (!sessionLoading && sessionToken) {
+      const timer = setTimeout(() => saveProgress(currentStep, formData), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentStep, formData, sessionToken, sessionLoading, saveProgress]);
+
   const steps: OnboardingStep[] = [
     {
       id: 1,
@@ -211,8 +295,52 @@ export function OnboardingPortal() {
     setCurrentStep(7);
   }
 
+  // Show loading state while validating token
+  if (sessionLoading) {
+    return (
+      <div className="max-w-2xl mx-auto py-20 text-center">
+        <div className="inline-flex items-center justify-center w-16 h-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin mb-4" />
+        <h2 className="text-xl font-semibold">Loading your onboarding portal...</h2>
+        <p className="text-sm text-muted-foreground mt-2">Validating your invitation link</p>
+      </div>
+    );
+  }
+
+  // Show error state if no valid token
+  if (sessionError) {
+    return (
+      <div className="max-w-2xl mx-auto py-20 text-center">
+        <div className="rounded-2xl border border-border/60 bg-card p-8 shadow-lg">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-amber-500/10 text-amber-500 mb-4">
+            <AlertCircle className="h-8 w-8" />
+          </div>
+          <h2 className="text-xl font-semibold mb-2">Onboarding Access Required</h2>
+          <p className="text-sm text-muted-foreground max-w-md mx-auto">{sessionError}</p>
+          <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+            <a href="mailto:admin@twinmile.com" className="inline-flex items-center justify-center px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90">
+              Contact Support
+            </a>
+            <a href="tel:+12817107787" className="inline-flex items-center justify-center px-4 py-2 rounded-lg border border-border text-sm font-medium hover:bg-accent">
+              Call (281) 710-7787
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {/* Resume Banner */}
+      {sessionToken && currentStep > 1 && (
+        <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 flex items-center gap-2 text-sm">
+          <CheckCircle2 className="h-4 w-4 text-blue-500 flex-shrink-0" />
+          <span className="text-muted-foreground">
+            Welcome back{sessionName ? `, ${sessionName}` : ""}! Your progress is saved. Continue from step {currentStep} of 7.
+          </span>
+        </div>
+      )}
+
       {/* Hero Header */}
       <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-primary/10 via-card to-card shadow-lg">
         <div className="pointer-events-none absolute inset-0">

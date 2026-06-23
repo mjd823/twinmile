@@ -174,7 +174,8 @@ export function PipelineFlowDashboard() {
                 {funnel?.onboardingInvited || 0} invited / {funnel?.totalProspects || 0} prospects
               </p>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
+              <MiniStat label="Total Prospects" value={funnel?.totalProspects || 0} icon={<Search className="h-4 w-4 text-blue-500" />} />
               <MiniStat label="Qualified" value={funnel?.qualified || 0} icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} />
               <MiniStat label="Onboarding" value={funnel?.onboardingStarted || 0} icon={<UserCheck className="h-4 w-4 text-purple-500" />} />
               <MiniStat label="Dispatch Ready" value={funnel?.dispatchReady || 0} icon={<Truck className="h-4 w-4 text-emerald-500" />} />
