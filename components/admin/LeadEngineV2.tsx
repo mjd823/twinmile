@@ -188,7 +188,7 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
   return (
     <div className="space-y-6 p-6">
       {/* HEADER */}
-      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pt-2">
         <div>
           <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
             <Zap className="h-7 w-7 text-primary" />
@@ -200,15 +200,15 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
         </div>
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="text-xs">Live</Badge>
-          <Button variant="ghost" size="sm" className="gap-1">
-            <RefreshCw className="h-4 w-4" />
-            Refresh
-          </Button>
+          <Link href="/admin/agents" className="inline-flex items-center gap-1 text-sm text-primary hover:underline">
+            <Zap className="h-4 w-4" />
+            View All Agents
+          </Link>
         </div>
       </div>
 
       {/* KPI STRIP - 6 metrics, executive view */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 pt-6">
         {([
           { label: "Total Leads", value: totalLeads, icon: <Users className="h-5 w-5" />, color: "text-slate-600", href: "/admin/inbox" },
           { label: "Qualified (≥75)", value: qualifiedLeads, icon: <CheckCircle className="h-5 w-5" />, color: "text-blue-600", href: "/admin/inbox?filter=qualified" },
@@ -244,56 +244,11 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
         ))}
       </div>
 
-      {/* MAIN GRID: PIPELINE (2/3) + AGENTS (1/3) */}
+      {/* MAIN GRID: PIPELINE (2/3) + QUICK ACTIONS (1/3) */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* PIPELINE FUNNELS */}
         <div className="lg:col-span-2 space-y-6">
-          {/* QUOTE PIPELINE */}
-          <Card className="border-border/60">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <BarChart3 className="h-5 w-5 text-blue-500" />
-                  Quote Pipeline
-                </CardTitle>
-                <Badge variant="outline" className="text-xs">
-                  {quoteLeads.length} total
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex items-center gap-2 overflow-x-auto pb-4">
-                {quoteStagesWithRates.map((stage, i) => (
-                  <React.Fragment key={stage.name}>
-                    <div className="flex flex-col items-center min-w-[100px] flex-shrink-0 relative">
-                      {/* Conversion rate above arrow (except first) */}
-                      {i > 0 && stage.conversionRate !== undefined && (
-                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-medium text-amber-600 whitespace-nowrap">
-                          {stage.conversionRate}% ←
-                        </div>
-                      )}
-                      {/* Stage node */}
-                      <div className={`w-16 h-16 rounded-xl ${stage.color} flex items-center justify-center text-white shadow-lg relative z-10`}>
-                        {stage.icon}
-                      </div>
-                      <div className="mt-2 text-center">
-                        <div className="text-2xl font-bold text-foreground">{stage.count}</div>
-                        <div className="text-xs font-medium text-muted-foreground">{stage.name}</div>
-                      </div>
-                    </div>
-                    {/* Connector arrow */}
-                    {i < quoteStagesWithRates.length - 1 && (
-                      <div className="flex items-center h-16 w-8 text-slate-300">
-                        <ArrowRight className="h-5 w-5" />
-                      </div>
-                    )}
-                  </React.Fragment>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* DRIVER PIPELINE */}
+          {/* DRIVER PIPELINE (on top — this is our primary focus) */}
           <Card className="border-border/60">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -315,15 +270,18 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
                         {stage.conversionRate}% ←
                       </div>
                     )}
-                    <div className="flex flex-col items-center min-w-[100px] flex-shrink-0 relative">
-                      <div className={`w-16 h-16 rounded-xl ${stage.color} flex items-center justify-center text-white shadow-lg relative z-10`}>
+                    <Link
+                      href={`/admin/inbox?filter=driver&stage=${stage.name}`}
+                      className="flex flex-col items-center min-w-[100px] flex-shrink-0 relative group cursor-pointer hover:scale-105 transition-transform"
+                    >
+                      <div className={`w-16 h-16 rounded-xl ${stage.color} flex items-center justify-center text-white shadow-lg relative z-10 group-hover:shadow-xl group-hover:ring-2 group-hover:ring-primary/40`}>
                         {stage.icon}
                       </div>
                       <div className="mt-2 text-center">
-                        <div className="text-2xl font-bold text-foreground">{stage.count}</div>
+                        <div className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{stage.count}</div>
                         <div className="text-xs font-medium text-muted-foreground">{stage.name}</div>
                       </div>
-                    </div>
+                    </Link>
                     {i < driverStagesWithRates.length - 1 && (
                       <div className="flex items-center h-16 w-8 text-slate-300">
                         <ArrowRight className="h-5 w-5" />
@@ -332,49 +290,62 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
                   </React.Fragment>
                 ))}
               </div>
+              <p className="text-xs text-muted-foreground mt-2">Click any stage to view leads at that stage</p>
+            </CardContent>
+          </Card>
+
+          {/* QUOTE PIPELINE */}
+          <Card className="border-border/60">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <BarChart3 className="h-5 w-5 text-blue-500" />
+                  Quote Pipeline
+                </CardTitle>
+                <Badge variant="outline" className="text-xs">
+                  {quoteLeads.length} total
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="flex items-center gap-2 overflow-x-auto pb-4">
+                {quoteStagesWithRates.map((stage, i) => (
+                  <React.Fragment key={stage.name}>
+                    {/* Conversion rate above arrow (except first) */}
+                    {i > 0 && stage.conversionRate !== undefined && (
+                      <div className="absolute -top-7 left-1/2 -translate-x-1/2 text-[10px] font-medium text-amber-600 whitespace-nowrap">
+                        {stage.conversionRate}% ←
+                      </div>
+                    )}
+                    {/* Stage node */}
+                    <Link
+                      href={`/admin/inbox?filter=quote&stage=${stage.name}`}
+                      className="flex flex-col items-center min-w-[100px] flex-shrink-0 relative group cursor-pointer hover:scale-105 transition-transform"
+                    >
+                      <div className={`w-16 h-16 rounded-xl ${stage.color} flex items-center justify-center text-white shadow-lg relative z-10 group-hover:shadow-xl group-hover:ring-2 group-hover:ring-primary/40`}>
+                        {stage.icon}
+                      </div>
+                      <div className="mt-2 text-center">
+                        <div className="text-2xl font-bold text-foreground group-hover:text-primary transition-colors">{stage.count}</div>
+                        <div className="text-xs font-medium text-muted-foreground">{stage.name}</div>
+                      </div>
+                    </Link>
+                    {/* Connector arrow */}
+                    {i < quoteStagesWithRates.length - 1 && (
+                      <div className="flex items-center h-16 w-8 text-slate-300">
+                        <ArrowRight className="h-5 w-5" />
+                      </div>
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">Click any stage to view leads at that stage</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* AGENT STATUS PANEL */}
+        {/* QUICK ACTIONS PANEL (replaced AI Agent Status — now at /admin/agents) */}
         <div className="space-y-4">
-          <Card className="border-border/60">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Zap className="h-5 w-5 text-cyan-500" />
-                AI Agent Status
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pt-0 space-y-3">
-              {agentStatuses.map((agent) => (
-                <Link
-                  key={agent.id}
-                  href={`/admin/lead-engine/agent/${agent.id}`}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border/60 hover:border-primary/40 hover:bg-primary/5 transition-all group"
-                >
-                  <div className={`w-10 h-10 rounded-lg ${agent.color} flex items-center justify-center text-white flex-shrink-0`}>
-                    {agent.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-sm text-foreground truncate">{agent.name}</span>
-                      <Badge variant="outline" className="text-[9px] px-1.5 py-0 bg-muted/50">{agent.role}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5">{agent.currentTask}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {getStatusBadge(agent.status)}
-                      <span className="text-[10px] text-muted-foreground">
-                        {agent.tasksToday} tasks • {formatRelativeTime(new Date(Date.now() - Math.random() * 3600000).toISOString())}
-                      </span>
-                    </div>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </Link>
-              ))}
-            </CardContent>
-          </Card>
-
-          {/* QUICK ACTIONS */}
           <Card className="border-border/60">
             <CardHeader className="pb-3">
               <CardTitle className="flex items-center gap-2 text-lg">

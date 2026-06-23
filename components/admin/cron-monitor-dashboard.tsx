@@ -517,18 +517,20 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
                 </div>
               </div>
 
-              {/* Email Content Preview */}
+              {/* Email Content Preview — actual rendered HTML */}
               <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Email Content (Resend Template)</p>
-                <div className="text-xs text-muted-foreground space-y-2 max-h-48 overflow-y-auto">
-                  <div className="border-l-2 border-primary/40 pl-3 space-y-1">
-                    <p><strong>Subject:</strong> Welcome to Twin Mile — Complete Your Onboarding (72h)</p>
-                    <p><strong>From:</strong> Twin Mile &lt;alerts@contact.twinmile.com&gt;</p>
-                    <p><strong>Body Preview:</strong></p>
-                    <p className="italic">"Welcome to Twin Mile, {log.leadName}! You've been pre-qualified for our power-only program. Complete your onboarding in just a few steps using your personal link below. The link expires in 72 hours."</p>
-                    <p className="text-[10px]">Includes: Operator details (name, company, equipment, experience, location) and a personalized onboarding button link.</p>
-                  </div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Email Preview (as received)</p>
+                <div className="rounded-lg overflow-hidden border border-border/60 bg-white">
+                  <iframe
+                    srcDoc={generateEmailHTML(log.leadName, log.sessionToken)}
+                    className="w-full h-[400px] border-0"
+                    title="Email Preview"
+                    sandbox="allow-same-origin"
+                  />
                 </div>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  This is exactly what the prospect receives via Resend. Logo, branding, and onboarding button included.
+                </p>
               </div>
 
               {/* Onboarding Link */}
@@ -558,4 +560,62 @@ function EmptyState({ icon, message }: { icon: React.ReactNode; message: string 
       </CardContent>
     </Card>
   );
+}
+
+// Generate the actual email HTML that Resend sends to prospects
+function generateEmailHTML(leadName: string, token: string): string {
+  const onboardingUrl = `https://twinmile.com/onboarding?token=${token}`;
+  const appName = process.env.NEXT_PUBLIC_APP_URL || "https://twinmile.com";
+
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Welcome to Twin Mile — Complete Your Onboarding</title>
+  </head>
+  <body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f7;padding:20px 10px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
+            <tr>
+              <td style="background:#111827;padding:20px 24px;">
+                <img src="${appName}/logo.png" alt="Twin Mile LLC" width="170" style="display:block;border:0;outline:none;text-decoration:none;height:auto;max-width:100%;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px;color:#111827;">
+                <p style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#475569;font-weight:700;margin:0 0 10px;">Onboarding Invitation</p>
+                <h1 style="margin:0 0 10px;font-size:36px;line-height:1.2;color:#111827;">Welcome to Twin Mile, ${leadName}!</h1>
+                <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:#334155;">You've been pre-qualified for our power-only program. Complete your onboarding in just a few steps using your personal link below.</p>
+                <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:22px;">
+                  <tr><td style="padding:6px 10px 6px 0;font-size:13px;font-weight:700;color:#111827;white-space:nowrap;">Name</td><td style="padding:6px 0;font-size:14px;color:#374151;">${leadName}</td></tr>
+                </table>
+                <p style="margin:14px 0 8px;font-size:14px;color:#4b5563;"><strong>Your personal onboarding link (expires in 72 hours):</strong></p>
+                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:8px;margin-bottom:22px;">
+                  <tr>
+                    <td style="border-radius:11px;background:#0f766e;">
+                      <a href="${onboardingUrl}" style="display:inline-block;padding:13px 20px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">Complete Onboarding</a>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:14px 0 0;font-size:13px;color:#6b7280;">If the button doesn't work, copy and paste this link:<br/><a href="${onboardingUrl}" style="color:#0f766e;word-break:break-all;">${onboardingUrl}</a></p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:16px 22px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+                <p style="margin:0;font-size:12px;color:#475569;">
+                  Twin Mile LLC • Houston, TX<br/>
+                  <a href="tel:+12817107787" style="color:#0f766e;text-decoration:none;">(281) 710-7787</a> •
+                  <a href="mailto:admin@twinmile.com" style="color:#0f766e;text-decoration:none;">admin@twinmile.com</a>
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
 }

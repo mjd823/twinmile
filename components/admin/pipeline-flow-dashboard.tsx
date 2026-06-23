@@ -164,7 +164,7 @@ export function PipelineFlowDashboard() {
       </div>
 
       {/* Conversion Summary */}
-      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent">
+      <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent pt-6">
         <CardContent className="p-5">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
@@ -188,7 +188,7 @@ export function PipelineFlowDashboard() {
         {STAGES.map((stage, i) => {
           const value = funnel?.[stage.key as keyof FunnelData] || 0;
           const maxValue = funnel?.totalProspects || 1;
-          const width = Math.max(8, (value / maxValue) * 100);
+          const width = value > 0 ? Math.max(8, (value / maxValue) * 100) : 0;
           const StageIcon = stage.icon;
 
           return (
@@ -276,7 +276,7 @@ export function PipelineFlowDashboard() {
           <div className="flex items-center justify-between flex-wrap gap-3">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="h-5 w-5 text-primary" />
-              Recent Prospects ({prospects.length})
+              All Prospects ({prospects.length})
             </CardTitle>
             <div className="flex gap-1 flex-wrap">
               <FilterButton active={filterStage === "all"} onClick={() => setFilterStage("all")}>All</FilterButton>
@@ -291,6 +291,7 @@ export function PipelineFlowDashboard() {
             <p className="text-sm text-muted-foreground text-center py-8">No prospects found</p>
           ) : (
             <div className="space-y-2">
+              <p className="text-xs text-muted-foreground mb-2">Showing all {filteredProspects.length} prospects</p>
               {filteredProspects.map((p) => (
                 <ProspectRow
                   key={p.id}

@@ -155,7 +155,7 @@ export function OnboardingPortal() {
       description: "Your account is ready. Welcome to Twin Mile!",
       icon: <CheckCircle2 className="h-5 w-5" />,
       component: <CompleteStep />,
-      isComplete: true,
+      isComplete: currentStep === 7, // Only complete when actually on this step
       isActive: currentStep === 7,
       canProceed: false,
     },

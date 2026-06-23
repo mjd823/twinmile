@@ -44,7 +44,7 @@ export async function GET() {
     const rawProspects = await db.collection("outbound_prospects")
       .find({})
       .sort({ createdAt: -1 })
-      .limit(20)
+      .limit(200)
       .toArray();
 
     const recentProspects = rawProspects.map((p: any) => ({
