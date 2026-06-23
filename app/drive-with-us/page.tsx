@@ -32,6 +32,21 @@ export const metadata: Metadata = {
     "Houston logistics jobs",
     "Texas truck driver jobs",
     "owner operator lease on",
+    "owner operator jobs Texas",
+    "power only trucking jobs",
+    "CDL owner operator jobs",
+    "lease onto authority",
+    "owner operator pay 80 percent",
+    "hot shot owner operator jobs",
+    "owner operator jobs no experience",
+    "class A CDL owner operator",
+    "dry van owner operator jobs",
+    "owner operator weekly pay",
+    "power only carrier jobs",
+    "owner operator jobs near me",
+    "truck owner operator Houston TX",
+    "best owner operator companies Houston",
+    "lease purchase owner operator Texas",
   ],
   alternates: { canonical: "/drive-with-us" },
   openGraph: {
@@ -100,6 +115,36 @@ export default function DriveWithUsPage() {
       question: "What equipment do I need?",
       answer:
         "We focus on power only operations, so you need your own tractor. Common equipment includes hotshot trucks, semi-trucks, and specialized vehicles. No trailer required.",
+    },
+    {
+      question: "Do I need my own MC authority or can I lease onto yours?",
+      answer:
+        "Both options are available. You can run under your own MC authority, or lease onto our MC-1790263 authority. Many owner-operators prefer leasing onto our authority to save on insurance and compliance costs.",
+    },
+    {
+      question: "How often do owner-operators get paid?",
+      answer:
+        "Weekly direct deposit by Tuesday for the previous week's loads. We offer 100% fuel surcharge pass-through and no hidden deductions. You see exactly what you earn on every load.",
+    },
+    {
+      question: "What states does Twin Mile operate in?",
+      answer:
+        "We're based in Houston, TX and operate nationwide with strong coverage in Texas, Louisiana, California, Georgia, and Tennessee. We match loads to your preferred lanes and home-base location.",
+    },
+    {
+      question: "Can a new CDL holder with no experience apply?",
+      answer:
+        "Yes! We welcome applicants at all experience levels. While 2+ years of OTR experience is preferred, we evaluate each application individually based on equipment, availability, and attitude.",
+    },
+    {
+      question: "What documents do I need to lease onto Twin Mile?",
+      answer:
+        "You'll need: CDL, Certificate of Insurance (COI), Vehicle Registration, W-9, DOT Physical/Medical Card, Motor Vehicle Record (MVR), and ELD Certification. Our 7-step self-serve portal guides you through everything.",
+    },
+    {
+      question: "Does Twin Mile offer sign-on bonuses or incentives?",
+      answer:
+        "We offer competitive compensation at 80% gross to the truck with no hidden fees. Contact us at (281) 710-7787 for current incentive programs and sign-on details.",
     },
   ];
 
