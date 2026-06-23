@@ -283,7 +283,7 @@ export default function DriveWithUsPage() {
                     <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">3</div>
                     <div className="font-medium">Onboard</div>
                   </div>
-                  <div className="mt-1 text-xs text-muted-foreground">If it's a fit, we'll send you our <Link href="/lease-agreement" className="text-primary hover:underline">Lease-On Agreement</Link> to sign and upload your documents (CDL, COI, W-9, etc.), then get you dispatched.</div>
+                  <div className="mt-1 text-xs text-muted-foreground">If it's a fit, we'll send you your personal onboarding link to complete identity verification, FMCSA check, e-sign your lease agreement, and upload your documents (CDL, COI, W-9, etc.), then get you dispatched.</div>
                 </div>
               </div>
 

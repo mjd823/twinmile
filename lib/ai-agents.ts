@@ -1,21 +1,23 @@
-import { Groq } from "groq-sdk";
+import OpenAI from "openai";
 
-// Enhanced AI Agent Configuration with Real MCP Integration
+// Enhanced AI Agent Configuration with OpenAI-compatible LLM (GLM-5.2 via ollama-cloud)
+// Unified model — same as Hermes chat uses
 export const AGENT_CONFIG = {
-  // Groq Compound System for multi-tool workflows
-  model: "groq/compound" as const,
-  
-  // Available built-in tools
+  // GLM-5.2 via ollama-cloud — same model used across the entire system
+  model: process.env.OLLAMA_MODEL || "glm-5.2",
+  provider: "ollama-cloud",
+  baseURL: process.env.OLLAMA_BASE_URL || "https://ollama.com/v1",
+
+  // Available built-in tools (note: GLM-5.2 supports tool calling via OpenAI-compatible API)
   tools: {
     web_search: "web_search",
-    code_interpreter: "code_interpreter", 
+    code_interpreter: "code_interpreter",
     visit_website: "visit_website",
     browser_automation: "browser_automation",
     wolfram_alpha: "wolfram_alpha"
   },
-  
+
   // Future MCP Server Integrations (not yet connected — requires real server endpoints)
-  // When connecting a real MCP server, add it here with a valid URL.
   mcpServers: [] as Array<{
     label: string;
     url: string;
@@ -23,13 +25,13 @@ export const AGENT_CONFIG = {
     tools: string[];
     status: 'connected' | 'planned';
   }>,
-  
-  // Voice synthesis configuration
+
+  // Voice synthesis configuration (kept for compatibility — not actively used)
   voice: {
     model: "canopylabs/orpheus-v1-english" as const,
     personas: {
       professional: "daniel",
-      friendly: "troy", 
+      friendly: "troy",
       energetic: "austin",
       warm: "autumn",
       confident: "hannah",
@@ -80,35 +82,33 @@ export interface AgentRelationship {
   lastInteraction: string;
 }
 
-// Initialize Enhanced Groq Client
+// Initialize OpenAI-compatible LLM Client (GLM-5.2 via ollama-cloud)
 export class GroqAgentClient {
-  private client: Groq | null = null;
+  private client: OpenAI | null = null;
   private apiKey: string | undefined;
-  
+
   constructor(apiKey?: string) {
     this.apiKey = apiKey;
     // Don't initialize client in constructor - lazy load on first use
   }
-  
-  private getClient(): Groq {
+
+  private getClient(): OpenAI {
     if (!this.client) {
-      const key = this.apiKey || (typeof process !== 'undefined' ? process.env.GROQ_API_KEY : undefined);
+      const key = this.apiKey || (typeof process !== 'undefined' ? (process.env.OLLAMA_API_KEY || process.env.GROQ_API_KEY) : undefined);
       if (!key) {
-        throw new Error('Groq API key not available. AI features require server-side execution.');
+        throw new Error('LLM API key not available. Set OLLAMA_API_KEY or GROQ_API_KEY. AI features require server-side execution.');
       }
-      this.client = new Groq({
+      this.client = new OpenAI({
         apiKey: key,
-        defaultHeaders: {
-          "Groq-Model-Version": "latest"
-        },
-        timeout: 180000 // 3 minutes timeout
+        baseURL: AGENT_CONFIG.baseURL,
+        timeout: 180000, // 3 minutes timeout
       });
     }
     return this.client;
   }
-  
+
   async createAgentResponse(
-    systemPrompt: string, 
+    systemPrompt: string,
     userMessage: string,
     enabledTools: string[] = Object.values(AGENT_CONFIG.tools),
     mcpServers: any[] = AGENT_CONFIG.mcpServers
@@ -119,11 +119,8 @@ export class GroqAgentClient {
         { role: "system", content: systemPrompt },
         { role: "user", content: userMessage }
       ],
-      compound_custom: {
-        tools: {
-          enabled_tools: enabledTools
-        }
-      }
+      temperature: 0.7,
+      max_tokens: 4000,
     };
 
     // Only include MCP tools if there are connected servers
@@ -140,18 +137,12 @@ export class GroqAgentClient {
 
     return await this.getClient().chat.completions.create(createParams);
   }
-  
+
   async generateSpeech(text: string, persona: keyof typeof AGENT_CONFIG.voice.personas = "professional") {
-    const voice = AGENT_CONFIG.voice.personas[persona];
-    
-    const response = await this.getClient().audio.speech.create({
-      model: AGENT_CONFIG.voice.model,
-      voice: voice,
-      input: text,
-      response_format: "wav"
-    });
-    
-    return Buffer.from(await response.arrayBuffer());
+    // Voice generation not available with ollama-cloud — return empty buffer
+    // If voice is needed in the future, use a dedicated TTS service
+    console.warn('[AI Agents] Voice generation not available with current LLM provider');
+    return Buffer.from([]);
   }
 }
 
@@ -212,7 +203,7 @@ export abstract class EnhancedAgent {
     
     return {
       content: response.choices[0]?.message?.content || "",
-      toolCalls: response.choices[0]?.message?.executed_tools || [],
+      toolCalls: response.choices[0]?.message?.tool_calls || [],
       usage: response.usage,
       agentId: this.agentId,
       personality: this.personality.name,

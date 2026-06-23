@@ -94,10 +94,28 @@ export async function submitDriverApplicationAction(
     const db = client.db();
     console.log("[submitDriverApplicationAction] Database connected, inserting driver application...");
 
+    // Score the lead based on experience and truck type
+    const experience = parseInt(parsed.data.yearsExperience || '0', 10);
+    let aiScore = 50; // Base score
+    if (experience >= 5) aiScore += 25;
+    else if (experience >= 3) aiScore += 18;
+    else if (experience >= 2) aiScore += 12;
+    if (parsed.data.truckType) {
+      const truck = parsed.data.truckType.toLowerCase();
+      if (truck.includes('power') || truck.includes('semi') || truck.includes('tractor')) aiScore += 15;
+      else if (truck.includes('hotshot') || truck.includes('flatbed')) aiScore += 12;
+    }
+    if (parsed.data.preferredRoutes && parsed.data.preferredRoutes.length > 0) aiScore += 10;
+    if (parsed.data.startDate && parsed.data.startDate.length > 0) aiScore += 5; // Ready to start soon
+    aiScore = Math.min(100, aiScore);
+
+    const qualifiedStatus = aiScore >= 75 ? 'qualified' : 'new';
+
     const insertResult = await db.collection("leads_drivers").insertOne({
       ...parsed.data,
       hp: undefined,
-      status: "new",
+      status: qualifiedStatus,
+      aiScore,
       notes: [],
       nextFollowUpAt: null,
       ownerUserId: null,

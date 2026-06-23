@@ -212,60 +212,79 @@ export function OnboardingPortal() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      {/* Progress Header */}
-      <Card className="border-border/60">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
+    <div className="max-w-5xl mx-auto space-y-6">
+      {/* Hero Header */}
+      <div className="relative overflow-hidden rounded-2xl border border-border/60 bg-gradient-to-br from-primary/10 via-card to-card shadow-lg">
+        <div className="pointer-events-none absolute inset-0">
+          <div className="absolute -top-24 right-0 h-64 w-64 rounded-full bg-primary/15 blur-3xl" />
+          <div className="absolute -bottom-24 left-0 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+        </div>
+        <div className="relative p-6 md:p-8">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold">Owner-Operator Onboarding</h1>
-              <p className="text-sm text-muted-foreground mt-1">Complete all 7 steps to start driving with Twin Mile</p>
+              <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-card/60 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur mb-3">
+                <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+                MC-1790263 • Houston, TX • Power-Only Program
+              </div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
+                Welcome{formData.firstName ? `, ${formData.firstName}` : ""}! Let&rsquo;s get you on the road.
+              </h1>
+              <p className="text-sm text-muted-foreground mt-2 max-w-xl">
+                Complete all 7 steps to join Twin Mile&rsquo;s power-only program.
+                80% gross • Weekly direct deposit • 100% fuel surcharge.
+              </p>
             </div>
-            <div className="text-right">
-              <div className="text-2xl font-bold text-primary">{Math.round(progress)}%</div>
-              <div className="text-sm text-muted-foreground">{completeCount} of {steps.length} steps complete</div>
+            <div className="flex-shrink-0">
+              <div className="relative w-28 h-28 md:w-32 md:h-32">
+                <svg className="w-full h-full -rotate-90" viewBox="0 0 100 100">
+                  <circle cx="50" cy="50" r="44" fill="none" stroke="currentColor" strokeWidth="6" className="text-muted/30" />
+                  <circle
+                    cx="50" cy="50" r="44" fill="none" stroke="currentColor" strokeWidth="6"
+                    className="text-primary transition-all duration-500"
+                    strokeDasharray={`${2 * Math.PI * 44}`}
+                    strokeDashoffset={`${2 * Math.PI * 44 * (1 - progress / 100)}`}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="text-2xl font-bold text-primary">{Math.round(progress)}%</span>
+                  <span className="text-[10px] text-muted-foreground">{completeCount}/{steps.length}</span>
+                </div>
+              </div>
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* Progress Bar */}
-          <div className="relative h-2 mb-6">
-            <Progress value={progress} className="h-2" />
-            <div className="absolute top-0 left-0 right-0 flex justify-between">
-              {steps.map((step, i) => (
-                <div
-                  key={step.key}
-                  className="flex flex-col items-center"
-                  style={{ left: `${(i / (steps.length - 1)) * 100}%`, transform: 'translateX(-50%)' }}
+      {/* Step Progress Bar */}
+      <Card className="border-border/60 shadow-sm">
+        <CardContent className="p-4 md:p-5">
+          <div className="flex items-center gap-1 md:gap-2">
+            {steps.map((step, i) => (
+              <React.Fragment key={step.key}>
+                <button
+                  onClick={() => step.isComplete && setCurrentStep(step.id)}
+                  className={`flex flex-col items-center gap-1.5 flex-1 group ${step.isComplete ? 'cursor-pointer' : 'cursor-default'}`}
                 >
-                  <div className={`w-2.5 h-2.5 rounded-full border-2 transition-all ${
-                    step.isComplete ? 'bg-green-500 border-green-500' :
-                    step.isActive ? 'bg-primary border-primary' :
-                    'bg-muted border-border'
-                  }`} />
-                  <span className="text-[9px] text-center mt-1 text-muted-foreground w-20 truncate">
+                  <div className={`flex items-center justify-center w-9 h-9 md:w-10 md:h-10 rounded-xl border-2 transition-all duration-300 ${
+                    step.isComplete ? 'bg-green-500 border-green-500 text-white shadow-md shadow-green-500/30 group-hover:scale-110' :
+                    step.isActive ? 'bg-primary border-primary text-white shadow-md shadow-primary/30 scale-110' :
+                    'border-border bg-background text-muted-foreground'
+                  }`}>
+                    {step.isComplete ? <CheckCircle2 className="w-5 h-5" /> : step.icon}
+                  </div>
+                  <span className={`text-[10px] md:text-xs text-center font-medium leading-tight transition-colors ${
+                    step.isComplete ? 'text-foreground' : step.isActive ? 'text-primary' : 'text-muted-foreground'
+                  }`}>
                     {step.label}
                   </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Step Indicators */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
-            {steps.map((step, i) => (
-              <div key={step.key} className="flex flex-col items-center" style={{ flex: 1 }}>
-                <div className={`flex items-center justify-center w-6 h-6 rounded-full border-2 mb-1 ${
-                  step.isComplete ? 'bg-green-500 border-green-500 text-white' :
-                  step.isActive ? 'bg-primary border-primary text-white' :
-                  'border-border bg-background'
-                }`}>
-                  {step.isComplete ? <CheckCircle2 className="w-4 h-4" /> : step.id}
-                </div>
-                <span className="text-center truncate w-24">{step.label}</span>
+                </button>
                 {i < steps.length - 1 && (
-                  <div className={`flex-1 h-0.5 mx-1 ${step.isComplete ? 'bg-green-500' : 'bg-border'}`} />
+                  <div className={`h-0.5 flex-1 min-w-[8px] rounded-full transition-colors duration-300 ${
+                    step.isComplete ? 'bg-green-500' : 'bg-border'
+                  }`} />
                 )}
-              </div>
+              </React.Fragment>
             ))}
           </div>
         </CardContent>
@@ -483,41 +502,125 @@ function BackgroundStep({ formData, setFormData }: { formData: any; setFormData:
 function ESignStep({ formData, setFormData }: { formData: any; setFormData: any }) {
   const [signed, setSigned] = React.useState(false);
   const [signature, setSignature] = React.useState("");
+  const [showFullAgreement, setShowFullAgreement] = React.useState(false);
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
-        <h3 className="font-medium mb-2">Lease-On Agreement</h3>
-        <p className="text-sm text-muted-foreground mb-4">
-          Review the agreement below. Your electronic signature below constitutes acceptance.
-        </p>
-        <div className="rounded-lg border border-border/60 bg-background p-4 max-h-64 overflow-y-auto text-sm">
-          <p className="mb-2"><strong>LEASE-ON AGREEMENT</strong></p>
-          <p className="mb-2">This Agreement is made between Twin Mile LLC (Carrier, MC1790263) and {formData.firstName} {formData.lastName} (Owner-Operator).</p>
-          <p className="mb-2"><strong>Terms:</strong> 20% gross revenue (10% MC usage + 3% factoring + 7% dispatch). Weekly direct deposit. 7-day termination notice.</p>
-          <p className="mb-2"><strong>Requirements:</strong> Valid CDL, DOT Physical, COI with Twin Mile as certificate holder, Annual DOT inspection, ELD compliance.</p>
-          <p className="mb-2"><strong>Insurance:</strong> Owner-Operator's insurance is primary. Twin Mile listed as certificate holder.</p>
-          <p className="mb-2"><strong>Termination:</strong> 7-day written notice. Automatic for failed DOT inspection, double brokering, unauthorized MC use.</p>
+      <div className="rounded-xl border border-border/60 bg-muted/30 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-base">Lease-On Agreement</h3>
+          <Badge variant="secondary" className="text-xs">MC-1790263</Badge>
         </div>
+        <p className="text-sm text-muted-foreground mb-4">
+          Review the agreement below. Your electronic signature constitutes legal acceptance.
+        </p>
+
+        {/* Summary Terms */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+          <div className="rounded-lg border border-border/60 bg-background p-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Payment Structure</p>
+            <div className="text-sm space-y-1">
+              <div className="flex justify-between"><span>MC Usage Fee:</span> <strong>10%</strong></div>
+              <div className="flex justify-between"><span>Factoring Fee:</span> <strong>3%</strong></div>
+              <div className="flex justify-between"><span>Dispatching Fee:</span> <strong>7%</strong></div>
+              <div className="flex justify-between border-t pt-1 mt-1"><span className="font-semibold">Total Sign-On:</span> <strong className="text-primary">20%</strong></div>
+              <div className="text-xs text-muted-foreground mt-1">Weekly direct deposit by Tuesday</div>
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-background p-3">
+            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Requirements</p>
+            <div className="text-xs space-y-1 text-muted-foreground">
+              <div>• Valid CDL with endorsements</div>
+              <div>• DOT Medical Examiner Certificate</div>
+              <div>• Annual DOT truck inspection</div>
+              <div>• COI with Twin Mile as certificate holder</div>
+              <div>• ELD compliance (FMCSA regs)</div>
+              <div>• Clean MVR on request</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Penalties Warning */}
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 mb-4">
+          <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase mb-2">⚠ Penalties & Termination</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-xs text-muted-foreground">
+            <div>• Failed DOT inspection: $1,000 fine + termination</div>
+            <div>• Unreported DOT inspection: $1,000 fine</div>
+            <div>• Unauthorized MC use: $1,000 + termination</div>
+            <div>• Double brokering: $2,000 + termination</div>
+            <div>• Driver change without notice: $500</div>
+            <div>• 7-day written termination notice</div>
+          </div>
+        </div>
+
+        {/* Full Agreement Toggle */}
+        <button
+          onClick={() => setShowFullAgreement(!showFullAgreement)}
+          className="text-sm text-primary hover:underline mb-3 flex items-center gap-1"
+        >
+          {showFullAgreement ? "Hide" : "Read"} full 8-section agreement
+          <ChevronRight className={`w-3 h-3 transition-transform ${showFullAgreement ? "rotate-90" : ""}`} />
+        </button>
+
+        {showFullAgreement && (
+          <div className="rounded-lg border border-border/60 bg-background p-4 max-h-80 overflow-y-auto text-sm space-y-3">
+            <p className="font-semibold">This Lease-On Agreement is made between <strong>Twin Mile LLC</strong> (Carrier, MC-1790263, Houston, TX) and <strong>{formData.firstName || "[Owner-Operator]"} {formData.lastName || ""}</strong> (Owner-Operator).</p>
+            <div>
+              <p className="font-semibold mb-1">1. Purpose</p>
+              <p className="text-xs text-muted-foreground">Carrier leases Owner-Operator's vehicle(s) for interstate property transportation under Carrier's FMCSA authority.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">2. Term</p>
+              <p className="text-xs text-muted-foreground">Commences on signing. 7-day termination notice. Renewable by written agreement.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">3. Compliance</p>
+              <p className="text-xs text-muted-foreground">DOT physical, annual inspection, CDL, HOS, ELD, MVR. Report violations immediately.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">4. Financial Terms</p>
+              <p className="text-xs text-muted-foreground">20% total (10% MC + 3% factoring + 7% dispatch). Weekly payout by Tuesday. Expedited payment TBD.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">5. Liability</p>
+              <p className="text-xs text-muted-foreground">Owner-Operator insurance is primary. At-fault accident may result in termination.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">6. Termination</p>
+              <p className="text-xs text-muted-foreground">7-day notice, material breach, or automatic for violations per Section 4.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">7. Dispute Resolution</p>
+              <p className="text-xs text-muted-foreground">Harris County, Texas law applies.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-1">8. Miscellaneous</p>
+              <p className="text-xs text-muted-foreground">Texas governing law. Entire agreement. Written amendments only.</p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* Signature */}
       <div className="space-y-3">
-        <label className="text-sm font-medium">Your Signature (type full name)</label>
+        <label className="text-sm font-medium">Your Signature (type full legal name)</label>
         <Input
           value={signature}
           onChange={e => setSignature(e.target.value)}
           placeholder="Type your full legal name to sign"
           className="font-medium"
         />
-        <div className="flex items-center gap-3">
+        <div className="flex items-start gap-3">
           <input
             type="checkbox"
             id="esign-consent"
             checked={signed}
             onChange={e => setSigned(e.target.checked)}
-            className="w-4 h-4 rounded border-border/80 text-primary focus:ring-primary"
+            className="w-4 h-4 mt-0.5 rounded border-border/80 text-primary focus:ring-primary"
           />
-          <label htmlFor="esign-consent" className="text-sm">
-            I agree to the terms above and provide my electronic signature
+          <label htmlFor="esign-consent" className="text-sm leading-relaxed">
+            I agree to all terms above and provide my electronic signature.
+            I certify the information provided is accurate and I authorize Twin Mile LLC to verify my credentials.
           </label>
         </div>
       </div>
@@ -564,17 +667,46 @@ function DocumentsStep({ documents, setDocuments }: { documents: Record<string, 
               </div>
 
               {isUploaded ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <FileText className="h-4 w-4 text-primary" />
-                  <span className="truncate flex-1">{docState.file.name}</span>
-                  <span className="text-muted-foreground">({(docState.file.size / 1024).toFixed(0)} KB)</span>
-                  <button
-                    type="button"
-                    onClick={() => setDocuments((prev: any) => { const n = {...prev}; delete n[doc.key]; return n; })}
-                    className="text-destructive hover:text-destructive/70"
-                  >
-                    <XCircle className="h-4 w-4" />
-                  </button>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <FileText className="h-4 w-4 text-primary flex-shrink-0" />
+                    <span className="truncate flex-1">{docState.file.name}</span>
+                    <span className="text-muted-foreground text-xs">({(docState.file.size / 1024).toFixed(0)} KB)</span>
+                    <button
+                      type="button"
+                      onClick={() => setDocuments((prev: any) => { const n = {...prev}; delete n[doc.key]; return n; })}
+                      className="text-destructive hover:text-destructive/70 flex-shrink-0"
+                    >
+                      <XCircle className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {/* Document Preview */}
+                  {docState.file.type.startsWith('image/') && (
+                    <div className="relative rounded-lg overflow-hidden border border-border/60 bg-muted/20">
+                      <img
+                        src={docState.preview}
+                        alt={doc.label}
+                        className="w-full h-32 object-cover"
+                      />
+                      <div className="absolute top-1 right-1 bg-green-500 text-white rounded-full p-1 shadow-md">
+                        <CheckCircle2 className="w-3 h-3" />
+                      </div>
+                    </div>
+                  )}
+                  {docState.file.type === 'application/pdf' && (
+                    <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2">
+                      <FileText className="h-5 w-5 text-red-500 flex-shrink-0" />
+                      <span className="text-xs text-muted-foreground">PDF Document</span>
+                      <a
+                        href={docState.preview}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="ml-auto text-xs text-primary hover:underline flex items-center gap-1"
+                      >
+                        <Eye className="w-3 h-3" /> Preview
+                      </a>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed border-border/60 bg-background/50 px-4 py-4 text-sm text-muted-foreground transition-colors hover:border-primary/40 hover:bg-primary/5">
