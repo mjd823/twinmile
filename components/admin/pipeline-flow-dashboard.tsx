@@ -176,10 +176,10 @@ export function PipelineFlowDashboard() {
               </p>
             </div>
             <div className="grid grid-cols-4 gap-4">
-              <MiniStat label="Total Prospects" value={funnel?.totalProspects || 0} icon={<Search className="h-4 w-4 text-blue-500" />} />
-              <MiniStat label="Qualified" value={funnel?.qualified || 0} icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} />
-              <MiniStat label="Onboarding" value={funnel?.onboardingStarted || 0} icon={<UserCheck className="h-4 w-4 text-purple-500" />} />
-              <MiniStat label="Dispatch Ready" value={funnel?.dispatchReady || 0} icon={<Truck className="h-4 w-4 text-emerald-500" />} />
+              <MiniStat label="Total Prospects" value={funnel?.totalProspects || 0} icon={<Search className="h-4 w-4 text-blue-500" />} onClick={() => { setActiveSection("prospects"); setFilterStage("all"); }} />
+              <MiniStat label="Qualified" value={funnel?.qualified || 0} icon={<CheckCircle2 className="h-4 w-4 text-green-500" />} onClick={() => { setActiveSection("prospects"); setFilterStage("qualified"); }} />
+              <MiniStat label="Onboarding" value={funnel?.onboardingStarted || 0} icon={<UserCheck className="h-4 w-4 text-purple-500" />} onClick={() => setActiveSection("onboarding")} />
+              <MiniStat label="Dispatch Ready" value={funnel?.dispatchReady || 0} icon={<Truck className="h-4 w-4 text-emerald-500" />} onClick={() => setActiveSection("onboarding")} />
             </div>
           </div>
         </CardContent>
@@ -193,9 +193,18 @@ export function PipelineFlowDashboard() {
           const width = value > 0 ? Math.max(8, (value / maxValue) * 100) : 0;
           const StageIcon = stage.icon;
 
+          // Map stage to tab + filter
+          const stageClick = () => {
+            if (stage.key === "totalProspects") { setActiveSection("prospects"); setFilterStage("all"); }
+            else if (stage.key === "qualified") { setActiveSection("prospects"); setFilterStage("qualified"); }
+            else if (stage.key === "onboardingInvited" || stage.key === "onboardingStarted") { setActiveSection("onboarding"); }
+            else if (stage.key === "documentsSubmitted" || stage.key === "leaseSigned" || stage.key === "dispatchReady") { setActiveSection("onboarding"); }
+            else { setActiveSection("prospects"); }
+          };
+
           return (
             <Card key={stage.key} className="border-border/60">
-              <CardContent className="p-3">
+              <CardContent className="p-3 cursor-pointer hover:bg-muted/20 transition-colors" onClick={stageClick}>
                 <div className="flex items-center gap-3">
                   <div className={`flex items-center justify-center w-10 h-10 rounded-lg bg-${stage.color}-500/10 text-${stage.color}-500 flex-shrink-0`}>
                     <StageIcon className="h-5 w-5" />
@@ -242,11 +251,12 @@ export function PipelineFlowDashboard() {
               return (
                 <div
                   key={agent.name}
-                  className={`rounded-lg border p-3 transition-all hover:shadow-md ${
+                  className={`rounded-lg border p-3 transition-all hover:shadow-md cursor-pointer hover:scale-[1.02] ${
                     isActive
                       ? "border-green-500/30 bg-green-500/5"
                       : "border-border/60 bg-muted/20"
                   }`}
+                  onClick={() => window.open('/admin/agents', '_self')}
                 >
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-2xl">{agent.icon}</span>
@@ -457,12 +467,15 @@ function ActivityDetailRow({ activity: a }: { activity: ActivityItem }) {
   );
 }
 
-function MiniStat({ label, value, icon }: { label: string; value: number; icon: React.ReactNode }) {
+function MiniStat({ label, value, icon, onClick }: { label: string; value: number; icon: React.ReactNode; onClick?: () => void }) {
   return (
-    <div className="text-center">
+    <div
+      className={`text-center ${onClick ? "cursor-pointer hover:scale-105 transition-transform" : ""}`}
+      onClick={onClick}
+    >
       <div className="flex items-center justify-center mb-1">{icon}</div>
       <p className="text-xl font-bold">{value}</p>
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="text-[10px] text-muted-foreground uppercase">{label}</p>
     </div>
   );
 }

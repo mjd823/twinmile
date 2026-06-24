@@ -23,6 +23,7 @@ import {
   Menu,
   Activity,
   TrendingUp,
+  Clock,
 } from "lucide-react";
 
 const navigation = [
@@ -30,6 +31,7 @@ const navigation = [
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
   { name: "Automation Center", href: "/admin/automation", icon: Activity },
   { name: "AI Agents", href: "/admin/agents", icon: Users },
+  { name: "Timesheet", href: "/admin/timesheet", icon: Clock },
   { name: "Calendar", href: "/admin/calendar", icon: Calendar },
   { name: "Inbox", href: "/admin/inbox", icon: Inbox },
   { name: "Operations", href: "/admin", icon: BarChart3 },
