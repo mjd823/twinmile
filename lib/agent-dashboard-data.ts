@@ -55,54 +55,62 @@ export const TOOL_DESCRIPTIONS: Record<string, { name: string; description: stri
   },
 };
 
-export const AGENT_ACTIONS: Record<string, { action: string; label: string; description: string; icon: string }> = {
+export const AGENT_ACTIONS: Record<string, { action: string; label: string; description: string; icon: string; time?: string }> = {
   ceo: {
     action: "strategic_review",
     label: "Strategic Review",
     description: "Run a full strategic analysis of current business performance.",
     icon: "Crown",
+    time: "Mon 6:00 AM",
   },
   sales: {
     action: "check_revenue",
     label: "Check Revenue",
     description: "Pull live revenue data, pipeline status, and sales forecasts.",
     icon: "DollarSign",
+    time: "9:00 AM",
   },
   operations: {
     action: "schedule_deliveries",
-    label: "Schedule Deliveries",
-    description: "Optimize routes and manage active load scheduling.",
+    label: "Schedule & Dispatch",
+    description: "Plan routes, assign drivers, and ensure on-time deliveries.",
     icon: "Truck",
+    time: "10:00 AM",
   },
   hr: {
     action: "hire_drivers",
     label: "Hire Drivers",
-    description: "Review driver applications and manage the recruitment pipeline.",
+    description: "Review applications and handle onboarding process.",
     icon: "UserCheck",
+    time: "11:00 AM",
   },
   marketing: {
     action: "send_marketing",
-    label: "Launch Marketing",
-    description: "Execute marketing campaigns and content distribution.",
+    label: "Marketing Outreach",
+    description: "Run campaigns, follow up on inbound leads, and nurture prospects.",
     icon: "Megaphone",
+    time: "Mon 8:00 AM",
   },
   finance: {
     action: "check_revenue",
-    label: "Financial Report",
-    description: "Generate financial reports, revenue tracking, and budget analysis.",
-    icon: "DollarSign",
+    label: "Finance Review",
+    description: "Reconcile payments, update forecasts, and flag any discrepancies.",
+    icon: "Calculator",
+    time: "12:00 PM",
   },
   customer_success: {
     action: "customer_support",
-    label: "Customer Support",
-    description: "Monitor customer accounts and handle support escalations.",
+    label: "Customer Success",
+    description: "Support active customers, handle escalations, and track satisfaction.",
     icon: "Heart",
+    time: "9:30 AM + 2:00 PM",
   },
   lead_generation: {
     action: "find_customers",
     label: "Find Customers",
-    description: "Prospect new leads and execute outreach campaigns.",
-    icon: "Target",
+    description: "Identify and qualify new prospects from multiple sources.",
+    icon: "Search",
+    time: "8:00 AM",
   },
 };
 

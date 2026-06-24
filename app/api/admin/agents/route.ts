@@ -198,7 +198,7 @@ export async function GET() {
         tasksToday,
         lastActivityTime,
         nextScheduled: action?.label
-          ? `Next: ${action.label}`
+          ? `Next: ${action.label} at ${action.time || "scheduled time"}`
           : "No scheduled task",
         action: action
           ? {
@@ -206,6 +206,7 @@ export async function GET() {
               label: action.label,
               description: action.description,
               icon: action.icon,
+              time: action.time,
             }
           : null,
         workflow,
