@@ -149,6 +149,32 @@ const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
       }),
     );
 
+    // Nighttime prep events — each agent's proactive prep schedule
+    const now = new Date();
+    const todayStr = now.toISOString().split('T')[0];
+    const AGENT_PREP = [
+      { name: "Sofia Rodriguez", time: "22:00", task: "🧠 Nighttime Prep — Review today's FMCSA finds, prepare search strategies for tomorrow", color: "bg-cyan-500/40" },
+      { name: "Marcus Chen", time: "21:00", task: "🧠 Nighttime Prep — Draft outreach messages, review qualified leads pipeline", color: "bg-blue-500/40" },
+      { name: "David Kumar", time: "20:00", task: "🧠 Nighttime Prep — Analyze freight trends, plan dispatch capacity for tomorrow", color: "bg-green-500/40" },
+      { name: "Jennifer Foster", time: "21:00", task: "🧠 Nighttime Prep — Prepare compliance checklists, review expiring sessions", color: "bg-orange-500/40" },
+      { name: "Robert Chang", time: "22:00", task: "🧠 Nighttime Prep — Review unpaid invoices, prepare financial summary", color: "bg-amber-500/40" },
+      { name: "Emily Watson", time: "20:00", task: "🧠 Nighttime Prep — Review customer feedback, prepare retention strategies", color: "bg-red-500/40" },
+      { name: "Alexandra Sterling", time: "19:00", task: "🧠 Nighttime Prep — Weekly performance review, strategic planning", color: "bg-purple-500/40" },
+      { name: "Team Lead", time: "01:00", task: "⭐ Supervisor Review — Check all agent performance, generate nightly summary", color: "bg-pink-500/60" },
+    ];
+    AGENT_PREP.forEach(p => {
+      const prepDate = new Date(`${todayStr}T${p.time}:00`);
+      events.push({
+        id: `prep-${p.name.replace(/\s+/g, '-')}`,
+        title: p.task,
+        date: prepDate,
+        type: "agent_action",
+        agent: p.name,
+        details: `After-hours proactive work — ${p.name} preparing for next day`,
+        color: p.color,
+      });
+    });
+
     return events;
   } catch (error) {
     console.error("Error fetching calendar events:", error);

@@ -213,4 +213,18 @@ export const AGENT_DEPARTMENTS: Record<string, string> = {
   finance: "Finance",
   customer_success: "Customer Success",
   lead_generation: "Sales",
+  supervisor: "Management",
+};
+
+// Agent work schedules — "shifts" for the timesheet + nighttime prep
+export const AGENT_SHIFTS: Record<string, { start: string; end: string; days: string[]; prep: { start: string; end: string; task: string } | null }> = {
+  "Sofia Rodriguez": { start: "08:00", end: "17:00", days: ["Mon","Tue","Wed","Thu","Fri"], prep: { start: "22:00", end: "23:00", task: "Nighttime prep — review today's prospecting results, prepare search strategies for tomorrow" } },
+  "Marcus Chen": { start: "09:00", end: "17:00", days: ["Mon","Tue","Wed","Thu","Fri"], prep: { start: "21:00", end: "22:00", task: "Nighttime prep — review qualified leads, draft outreach messages for morning" } },
+  "David Kumar": { start: "10:00", end: "18:00", days: ["Mon","Tue","Wed","Thu","Fri"], prep: { start: "20:00", end: "21:00", task: "Nighttime prep — review load board trends, plan dispatch capacity" } },
+  "Jennifer Foster": { start: "11:00", end: "19:00", days: ["Mon","Tue","Wed","Thu","Fri"], prep: { start: "21:00", end: "22:00", task: "Nighttime prep — review onboarding progress, prepare compliance checklists" } },
+  "Robert Chang": { start: "12:00", end: "20:00", days: ["Mon","Tue","Wed","Thu","Fri"], prep: { start: "22:00", end: "23:00", task: "Nighttime prep — review invoices, prepare financial summary" } },
+  "Emily Watson": { start: "09:30", end: "17:30", days: ["Mon","Tue","Wed","Thu","Fri"], prep: { start: "20:00", end: "21:00", task: "Nighttime prep — review customer feedback, prepare follow-up plans" } },
+  "Isabella Martinez": { start: "08:00", end: "16:00", days: ["Mon"], prep: null },
+  "Alexandra Sterling": { start: "06:00", end: "14:00", days: ["Mon"], prep: { start: "19:00", end: "20:00", task: "Nighttime prep — compile weekly review, set strategic priorities for the week" } },
+  "Team Lead": { start: "01:00", end: "03:00", days: ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], prep: null },
 };
