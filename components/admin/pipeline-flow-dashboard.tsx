@@ -101,6 +101,7 @@ export function PipelineFlowDashboard() {
   const [activity, setActivity] = React.useState<ActivityItem[]>([]);
   const [agentStats, setAgentStats] = React.useState<AgentStat[]>([]);
   const [expandedProspect, setExpandedProspect] = React.useState<string | null>(null);
+  const [activeSection, setActiveSection] = React.useState<"prospects" | "onboarding" | "activity">("prospects");
   const [filterStage, setFilterStage] = React.useState<string>("all");
   const [lastRefresh, setLastRefresh] = React.useState(new Date());
 
@@ -271,7 +272,34 @@ export function PipelineFlowDashboard() {
         </CardContent>
       </Card>
 
-      {/* Recent Prospects */}
+      {/* Tabbed Section: Prospects | Onboarding | Activity */}
+      <div>
+        <div className="flex gap-1 border-b border-border/60 mb-4">
+          <button
+            onClick={() => setActiveSection("prospects")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeSection === "prospects" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            <Users className="h-4 w-4 inline mr-1" />
+            All Prospects ({prospects.length})
+          </button>
+          <button
+            onClick={() => setActiveSection("onboarding")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeSection === "onboarding" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            <UserCheck className="h-4 w-4 inline mr-1" />
+            Onboarding ({sessions.length})
+          </button>
+          <button
+            onClick={() => setActiveSection("activity")}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeSection === "activity" ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            <Zap className="h-4 w-4 inline mr-1" />
+            Live Activity ({activity.length})
+          </button>
+        </div>
+
+      {/* Prospects Tab */}
+      {activeSection === "prospects" && (
       <Card className="border-border/60">
         <CardHeader>
           <div className="flex items-center justify-between flex-wrap gap-3">
@@ -305,8 +333,10 @@ export function PipelineFlowDashboard() {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {/* Onboarding Sessions */}
+      {/* Onboarding Sessions Tab */}
+      {activeSection === "onboarding" && (
       <Card className="border-border/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -326,8 +356,10 @@ export function PipelineFlowDashboard() {
           )}
         </CardContent>
       </Card>
+      )}
 
-      {/* Live Activity Feed */}
+      {/* Activity Tab */}
+      {activeSection === "activity" && (
       <Card className="border-border/60">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
@@ -347,6 +379,8 @@ export function PipelineFlowDashboard() {
           )}
         </CardContent>
       </Card>
+      )}
+      </div>
     </div>
   );
 }

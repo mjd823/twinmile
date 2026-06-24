@@ -262,7 +262,7 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="flex items-center gap-2 overflow-x-auto pb-4">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-4">
                 {driverStagesWithRates.map((stage, i) => (
                   <React.Fragment key={stage.name}>
                     {i > 0 && stage.conversionRate !== undefined && (
@@ -308,7 +308,7 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              <div className="flex items-center gap-2 overflow-x-auto pb-4">
+              <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide pb-4">
                 {quoteStagesWithRates.map((stage, i) => (
                   <React.Fragment key={stage.name}>
                     {/* Conversion rate above arrow (except first) */}
