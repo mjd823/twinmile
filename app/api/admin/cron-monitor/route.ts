@@ -19,6 +19,7 @@ const CRON_JOB_DEFS = [
   { id: "c977f5067376", name: "Emily Watson — Customer Success Check", schedule: "0 14 * * *", description: "Researches customer businesses, monitors online reputation, retention recommendations", skill: "web" },
   { id: "2171a406ef62", name: "Isabella Martinez — Marketing Analysis", schedule: "0 8 * * 1", description: "Analyzes lead sources, competitor marketing, SEO performance (weekly)", skill: "web" },
   { id: "5dff3683b416", name: "Alexandra Sterling — CEO Strategic Review", schedule: "0 6 * * 1", description: "Full organization performance review, industry research, executive decisions (weekly)", skill: "web" },
+  { id: "cfa808bb49c6", name: "AI Supervisor — Proactive Monitor", schedule: "0 6,12,18 * * *", description: "Monitors all 8 agents 3x daily — assigns proactive work to idle agents, investigates errors, ensures 40hr/week productivity", skill: "web" },
 ];
 
 // Map cron jobs to their activity types in agent_activity collection
