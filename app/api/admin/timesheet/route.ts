@@ -163,12 +163,14 @@ function formatHourLabel(h: number, m: number): string {
 }
 
 function isOnShift(shift: ShiftDef, now: Date): { onClock: boolean; status: "on_clock" | "off_duty" | "on_break" } {
-  const day = now.getDay();
+  // Use America/Chicago timezone for shift calculations (company HQ is Houston, TX)
+  const ctTime = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+  const day = ctTime.getDay();
   const worksToday =
     shift.daysOfWeek === "ALL" ? true : shift.daysOfWeek.includes(day);
   if (!worksToday) return { onClock: false, status: "off_duty" };
 
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowMin = ctTime.getHours() * 60 + ctTime.getMinutes();
   const startMin = shift.shiftStartHour * 60 + shift.shiftStartMinute;
   const endMin = shift.shiftEndHour * 60 + shift.shiftEndMinute;
 
