@@ -94,18 +94,76 @@ export async function GET() {
     const rawActivity = await db.collection("agent_activity")
       .find({})
       .sort({ createdAt: -1 })
-      .limit(30)
+      .limit(100)
       .toArray();
 
-    const activityFeed = rawActivity.map((a: any) => ({
-      id: a._id?.toString(),
-      action: a.action || a.type || "activity",
-      agent: a.agent?.name || (typeof a.agent === "string" ? a.agent : "System"),
-      agentRole: a.agent?.role || "Automated",
-      result: a.result || a.details || (a.activity ? { summary: a.activity } : undefined),
-      success: a.success,
-      timestamp: a.createdAt || a.timestamp,
-    }));
+    // Map activity to human-friendly format
+    const activityFeed = rawActivity.map((a: any) => {
+      // Convert code action names to human-friendly labels
+      const actionLabels: Record<string, string> = {
+        "outreach_processing": "Processing Outreach Tasks",
+        "outreach_cron": "Outreach Task Processed",
+        "outreach_cron_summary": "Outreach Run Summary",
+        "fmcsa_prospecting": "FMCSA Carrier Search",
+        "outbound_prospecting": "Prospecting Run",
+        "web_prospecting": "Web Search Prospecting",
+        "browser_prospecting": "Browser Research",
+        "onboarding_invite": "Onboarding Invitation Sent",
+        "auto_onboarding_invite": "Onboarding Invitation Sent",
+        "daily_ai_ops": "Daily Operations Review",
+        "daily_ops": "Operations Review",
+        "daily_sales_review": "Sales Strategy Review",
+        "daily_ops_check": "Operations Check",
+        "hr_onboarding_review": "HR Onboarding Review",
+        "onboarding_link_clicked": "Onboarding Link Clicked",
+        "daily_finance_review": "Finance Review",
+        "customer_success_check": "Customer Success Check",
+        "customer_support": "Customer Support",
+        "driver_engagement": "Driver Engagement Check",
+        "marketing_analysis": "Marketing Analysis",
+        "ceo_strategic_review": "CEO Strategic Review",
+        "weekly_review": "Weekly Review",
+        "weekly_strategic_review": "Strategic Review",
+        "monthly_bi": "Monthly Business Intelligence",
+        "monthly_report": "Monthly Report",
+      };
+
+      // Build human-friendly result summary
+      let friendlyResult: any = undefined;
+      if (a.result) {
+        friendlyResult = a.result;
+      } else if (a.details) {
+        friendlyResult = a.details;
+      } else if (a.activity) {
+        friendlyResult = { summary: a.activity };
+      }
+
+      // Convert result to human-friendly text if it's raw data
+      if (friendlyResult && friendlyResult.tasksProcessed === 0) {
+        friendlyResult = { summary: "No tasks to process — system idle" };
+      } else if (friendlyResult && friendlyResult.carriersFound !== undefined) {
+        friendlyResult = {
+          summary: `Found ${friendlyResult.carriersFound} carriers, ${friendlyResult.qualified || 0} qualified, ${friendlyResult.saved || 0} new prospects saved`,
+          ...friendlyResult,
+        };
+      } else if (friendlyResult && friendlyResult.sent !== undefined) {
+        friendlyResult = {
+          summary: `${friendlyResult.sent} emails sent, ${friendlyResult.failed || 0} failed, ${friendlyResult.skipped || 0} skipped`,
+          ...friendlyResult,
+        };
+      }
+
+      return {
+        id: a._id?.toString(),
+        action: a.action || a.type || "activity",
+        actionLabel: actionLabels[a.action || a.type] || (a.action || a.type || "Activity").replace(/_/g, " "),
+        agent: a.agent?.name || (typeof a.agent === "string" ? a.agent : "System"),
+        agentRole: a.agent?.role || "Automated",
+        result: friendlyResult,
+        success: a.success,
+        timestamp: a.createdAt || a.timestamp,
+      };
+    });
 
     // Get activity counts per agent for the agent overview
     const agentActivityCounts = await db.collection("agent_activity")

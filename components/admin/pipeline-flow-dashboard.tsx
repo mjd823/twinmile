@@ -58,6 +58,7 @@ interface OnboardingSession {
 interface ActivityItem {
   id: string;
   action: string;
+  actionLabel?: string;
   agent: string;
   agentRole: string;
   result: any;
@@ -382,7 +383,7 @@ export function PipelineFlowDashboard() {
             <p className="text-sm text-muted-foreground text-center py-8">No activity yet</p>
           ) : (
             <div className="space-y-2 max-h-[500px] overflow-y-auto">
-              {activity.slice(0, 30).map((a) => (
+              {activity.slice(0, 100).map((a) => (
                 <ActivityDetailRow key={a.id} activity={a} />
               ))}
             </div>
@@ -411,15 +412,20 @@ function ActivityDetailRow({ activity: a }: { activity: ActivityItem }) {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs font-medium">{a.agent}</span>
-              <Badge variant="secondary" className="text-[9px]">{a.action}</Badge>
+              <Badge variant="secondary" className="text-[9px]">{a.actionLabel || a.action}</Badge>
               <span className="text-[9px] text-muted-foreground ml-auto">
                 {new Date(a.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
               </span>
             </div>
             {a.result && !expanded && (
               <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                {Object.entries(a.result).slice(0, 3).map(([k, v]) => `${k}: ${String(v)}`).join(" • ")}
+                {a.result.summary
+                  ? a.result.summary
+                  : Object.entries(a.result).slice(0, 3).map(([k, v]) => `${k}: ${String(v)}`).join(" • ")}
               </p>
+            )}
+            {!a.result && !expanded && (
+              <p className="text-[10px] text-muted-foreground mt-0.5 italic">No details available</p>
             )}
             {expanded && (
               <ChevronDown className="h-3 w-3 text-muted-foreground mt-1" />
@@ -440,21 +446,29 @@ function ActivityDetailRow({ activity: a }: { activity: ActivityItem }) {
             </div>
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Action</p>
-              <p className="text-xs font-mono">{a.action}</p>
+              <p className="text-xs">{a.actionLabel || a.action}</p>
             </div>
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Timestamp</p>
-              <p className="text-xs">{new Date(a.timestamp).toLocaleString("en-US")}</p>
+              <p className="text-xs">{new Date(a.timestamp).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}</p>
             </div>
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Status</p>
               <p className={`text-xs ${a.success ? "text-green-600" : "text-red-600"}`}>
-                {a.success ? "✓ Success" : "✗ Failed"}
+                {a.success ? "✓ Completed Successfully" : "✗ Failed"}
               </p>
             </div>
             {a.result && (
               <div>
-                <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Full Result Details</p>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Summary</p>
+                <p className="text-xs bg-muted/40 rounded p-2">
+                  {a.result.summary || "No summary available"}
+                </p>
+              </div>
+            )}
+            {a.result && Object.keys(a.result).length > 1 && (
+              <div>
+                <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Full Details</p>
                 <pre className="text-[10px] font-mono bg-muted/40 rounded p-2 overflow-x-auto max-h-48 overflow-y-auto">
                   {JSON.stringify(a.result, null, 2)}
                 </pre>
