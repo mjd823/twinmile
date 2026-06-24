@@ -27,11 +27,8 @@ const JOB_ACTIVITY_MAP: Record<string, string[]> = {
   "00796b3c6135": ["outreach_processing", "process_outreach", "outreach_cron", "outreach_cron_summary"],
   "93aaa6272b8c": ["auto_onboarding_invite", "onboarding_invite"],
   "10177a8ab2cf": ["fmcsa_prospecting", "outbound_prospecting", "web_prospecting", "browser_prospecting"],
-  "8c53c6ce9d90": ["daily_ai_ops", "daily_ops"],
-  "17a94fde883f": ["weekly_strategic_review", "strategic_review"],
   "9ee75230bf31": ["monthly_bi", "monthly_report"],
   "e8dd1c631f6a": ["driver_engagement", "engagement"],
-  "2395ac48f817": ["auto_onboarding_invite", "onboarding_invite"],
   "4be574df5689": ["daily_sales_review", "sales_review"],
   "05ded9849d2f": ["daily_ops_check", "ops_check"],
   "146d13ca8622": ["hr_onboarding_review", "onboarding_link_clicked"],
@@ -39,8 +36,8 @@ const JOB_ACTIVITY_MAP: Record<string, string[]> = {
   "c977f5067376": ["customer_success_check", "customer_support"],
   "2171a406ef62": ["marketing_analysis"],
   "5dff3683b416": ["ceo_strategic_review"],
+  "cfa808bb49c6": ["supervisor_monitoring"],
 };
-
 /**
  * GET /api/admin/cron-monitor
  * Returns all Hermes cron jobs with their status derived from agent_activity collection.

@@ -24,9 +24,11 @@ import {
   Activity,
   TrendingUp,
   Clock,
+  Command,
 } from "lucide-react";
 
 const navigation = [
+  { name: "Command Center", href: "/admin/command-center", icon: Command },
   { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
   { name: "Automation Center", href: "/admin/automation", icon: Activity },
