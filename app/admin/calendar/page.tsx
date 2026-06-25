@@ -76,13 +76,71 @@ const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
           : typeof a.agent === "string"
             ? a.agent
             : "System";
+
+      // Human-friendly action labels
+      const actionLabels: Record<string, string> = {
+        "outreach_processing": "Processing Outreach Tasks",
+        "outreach_cron": "Outreach Task Processed",
+        "outreach_cron_summary": "Outreach Run Summary",
+        "fmcsa_prospecting": "FMCSA Carrier Search",
+        "outbound_prospecting": "Prospecting Run",
+        "web_prospecting": "Web Search Prospecting",
+        "browser_prospecting": "Browser Research",
+        "onboarding_invite": "Onboarding Invitation Sent",
+        "auto_onboarding_invite": "Onboarding Invitation Sent",
+        "daily_ai_ops": "Daily Operations Review",
+        "daily_sales_review": "Sales Strategy Review",
+        "daily_ops_check": "Operations Check",
+        "hr_onboarding_review": "HR Onboarding Review",
+        "onboarding_link_clicked": "Onboarding Link Clicked",
+        "daily_finance_review": "Finance Review",
+        "customer_success_check": "Customer Success Check",
+        "customer_support": "Customer Support",
+        "driver_engagement": "Driver Engagement Check",
+        "marketing_analysis": "Marketing Analysis",
+        "ceo_strategic_review": "CEO Strategic Review",
+        "weekly_review": "Weekly Review",
+        "weekly_strategic_review": "Strategic Review",
+        "monthly_bi": "Monthly Business Intelligence",
+        "monthly_report": "Monthly Report",
+        "supervisor_monitoring": "Supervisor Monitoring Check",
+        "find_customers": "Finding New Prospects",
+        "check_revenue": "Revenue & Pipeline Check",
+        "schedule_deliveries": "Scheduling & Dispatch",
+        "hire_drivers": "Driver Recruitment",
+        "send_marketing": "Marketing Outreach",
+      };
+
+      const rawAction = a.action || "";
+      const actionLabel = actionLabels[rawAction] || rawAction.replace(/_/g, " ");
+
+      // Build a descriptive title: "Sofia Rodriguez – FMCSA Carrier Search"
+      const title = agentName !== "System"
+        ? `${agentName} — ${actionLabel}`
+        : `System — ${actionLabel}`;
+
+      // Build human-friendly details
+      let detailText = a.activity || a.action || "";
+      if (a.result && typeof a.result === "object") {
+        const r = a.result as Record<string, unknown>;
+        if (r.summary) {
+          detailText = String(r.summary);
+        } else if (r.carriersFound !== undefined) {
+          detailText = `Found ${r.carriersFound} carriers, ${r.qualified || 0} qualified, ${r.saved || 0} saved`;
+        } else if (r.sent !== undefined) {
+          detailText = `${r.sent} sent, ${r.failed || 0} failed, ${r.skipped || 0} skipped`;
+        } else if (r.agentsMonitored !== undefined) {
+          detailText = `Monitored ${r.agentsMonitored} agents — ${r.activeAgents || 0} active, ${r.idleAgents || 0} idle`;
+        }
+      }
+
       events.push({
         id: `activity-${String(a._id)}`,
-        title: agentName || "System",
+        title,
         date: new Date(when),
         type: "agent_action",
         agent: agentName,
-        details: a.activity || a.action || a.details,
+        details: detailText,
         color: "bg-primary/80",
         raw: a as unknown as Record<string, unknown>,
       });

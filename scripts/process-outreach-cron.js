@@ -319,7 +319,7 @@ async function main() {
     for (const priority of PRIORITY_ORDER) {
       const tasks = await db.collection('outreach_tasks')
         .find({
-          status: { $in: ['pending', 'retrying'] },
+          status: { $in: ['pending', 'retrying', 'scheduled'] },
           scheduledAt: { $lte: now },
           priority: priority,
           attempts: { $lt: MAX_ATTEMPTS },
@@ -336,7 +336,7 @@ async function main() {
     if (allDueTasks.length < MAX_TASKS_PER_RUN) {
       const noPriorityTasks = await db.collection('outreach_tasks')
         .find({
-          status: { $in: ['pending', 'retrying'] },
+          status: { $in: ['pending', 'retrying', 'scheduled'] },
           scheduledAt: { $lte: now },
           priority: { $exists: false },
           attempts: { $lt: MAX_ATTEMPTS },

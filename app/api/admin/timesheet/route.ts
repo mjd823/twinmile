@@ -187,7 +187,7 @@ function isOnShift(shift: ShiftDef, now: Date): { onClock: boolean; status: "on_
 
 // ── API handler ──────────────────────────────────────────────────────────────
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
     const user = await getAuthUser();
     if (!user || user.role !== "admin") {
@@ -195,16 +195,19 @@ export async function GET() {
     }
 
     if (!clientPromise) {
-      return NextResponse.json(
-        { error: "MONGODB_URI not configured" },
-        { status: 500 },
-      );
+      return NextResponse.json({ error: "Database not configured" }, { status: 500 });
     }
+
+    // Parse week offset parameter (0 = current, -1 = last week, etc.)
+    const { searchParams } = new URL(req.url);
+    const weekOffset = parseInt(searchParams.get("week") || "0", 10);
 
     const client = await clientPromise;
     const db = client.db();
 
     const now = new Date();
+    // Apply week offset
+    now.setDate(now.getDate() + weekOffset * 7);
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 

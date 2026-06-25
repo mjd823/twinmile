@@ -25,11 +25,9 @@ import {
   TrendingUp,
   Clock,
   Shield,
-  Command,
 } from "lucide-react";
 
 const navigation = [
-  { name: "Command Center", href: "/admin/command-center", icon: Command },
   { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
   { name: "Automation Center", href: "/admin/automation", icon: Activity },
@@ -62,7 +60,7 @@ export function AdminSidebar({ className }: AdminSidebarProps) {
   return (
     <aside
       className={cn(
-        "sticky top-20 hidden h-[calc(100vh-5rem)] shrink-0 overflow-auto rounded-r-lg border border-border/60 bg-card/60 backdrop-blur transition-all duration-300 md:block",
+        "sticky top-20 hidden h-[calc(100vh-5rem)] shrink-0 overflow-hidden rounded-r-lg border border-border/60 bg-card/60 backdrop-blur transition-all duration-300 md:block",
         isCollapsed ? "w-16" : "w-64",
         className
       )}

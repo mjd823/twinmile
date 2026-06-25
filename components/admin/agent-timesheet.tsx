@@ -13,6 +13,7 @@ import {
   TrendingDown,
   Minus,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   Calendar,
   RefreshCw,
@@ -433,11 +434,13 @@ export function AgentTimesheet() {
   const [filter, setFilter] = React.useState<FilterTab>("all");
   const [departmentFilter, setDepartmentFilter] = React.useState<string>("all");
   const [lastRefresh, setLastRefresh] = React.useState(new Date());
+  const [weekOffset, setWeekOffset] = React.useState(0); // 0 = current, -1 = last week, etc.
 
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/timesheet");
+      const weekParam = weekOffset !== 0 ? `&week=${weekOffset}` : "";
+      const res = await fetch(`/api/admin/timesheet${weekParam}`);
       if (!res.ok) {
         if (res.status === 401) {
           setError("Authentication required. Please log in as admin.");
@@ -556,10 +559,16 @@ export function AgentTimesheet() {
               Pay Period
             </CardTitle>
             <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setWeekOffset(weekOffset - 1)} disabled={weekOffset <= -4}>
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
               <span className="text-xs text-muted-foreground">Week of:</span>
               <Badge variant="outline" className="text-xs border-border/60">
                 {summary ? `${formatDateShort(summary.payPeriodStart)} – ${formatDateShort(summary.payPeriodEnd)}` : "Loading…"}
               </Badge>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setWeekOffset(weekOffset + 1)} disabled={weekOffset >= 0}>
+                <ChevronRight className="h-4 w-4" />
+              </Button>
             </div>
           </div>
         </CardHeader>
