@@ -15,18 +15,18 @@ export default async function PipelineFlowPage() {
 
   let data;
   try {
-    // Normalize MongoDB objects/Date/ObjectId nested in activity results before
-    // passing into the client component. Server Components require plain data.
     data = JSON.parse(JSON.stringify(await getPipelineFunnelData()));
   } catch (error) {
     console.error("[pipeline-flow-page] Failed to load pipeline data:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return (
       <main className="mx-auto w-full max-w-6xl px-5 py-6">
         <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6">
           <h2 className="text-lg font-semibold text-red-400">Pipeline data unavailable</h2>
           <p className="text-sm text-muted-foreground mt-2">
-            Could not connect to the database. Please try refreshing. If the problem persists, check that MONGODB_URI is configured.
+            {message.includes("snappy") ? "Database compression error — please contact support." : "Could not connect to the database. Please try refreshing."}
           </p>
+          <p className="text-xs text-muted-foreground mt-2 font-mono">{message.substring(0, 200)}</p>
         </div>
       </main>
     );
