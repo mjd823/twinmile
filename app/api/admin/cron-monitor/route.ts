@@ -38,18 +38,19 @@ const JOB_AGENT_MAP: Record<string, { name: string; role: string; avatar: string
   "cfa808bb49c6": { name: "AI Supervisor", role: "Monitor", avatar: "🛡️" },
 };
 const JOB_ACTIVITY_MAP: Record<string, string[]> = {
-  "00796b3c6135": ["outreach_processing", "process_outreach", "outreach_cron", "outreach_cron_summary"],
+  "00796b3c6135": ["outreach_processing", "process_outreach", "outreach_cron", "outreach_cron_summary", "outreach_summary", "outreach_seeding", "seed_outreach_tasks"],
   "93aaa6272b8c": ["auto_onboarding_invite", "onboarding_invite"],
   "10177a8ab2cf": ["fmcsa_prospecting", "outbound_prospecting", "web_prospecting", "browser_prospecting"],
+  "8c53c6ce9d90": ["daily_ai_ops", "daily_ops"],
   "9ee75230bf31": ["monthly_bi", "monthly_report"],
   "e8dd1c631f6a": ["driver_engagement", "engagement"],
   "4be574df5689": ["daily_sales_review", "sales_review"],
-  "05ded9849d2f": ["daily_ops_check", "ops_check"],
-  "146d13ca8622": ["hr_onboarding_review", "onboarding_link_clicked"],
+  "05ded9849d2f": ["daily_ops_check", "ops_check", "proactive_fuel_cost_analysis"],
+  "146d13ca8622": ["hr_onboarding_review", "onboarding_link_clicked", "proactive_compliance_research"],
   "e92124812273": ["daily_finance_review", "finance_review"],
   "c977f5067376": ["customer_success_check", "customer_support"],
-  "2171a406ef62": ["marketing_analysis"],
-  "5dff3683b416": ["ceo_strategic_review"],
+  "2171a406ef62": ["marketing_analysis", "proactive_seo_analysis"],
+  "5dff3683b416": ["ceo_strategic_review", "proactive_strategic_research"],
   "cfa808bb49c6": ["supervisor_monitoring"],
 };
 /**

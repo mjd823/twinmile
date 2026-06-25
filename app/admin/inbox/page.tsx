@@ -18,7 +18,7 @@ export default async function AdminInboxPage() {
   const client = await clientPromise!;
   const db = client.db();
 
-  const [quoteLeads, driverLeads] = await Promise.all([
+  const [quoteLeads, driverLeads, outboundProspects] = await Promise.all([
     db
       .collection("leads_quotes")
       .find({ isArchived: { $ne: true } }, { sort: { createdAt: -1 }, limit: 300 })
@@ -27,7 +27,28 @@ export default async function AdminInboxPage() {
       .collection("leads_drivers")
       .find({ isArchived: { $ne: true } }, { sort: { createdAt: -1 }, limit: 300 })
       .toArray(),
+    db
+      .collection("outbound_prospects")
+      .find({}, { sort: { createdAt: -1 }, limit: 300 })
+      .toArray(),
   ]);
+
+  // Merge outbound prospects into driver leads so they show in the inbox
+  const prospectDriverLeads = outboundProspects.map((p: any) => ({
+    _id: p._id,
+    fullName: p.name || "",
+    email: p.contact?.email || "",
+    phone: p.contact?.phone || "",
+    truckType: p.equipment || "",
+    yearsExperience: "",
+    preferredRoutes: "",
+    startDate: "",
+    notes: `AI Score: ${p.aiScore || 0} | DOT: ${p.dotNumber || "N/A"} | ${p.location || ""} | Source: ${p.source || "FMCSA"}`,
+    status: (p.status === "onboarding_invited" ? "onboarding" : p.status) || "new",
+    createdAt: p.createdAt,
+  }));
+
+  const allDriverLeads = [...driverLeads, ...prospectDriverLeads];
 
   return (
     <main>
@@ -61,7 +82,7 @@ export default async function AdminInboxPage() {
               status: (l.status ?? "new") as any,
               createdAt: l.createdAt ? String(new Date(l.createdAt).toISOString()) : "",
             }))}
-            driverLeads={driverLeads.map((l: any) => ({
+            driverLeads={allDriverLeads.map((l: any) => ({
               id: String(l._id),
               fullName: String(l.fullName ?? ""),
               email: String(l.email ?? ""),

@@ -59,12 +59,12 @@ const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
 
     const events: CalendarEvent[] = [];
 
-    // Recent agent activities (full history window, EXCLUDE outreach_processing which runs every 15min)
+    // Recent agent activities (exclude outreach_processing/cron which runs every 15min — too noisy for calendar)
     const activities = await db
       .collection<RawActivity>("agent_activity")
       .find({
         createdAt: { $gte: HISTORY_START },
-        action: { $ne: "outreach_processing" },
+        action: { $nin: ["outreach_processing", "outreach_cron", "outreach_cron_summary", "outreach_summary", "outreach_seeding", "seed_outreach_tasks"] },
       })
       .sort({ createdAt: -1 })
       .limit(500)
