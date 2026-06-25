@@ -214,8 +214,8 @@ export async function GET() {
         metrics,
         recentActivity,
         configuration: {
-          model: process.env.OLLAMA_MODEL || "glm-5.2",
-          provider: "ollama-cloud",
+          model: "openrouter/owl-alpha",
+          provider: "openrouter",
           department: AGENT_DEPARTMENTS[def.id] || def.department,
           reportsTo: def.reportsTo || "—",
         },

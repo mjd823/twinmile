@@ -32,7 +32,8 @@ export async function GET() {
       dispatchReady,
     ] = await Promise.all([
       db.collection("outbound_prospects").countDocuments(),
-      db.collection("outbound_prospects").countDocuments({ status: "qualified" }),
+      // Qualified = prospects with aiScore >= 75 that have been reviewed
+      db.collection("outbound_prospects").countDocuments({ aiScore: { $gte: 75 }, status: { $in: ["reviewed", "onboarding_invited"] } }),
       db.collection("outbound_prospects").countDocuments({ status: "onboarding_invited" }),
       // Onboarding started = prospects who have a session AND have interacted with it
       db.collection("onboarding_sessions").countDocuments({ currentStep: { $gt: 1 } }),
@@ -54,6 +55,7 @@ export async function GET() {
         dotNumber: p.dotNumber,
         location: p.location,
         state: p.state || p.location?.split(",")?.[1]?.trim(),
+        score: p.aiScore || p.score,
         aiScore: p.aiScore,
         status: p.status,
         source: p.source,
