@@ -32,6 +32,7 @@ interface TaskEntry {
   action: string;
   label: string;
   description: string;
+  detailLines?: string[];
   result: any;
   success: boolean;
   timestamp: string | null;
@@ -319,6 +320,13 @@ function ExpandedDetail({ employee }: { employee: Employee }) {
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-medium truncate">{task.label || task.action}</p>
                     <p className="text-[11px] text-muted-foreground line-clamp-2">{task.description}</p>
+                    {task.detailLines && task.detailLines.length > 0 && (
+                      <div className="mt-1 space-y-0.5">
+                        {task.detailLines.map((line, idx) => (
+                          <p key={idx} className="text-[10px] text-muted-foreground/70 truncate">{line}</p>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <span className="text-[10px] text-muted-foreground flex-shrink-0 whitespace-nowrap">
                     {formatTime(task.timestamp)}

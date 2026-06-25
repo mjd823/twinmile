@@ -366,15 +366,42 @@ export async function GET(req: Request) {
 
       const { onClock, status } = isOnShift(shift, now);
 
-      // Today's task breakdown (limit 10, newest first)
+      // Today's task breakdown (limit 10, newest first) with rich detail
       const todaysTasks = todayActivity.slice(0, 10).map((a) => {
         const rawAction = a.action || a.activity || a.type || "activity";
+        const label = ACTION_LABELS[rawAction] || rawAction.replace(/_/g, " ");
+        const r = a.result || a.details;
+        let description = "Task performed";
+        let detailLines: string[] = [];
+
+        if (r && typeof r === "object") {
+          if (r.carriersFound !== undefined) {
+            description = `Found ${r.carriersFound} carriers, ${r.qualified || 0} qualified, ${r.saved || 0} saved to pipeline`;
+            if (r.source) detailLines.push(`Source: ${r.source}`);
+            if (r.targetStates) detailLines.push(`Target states: ${r.targetStates.join(", ")}`);
+            if (r.searchQueries) detailLines.push(`Search queries: ${r.searchQueries.length} queries used`);
+            if (r.pagesVisited) detailLines.push(`Pages visited: ${r.pagesVisited.join(", ").substring(0, 200)}`);
+            if (r.dataSource) detailLines.push(`Data source: ${r.dataSource}`);
+          } else if (r.sent !== undefined) {
+            description = `${r.sent} emails sent, ${r.failed || 0} failed, ${r.skipped || 0} skipped`;
+            if (r.template) detailLines.push(`Template: ${r.template}`);
+          } else if (r.agentsMonitored !== undefined) {
+            description = `Monitored ${r.agentsMonitored} agents — ${r.activeAgents || 0} active, ${r.idleAgents || 0} idle`;
+            if (r.bottleneck) detailLines.push(`Bottleneck: ${r.bottleneck}`);
+          } else if (r.summary) {
+            description = String(r.summary);
+          } else if (a.activity) {
+            description = a.activity;
+          }
+        }
+
         return {
           id: a._id?.toString() || "",
           action: rawAction,
-          label: ACTION_LABELS[rawAction] || rawAction.replace(/_/g, " "),
-          description: a.activity || a.action || a.details || "Task performed",
-          result: a.result || a.details || null,
+          label,
+          description,
+          detailLines,
+          result: r,
           success: a.success !== false,
           timestamp: a.timestamp || a.createdAt || null,
         };
