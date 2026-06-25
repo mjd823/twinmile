@@ -14,7 +14,7 @@ const options: MongoClientOptions = {
   heartbeatFrequencyMS: 10000,
   retryWrites: true,
   retryReads: true,
-  compressors: ['snappy', 'zlib'],
+  compressors: ['zlib'],
 };
 
 let client: MongoClient;
