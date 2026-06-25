@@ -79,39 +79,42 @@ export async function GET() {
         // Find the most recent activity for this job
         const lastActivity = await db.collection("agent_activity")
           .find({ action: { $in: activityTypes } })
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1, timestamp: -1 })
           .limit(1)
           .toArray();
 
-        // Count activities in the last 24 hours
+        // Count activities in the last 24 hours (createdAt OR legacy timestamp)
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const recentWindow = {
+          action: { $in: activityTypes },
+          $or: [
+            { createdAt: { $gte: twentyFourHoursAgo } },
+            { timestamp: { $gte: twentyFourHoursAgo } },
+          ],
+        };
         const todayCount = await db.collection("agent_activity")
-          .countDocuments({
-            action: { $in: activityTypes },
-            createdAt: { $gte: twentyFourHoursAgo },
-          });
+          .countDocuments(recentWindow);
 
-        // Check if there's been any successful run in the last 24 hours
+        // Older rows sometimes omit success; absence means the job logged normally.
         const recentSuccess = await db.collection("agent_activity")
           .countDocuments({
-            action: { $in: activityTypes },
-            success: true,
-            createdAt: { $gte: twentyFourHoursAgo },
+            ...recentWindow,
+            success: { $ne: false },
           });
 
         const last = lastActivity[0];
-        const lastRun = last?.createdAt || null;
-        const lastSuccess = last ? last.success : null;
-        const lastResult = last?.result || null;
+        const lastRun = last?.createdAt || last?.timestamp || null;
+        const lastSuccess = last ? last.success !== false : null;
+        const lastResult = last?.result || last?.details || null;
 
-        // Determine status: green if any recent success, red if last run was error, gray if never run
+        // Determine status: green if any recent normal run, red only explicit failure, gray if never run
         let lastStatus: string | null;
-        if (recentSuccess > 0) {
+        if (recentSuccess > 0 || lastSuccess === true) {
           lastStatus = "ok";
-        } else if (lastSuccess === false) {
+        } else if (last && last.success === false) {
           lastStatus = "error";
         } else {
-          lastStatus = null; // never run or no recent activity
+          lastStatus = null;
         }
 
         // Calculate next run based on schedule (simplified)
