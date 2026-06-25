@@ -192,6 +192,50 @@ const SHIFTS: ShiftDef[] = [
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+const EXPECTED_ACTIONS_BY_AGENT: Record<string, string[]> = {
+  "Sofia Rodriguez": ["fmcsa_prospecting", "web_prospecting", "browser_prospecting"],
+  "Marcus Chen": ["daily_sales_review"],
+  "David Kumar": ["daily_ops_check"],
+  "Jennifer Foster": ["hr_onboarding_review"],
+  "Robert Chang": ["daily_finance_review"],
+  "Emily Watson": ["customer_success_check"],
+  "Isabella Martinez": ["marketing_analysis", "proactive_seo_analysis"],
+  "Alexandra Sterling": ["ceo_strategic_review", "proactive_strategic_research"],
+};
+
+function activityTime(a: any): Date {
+  return new Date(a.createdAt || a.timestamp || 0);
+}
+
+function ctDateKey(value: Date | string): string {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Chicago",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function summarizeActivity(a: any): { label: string; description: string; result: any; rawAction: string } {
+  const rawAction = a.action || a.activity || a.type || "activity";
+  const label = ACTION_LABELS[rawAction] || rawAction.replace(/_/g, " ");
+  const r = a.result || a.details || null;
+  let description = a.activity || "Activity performed";
+
+  if (r && typeof r === "object") {
+    if (r.summary) description = String(r.summary);
+    else if (r.carriersFound !== undefined) description = `Found ${r.carriersFound} carriers, ${r.qualified || 0} qualified, ${r.saved || 0} saved`;
+    else if (r.sent !== undefined) description = `${r.sent} emails sent, ${r.failed || 0} failed, ${r.skipped || 0} skipped`;
+    else if (r.agentsMonitored !== undefined) description = `Monitored ${r.agentsMonitored} agents — ${r.activeAgents || 0} active, ${r.idleAgents || 0} idle`;
+    else description = label;
+  } else if (!description || description === rawAction) {
+    description = label;
+  }
+
+  return { label, description, result: r, rawAction };
+}
+
 function formatHourLabel(h: number, m: number): string {
   const period = h >= 12 ? "PM" : "AM";
   const hour12 = h % 12 === 0 ? 12 : h % 12;
@@ -242,13 +286,14 @@ export async function GET(req: Request) {
     const db = client.db();
 
     const now = new Date();
-    // Apply week offset
-    now.setDate(now.getDate() + weekOffset * 7);
-    const todayStart = new Date(now);
+    // Use America/Chicago business day/week for timesheet windows.
+    const ctNow = new Date(now.toLocaleString("en-US", { timeZone: "America/Chicago" }));
+    ctNow.setDate(ctNow.getDate() + weekOffset * 7);
+    const todayStart = new Date(ctNow);
     todayStart.setHours(0, 0, 0, 0);
 
-    // Start of the current week (Sunday 00:00)
-    const weekStart = new Date(now);
+    // Start of the current CT week (Sunday 00:00)
+    const weekStart = new Date(ctNow);
     const dow = weekStart.getDay();
     weekStart.setDate(weekStart.getDate() - dow);
     weekStart.setHours(0, 0, 0, 0);
@@ -258,9 +303,12 @@ export async function GET(req: Request) {
     const allActivityRaw: any[] = await db
       .collection("agent_activity")
       .find({})
-      .sort({ timestamp: -1, createdAt: -1 })
-      .limit(500)
+      .sort({ createdAt: -1, timestamp: -1 })
+      .limit(800)
       .toArray();
+
+    // Normalize order after fetch because legacy rows may use timestamp while newer rows use createdAt.
+    allActivityRaw.sort((a, b) => activityTime(b).getTime() - activityTime(a).getTime());
 
     // Group by agent name
     const activityByName: Record<string, any[]> = {};
@@ -276,21 +324,20 @@ export async function GET(req: Request) {
     const employees = SHIFTS.map((shift) => {
       const activity = activityByName[shift.name] || [];
 
-      const todayActivity = activity.filter((a) => {
-        const ts = new Date(a.timestamp || a.createdAt || now);
-        return ts >= todayStart;
-      });
+      const todayKey = ctDateKey(ctNow);
+      const weekStartMs = weekStart.getTime();
+
+      const todayActivity = activity.filter((a) => ctDateKey(activityTime(a)) === todayKey);
 
       const weekActivity = activity.filter((a) => {
-        const ts = new Date(a.timestamp || a.createdAt || now);
-        return ts >= weekStart;
+        const ts = new Date(activityTime(a).toLocaleString("en-US", { timeZone: "America/Chicago" }));
+        return ts.getTime() >= weekStartMs;
       });
 
       // Count distinct days with activity this week for hours-this-week calc
       const daySet = new Set<string>();
       for (const a of weekActivity) {
-        const ts = new Date(a.timestamp || a.createdAt || now);
-        daySet.add(ts.toDateString());
+        daySet.add(ctDateKey(activityTime(a)));
       }
       const daysWorkedThisWeek = daySet.size;
       const hoursThisWeek = Math.round(daysWorkedThisWeek * shift.hoursPerDay * 10) / 10;
@@ -308,11 +355,14 @@ export async function GET(req: Request) {
 
       // Productivity: distinct action types completed today vs unique types ever seen.
       // This reflects coverage, not raw volume. All 8 agents' prospecting = 100%.
-      const distinctToday = new Set(todayActivity.map((a) => a.action));
-      const distinctAllTime = new Set(activity.map((a) => a.action));
-      const expected = distinctAllTime.size > 0 ? distinctAllTime.size : shift.expectedTasksPerDay;
+      const distinctToday = new Set(todayActivity.map((a) => a.action).filter(Boolean));
+      const expectedActions = EXPECTED_ACTIONS_BY_AGENT[shift.name] || [];
+      const expected = expectedActions.length || shift.expectedTasksPerDay;
+      const completedExpected = expectedActions.length
+        ? expectedActions.filter((action) => distinctToday.has(action)).length
+        : distinctToday.size;
       const productivityScore =
-        expected > 0 ? Math.min(Math.round((distinctToday.size / expected) * 100), 100) : 0;
+        expected > 0 ? Math.min(Math.round((completedExpected / expected) * 100), 100) : 0;
 
       const { onClock, status } = isOnShift(shift, now);
 
@@ -404,7 +454,7 @@ export async function GET(req: Request) {
         hoursThisWeek,
         tasksToday,
         tasksThisWeek,
-        expectedTasksPerDay: shift.expectedTasksPerDay,
+        expectedTasksPerDay: expected,
         productivityScore,
         successRate,
         lastActivityTime,

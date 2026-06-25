@@ -135,11 +135,15 @@ export default async function LeadEnginePage() {
   // Merge: outbound prospects + leads_drivers (dedup by name)
   const allDriverLeads = [...prospectDrivers, ...scoredDrivers];
 
+  // Normalize MongoDB Date/ObjectId/nested values before crossing into the client component.
+  const clientQuotes = JSON.parse(JSON.stringify(scoredQuotes));
+  const clientDrivers = JSON.parse(JSON.stringify(allDriverLeads));
+
   return (
     <main className="min-h-screen bg-background">
       <LeadEngineV2
-        quoteLeads={scoredQuotes}
-        driverLeads={allDriverLeads}
+        quoteLeads={clientQuotes}
+        driverLeads={clientDrivers}
       />
     </main>
   );
