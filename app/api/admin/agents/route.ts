@@ -174,16 +174,77 @@ export async function GET() {
           ? `${tasksToday} task${tasksToday === 1 ? "" : "s"} completed today`
           : "Awaiting next scheduled task");
 
+      // Human-friendly action labels
+      const actionLabels: Record<string, string> = {
+        "fmcsa_prospecting": "FMCSA Carrier Search",
+        "web_prospecting": "Web Search Prospecting",
+        "browser_prospecting": "Browser Research",
+        "outbound_prospecting": "Outbound Prospecting",
+        "outreach_processing": "Processing Outreach",
+        "outreach_cron": "Outreach Processed",
+        "outreach_cron_summary": "Outreach Summary",
+        "outreach_summary": "Outreach Summary",
+        "outreach_seeding": "Seeding Outreach Tasks",
+        "onboarding_invite": "Onboarding Invitation Sent",
+        "auto_onboarding_invite": "Onboarding Invitation Sent",
+        "daily_ai_ops": "Daily Operations Review",
+        "daily_sales_review": "Sales Strategy Review",
+        "daily_ops_check": "Operations Check",
+        "daily_ops": "Operations Check",
+        "hr_onboarding_review": "HR Onboarding Review",
+        "onboarding_link_clicked": "Onboarding Link Clicked",
+        "daily_finance_review": "Finance Review",
+        "finance_review": "Finance Review",
+        "customer_success_check": "Customer Success Check",
+        "customer_support": "Customer Support",
+        "driver_engagement": "Driver Engagement Check",
+        "marketing_analysis": "Marketing Analysis",
+        "ceo_strategic_review": "CEO Strategic Review",
+        "weekly_review": "Weekly Review",
+        "supervisor_monitoring": "Supervisor Monitoring Check",
+        "monthly_bi": "Monthly Business Intelligence",
+        "proactive_trucking_forum_research": "Trucking Forum Research",
+        "proactive_seo_analysis": "SEO Analysis",
+        "proactive_fuel_cost_analysis": "Fuel Cost Analysis",
+        "proactive_strategic_research": "Strategic Research",
+        "proactive_compliance_research": "Compliance Research",
+        "find_customers": "Finding New Prospects",
+      };
+
       // Map activity docs to a clean serializable shape (limit 20 per agent)
-      const recentActivity = activity.slice(0, 20).map((a) => ({
-        id: a._id?.toString() || "",
-        type: a.type || a.action || "activity",
-        description:
-          a.activity || a.action || "Activity performed",
-        details: a.details || a.result || {},
-        success: a.success !== false,
-        timestamp: a.timestamp || a.createdAt || null,
-      }));
+      const recentActivity = activity.slice(0, 20).map((a) => {
+        const rawAction = a.action || a.type || "activity";
+        const label = actionLabels[rawAction] || rawAction.replace(/_/g, " ");
+
+        // Build human-friendly description from result
+        let description = label;
+        const r = a.result || {};
+        if (typeof r === "object" && r !== null) {
+          if (r.carriersFound !== undefined) {
+            description = `Found ${r.carriersFound} carriers, ${r.qualified || 0} qualified, ${r.saved || 0} saved`;
+          } else if (r.sent !== undefined) {
+            description = `${r.sent} sent, ${r.failed || 0} failed, ${r.skipped || 0} skipped`;
+          } else if (r.prospectsFound !== undefined) {
+            description = `Found ${r.prospectsFound} prospects, ${r.prospectsSaved || 0} saved`;
+          } else if (r.agentsMonitored !== undefined) {
+            description = `Monitored ${r.agentsMonitored} agents — ${r.activeAgents || 0} active, ${r.idleAgents || 0} idle`;
+          } else if (r.summary) {
+            description = String(r.summary);
+          } else if (a.activity) {
+            description = a.activity;
+          }
+        }
+
+        return {
+          id: a._id?.toString() || "",
+          type: rawAction,
+          label,
+          description,
+          details: a.details || a.result || {},
+          success: a.success !== false,
+          timestamp: a.timestamp || a.createdAt || null,
+        };
+      });
 
       return {
         id: def.id,

@@ -135,10 +135,10 @@ export function LeadEngineV2({ quoteLeads, driverLeads }: LeadEngineV2Props) {
   ];
 
   const driverStages: PipelineStage[] = [
-    { name: "Applied", count: driverLeads.filter(l => l.status === "new").length, color: "bg-slate-500", icon: <Users className="h-4 w-4" /> },
-    { name: "Qualified", count: driverLeads.filter(l => (l.score || 0) >= 75).length, color: "bg-blue-500", icon: <CheckCircle className="h-4 w-4" /> },
-    { name: "Onboarding", count: driverLeads.filter(l => l.status === "onboarding").length, color: "bg-indigo-500", icon: <Truck className="h-4 w-4" /> },
-    { name: "Compliance", count: driverLeads.filter(l => l.status === "compliance_check").length, color: "bg-amber-500", icon: <Filter className="h-4 w-4" /> },
+    { name: "New", count: driverLeads.filter(l => l.status === "new").length, color: "bg-slate-500", icon: <Users className="h-4 w-4" /> },
+    { name: "Qualified", count: driverLeads.filter(l => (l.score || l.aiScore || 0) >= 75).length, color: "bg-blue-500", icon: <CheckCircle className="h-4 w-4" /> },
+    { name: "Reviewed", count: driverLeads.filter(l => l.status === "reviewed").length, color: "bg-cyan-500", icon: <Filter className="h-4 w-4" /> },
+    { name: "Onboarding", count: driverLeads.filter(l => l.status === "onboarding" || l.status === "onboarding_invited").length, color: "bg-indigo-500", icon: <Truck className="h-4 w-4" /> },
     { name: "Ready", count: driverLeads.filter(l => l.status === "ready_to_dispatch").length, color: "bg-green-500", icon: <CheckCircle className="h-4 w-4" /> },
     { name: "Rejected", count: driverLeads.filter(l => l.status === "rejected").length, color: "bg-red-500", icon: <AlertTriangle className="h-4 w-4" /> },
   ];

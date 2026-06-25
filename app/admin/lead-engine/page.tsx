@@ -82,7 +82,7 @@ export default async function LeadEnginePage() {
   const db = client.db();
 
   // Fetch real data from database
-  const [quoteLeads, driverLeads] = await Promise.all([
+  const [quoteLeads, driverLeads, outboundProspects] = await Promise.all([
     db
       .collection("leads_quotes")
       .find({ isArchived: { $ne: true } })
@@ -95,17 +95,51 @@ export default async function LeadEnginePage() {
       .sort({ createdAt: -1 })
       .limit(100)
       .toArray(),
+    db
+      .collection("outbound_prospects")
+      .find({})
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .toArray(),
   ]);
 
   // Score leads server-side (no Groq needed)
   const scoredQuotes = processLeads(serialize(quoteLeads), 'quote');
   const scoredDrivers = processLeads(serialize(driverLeads), 'driver');
 
+  // Convert outbound prospects to driver lead format for the pipeline
+  const prospectDrivers = outboundProspects.map((p: any) => ({
+    ...serialize([p])[0],
+    name: p.name || '',
+    fullName: p.name || '',
+    email: p.contact?.email || '',
+    phone: p.contact?.phone || '',
+    truckType: p.equipment || '',
+    yearsExperience: '',
+    hasOwnAuthority: p.authorityStatus === 'authorized',
+    score: p.aiScore || 0,
+    aiScore: p.aiScore || 0,
+    status: p.status === 'onboarding_invited' ? 'onboarding' : p.status,
+    quality: (p.aiScore || 0) >= 85 ? 'premium' : (p.aiScore || 0) >= 70 ? 'high' : 'medium',
+    estimatedValue: 0,
+    priority: (p.aiScore || 0) >= 85 ? 'urgent' : 'medium',
+    timestamp: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
+    dotNumber: p.dotNumber,
+    location: p.location,
+    state: p.state,
+    powerUnits: p.powerUnits,
+    safetyRating: p.safetyRating,
+    source: p.source,
+  }));
+
+  // Merge: outbound prospects + leads_drivers (dedup by name)
+  const allDriverLeads = [...prospectDrivers, ...scoredDrivers];
+
   return (
     <main className="min-h-screen bg-background">
       <LeadEngineV2
         quoteLeads={scoredQuotes}
-        driverLeads={scoredDrivers}
+        driverLeads={allDriverLeads}
       />
     </main>
   );
