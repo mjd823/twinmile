@@ -20,7 +20,23 @@ const CRON_JOB_DEFS = [
   { id: "cfa808bb49c6", name: "AI Supervisor — Monitor", schedule: "0 6,12,18 * * *", description: "Monitors all 3x daily — proactive work + error fixes", skill: "web" },
 ];
 
-// Map cron jobs to their activity types in agent_activity collection
+// Map cron job IDs to their responsible agent
+const JOB_AGENT_MAP: Record<string, { name: string; role: string; avatar: string }> = {
+  "00796b3c6135": { name: "System", role: "Automation", avatar: "⚙️" },
+  "93aaa6272b8c": { name: "System", role: "Onboarding", avatar: "📋" },
+  "10177a8ab2cf": { name: "Sofia Rodriguez", role: "Lead Gen", avatar: "🔍" },
+  "8c53c6ce9d90": { name: "AI Supervisor", role: "Operations", avatar: "👁️" },
+  "9ee75230bf31": { name: "Robert Chang", role: "Finance", avatar: "📊" },
+  "e8dd1c631f6a": { name: "Emily Watson", role: "Customer Success", avatar: "🤝" },
+  "4be574df5689": { name: "Marcus Chen", role: "Sales Director", avatar: "💼" },
+  "05ded9849d2f": { name: "David Kumar", role: "Operations", avatar: "🚛" },
+  "146d13ca8622": { name: "Jennifer Foster", role: "HR Director", avatar: "👤" },
+  "e92124812273": { name: "Robert Chang", role: "Finance", avatar: "💰" },
+  "c977f5067376": { name: "Emily Watson", role: "Customer Success", avatar: "❤️" },
+  "2171a406ef62": { name: "Isabella Martinez", role: "Marketing", avatar: "📢" },
+  "5dff3683b416": { name: "Alexandra Sterling", role: "CEO", avatar: "👑" },
+  "cfa808bb49c6": { name: "AI Supervisor", role: "Monitor", avatar: "🛡️" },
+};
 const JOB_ACTIVITY_MAP: Record<string, string[]> = {
   "00796b3c6135": ["outreach_processing", "process_outreach", "outreach_cron", "outreach_cron_summary"],
   "93aaa6272b8c": ["auto_onboarding_invite", "onboarding_invite"],
@@ -106,6 +122,7 @@ export async function GET() {
           schedule: def.schedule,
           description: def.description,
           skill: def.skill,
+          agent: JOB_AGENT_MAP[def.id] || { name: "System", role: "Automation", avatar: "⚙️" },
           lastRun,
           lastStatus,
           lastResult,

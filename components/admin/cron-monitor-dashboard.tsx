@@ -10,10 +10,18 @@ import {
   Calendar, Server, Cpu, PlayCircle, PauseCircle,
 } from "lucide-react";
 
+interface CronAgent {
+  name: string;
+  role: string;
+  avatar: string;
+}
+
 interface CronJob {
   id: string;
   name: string;
   schedule: string;
+  description?: string;
+  agent?: CronAgent;
   lastRun: string | null;
   lastStatus: string | null;
   lastResult?: any;
@@ -75,6 +83,7 @@ export function CronMonitorDashboard() {
         name: j.name,
         schedule: j.schedule,
         description: j.description || "",
+        agent: j.agent || { name: "System", role: "Automation", avatar: "⚙️" },
         skill: j.skill || "web",
         lastRun: j.lastRun || j.last_run_at || null,
         lastStatus: j.lastStatus || j.last_status || null,
@@ -265,10 +274,19 @@ function CronJobCard({ job, expanded, onToggle }: { job: any; expanded: boolean;
       <button onClick={onToggle} className="w-full text-left p-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            {cfg.icon}
+            {job.agent && (
+              <div className="w-9 h-9 rounded-lg bg-muted/40 flex items-center justify-center text-lg flex-shrink-0 border border-border/60">
+                {job.agent.avatar}
+              </div>
+            )}
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-sm truncate">{job.name}</h3>
+                {job.agent && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                    {job.agent.name} · {job.agent.role}
+                  </Badge>
+                )}
                 <Badge variant={status === "ok" ? "default" : status === "error" ? "destructive" : "secondary"} className="text-[10px]">
                   {cfg.label}
                 </Badge>
