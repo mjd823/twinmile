@@ -2,6 +2,42 @@ import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { getAuthUser } from "@/lib/auth/session";
 
+// ── Human-friendly action labels ───────────────────────────────────────────────
+const ACTION_LABELS: Record<string, string> = {
+  outreach_processing: "Processing Outreach Tasks",
+  outreach_cron: "Outreach Task Processed",
+  outreach_cron_summary: "Outreach Run Summary",
+  outreach_summary: "Outreach Summary",
+  fmcsa_prospecting: "FMCSA Carrier Search",
+  outbound_prospecting: "Prospecting Run",
+  web_prospecting: "Web Search Prospecting",
+  browser_prospecting: "Browser Research",
+  onboarding_invite: "Onboarding Invitation Sent",
+  auto_onboarding_invite: "Onboarding Invitation Sent",
+  daily_ai_ops: "Daily Operations Review",
+  daily_ops: "Operations Review",
+  daily_sales_review: "Sales Strategy Review",
+  daily_ops_check: "Operations Check",
+  hr_onboarding_review: "HR Onboarding Review",
+  onboarding_link_clicked: "Onboarding Link Clicked",
+  daily_finance_review: "Finance Review",
+  customer_success_check: "Customer Success Check",
+  customer_support: "Customer Support",
+  driver_engagement: "Driver Engagement Check",
+  marketing_analysis: "Marketing Analysis",
+  ceo_strategic_review: "CEO Strategic Review",
+  weekly_review: "Weekly Review",
+  weekly_strategic_review: "Strategic Review",
+  monthly_bi: "Monthly Business Intelligence",
+  monthly_report: "Monthly Report",
+  supervisor_monitoring: "Supervisor Monitoring Check",
+  proactive_trucking_forum_research: "Trucking Forum Research",
+  proactive_fuel_cost_analysis: "Fuel Cost Analysis",
+  proactive_seo_analysis: "SEO Analysis",
+  proactive_strategic_research: "Strategic Research",
+  proactive_compliance_research: "Compliance Research",
+};
+
 // ── Agent shift definitions (mirrors cron schedules) ─────────────────────────
 // Each entry describes the "work block" for an agent based on their cron job.
 // hoursPerDay is the estimated shift length. expectedTasksPerDay is the number
@@ -270,33 +306,57 @@ export async function GET(req: Request) {
       const total = activity.length;
       const successRate = total > 0 ? Math.round((successful / total) * 1000) / 10 : 0;
 
-      // Productivity score: tasks today vs expected, capped at 100
+      // Productivity: distinct action types completed today vs unique types ever seen.
+      // This reflects coverage, not raw volume. All 8 agents' prospecting = 100%.
+      const distinctToday = new Set(todayActivity.map((a) => a.action));
+      const distinctAllTime = new Set(activity.map((a) => a.action));
+      const expected = distinctAllTime.size > 0 ? distinctAllTime.size : shift.expectedTasksPerDay;
       const productivityScore =
-        shift.expectedTasksPerDay > 0
-          ? Math.min(Math.round((tasksToday / shift.expectedTasksPerDay) * 100), 100)
-          : 0;
+        expected > 0 ? Math.min(Math.round((distinctToday.size / expected) * 100), 100) : 0;
 
       const { onClock, status } = isOnShift(shift, now);
 
       // Today's task breakdown (limit 10, newest first)
-      const todaysTasks = todayActivity.slice(0, 10).map((a) => ({
-        id: a._id?.toString() || "",
-        action: a.action || a.activity || a.type || "activity",
-        description: a.activity || a.action || a.details || "Task performed",
-        result: a.result || a.details || null,
-        success: a.success !== false,
-        timestamp: a.timestamp || a.createdAt || null,
-      }));
+      const todaysTasks = todayActivity.slice(0, 10).map((a) => {
+        const rawAction = a.action || a.activity || a.type || "activity";
+        return {
+          id: a._id?.toString() || "",
+          action: rawAction,
+          label: ACTION_LABELS[rawAction] || rawAction.replace(/_/g, " "),
+          description: a.activity || a.action || a.details || "Task performed",
+          result: a.result || a.details || null,
+          success: a.success !== false,
+          timestamp: a.timestamp || a.createdAt || null,
+        };
+      });
 
-      // Recent activity log (last 5 across all time)
-      const recentActivity = activity.slice(0, 5).map((a) => ({
-        id: a._id?.toString() || "",
-        action: a.action || a.activity || a.type || "activity",
-        description: a.activity || a.action || a.details || "Activity performed",
-        result: a.result || a.details || null,
-        success: a.success !== false,
-        timestamp: a.timestamp || a.createdAt || null,
-      }));
+      // Recent activity log — last 5, human-friendly
+      const recentActivity = activity.slice(0, 5).map((a) => {
+        const rawAction = a.action || a.activity || a.type || "activity";
+        const label = ACTION_LABELS[rawAction] || rawAction.replace(/_/g, " ");
+        let description = a.activity || a.action || a.details || "Activity performed";
+        const r = a.result || a.details;
+        if (r && typeof r === "object") {
+          if (r.summary) {
+            description = String(r.summary);
+          } else if (r.carriersFound !== undefined) {
+            description = `Found ${r.carriersFound} carriers, ${r.qualified || 0} qualified, ${r.saved || 0} saved`;
+          } else if (r.sent !== undefined) {
+            description = `${r.sent} emails sent, ${r.failed || 0} failed`;
+          } else if (r.agentsMonitored !== undefined) {
+            description = `Monitored ${r.agentsMonitored} agents — ${r.activeAgents || 0} active, ${r.idleAgents || 0} idle`;
+          }
+        }
+        return {
+          id: a._id?.toString() || "",
+          action: rawAction,
+          label,
+          description,
+          result: r,
+          success: a.success !== false,
+          timestamp: a.timestamp || a.createdAt || null,
+        };
+      });
 
       // Weekly schedule description
       const scheduleDays =

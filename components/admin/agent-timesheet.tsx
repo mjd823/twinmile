@@ -30,6 +30,7 @@ import {
 interface TaskEntry {
   id: string;
   action: string;
+  label: string;
   description: string;
   result: any;
   success: boolean;
@@ -316,7 +317,7 @@ function ExpandedDetail({ employee }: { employee: Employee }) {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium truncate">{task.action}</p>
+                    <p className="text-xs font-medium truncate">{task.label || task.action}</p>
                     <p className="text-[11px] text-muted-foreground line-clamp-2">{task.description}</p>
                   </div>
                   <span className="text-[10px] text-muted-foreground flex-shrink-0 whitespace-nowrap">
@@ -407,7 +408,7 @@ function ExpandedDetail({ employee }: { employee: Employee }) {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium truncate">{a.action}</p>
+                    <p className="text-xs font-medium truncate">{a.label || a.action}</p>
                     <p className="text-[11px] text-muted-foreground truncate">{a.description}</p>
                   </div>
                   <span className="text-[10px] text-muted-foreground whitespace-nowrap flex-shrink-0">
