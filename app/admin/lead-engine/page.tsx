@@ -108,29 +108,33 @@ export default async function LeadEnginePage() {
   const scoredDrivers = processLeads(serialize(driverLeads), 'driver');
 
   // Convert outbound prospects to driver lead format for the pipeline
-  const prospectDrivers = outboundProspects.map((p: any) => ({
-    ...serialize([p])[0],
-    name: p.name || '',
-    fullName: p.name || '',
-    email: p.contact?.email || '',
-    phone: p.contact?.phone || '',
-    truckType: p.equipment || '',
-    yearsExperience: '',
-    hasOwnAuthority: p.authorityStatus === 'authorized',
-    score: p.aiScore || 0,
-    aiScore: p.aiScore || 0,
-    status: p.status === 'onboarding_invited' ? 'onboarding' : p.status,
-    quality: (p.aiScore || 0) >= 85 ? 'premium' : (p.aiScore || 0) >= 70 ? 'high' : 'medium',
-    estimatedValue: 0,
-    priority: (p.aiScore || 0) >= 85 ? 'urgent' : 'medium',
-    timestamp: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
-    dotNumber: p.dotNumber,
-    location: p.location,
-    state: p.state,
-    powerUnits: p.powerUnits,
-    safetyRating: p.safetyRating,
-    source: p.source,
-  }));
+  const prospectDrivers = outboundProspects.map((p: any) => {
+    const loc = p.location;
+    const locStr = typeof loc === "string" ? loc : (loc?.city && loc?.state ? `${loc.city}, ${loc.state}` : JSON.stringify(loc));
+    return {
+      ...serialize([p])[0],
+      name: p.name || "",
+      fullName: p.name || "",
+      email: p.contact?.email || "",
+      phone: p.contact?.phone || "",
+      truckType: p.equipment || "",
+      yearsExperience: "",
+      hasOwnAuthority: p.authorityStatus === "authorized",
+      score: p.aiScore || 0,
+      aiScore: p.aiScore || 0,
+      status: p.status === "onboarding_invited" ? "onboarding" : p.status,
+      quality: (p.aiScore || 0) >= 85 ? "premium" : (p.aiScore || 0) >= 70 ? "high" : "medium",
+      estimatedValue: 0,
+      priority: (p.aiScore || 0) >= 85 ? "urgent" : "medium",
+      timestamp: p.createdAt instanceof Date ? p.createdAt.toISOString() : p.createdAt,
+      dotNumber: p.dotNumber,
+      location: locStr,
+      state: typeof locStr === "string" ? locStr.split(",")?.[1]?.trim() || "" : "",
+      powerUnits: p.powerUnits,
+      safetyRating: p.safetyRating,
+      source: p.source,
+    };
+  });
 
   // Merge: outbound prospects + leads_drivers (dedup by name)
   const allDriverLeads = [...prospectDrivers, ...scoredDrivers];

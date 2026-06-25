@@ -139,27 +139,32 @@ export async function getPipelineFunnelData() {
       .toArray(),
   ]);
 
-  const recentProspects = rawProspects.map((p: any) => ({
-    id: p._id?.toString(),
-    name: p.name || p.companyName || "Unknown Prospect",
-    dotNumber: p.dotNumber || p.dot || "",
-    location: p.location || "",
-    state: p.state || p.location?.split(",")?.[1]?.trim() || "",
-    score: p.aiScore || p.score || 0,
-    aiScore: p.aiScore || p.score || 0,
-    status: p.status || "new",
-    source: p.source || "FMCSA",
-    phone: p.contact?.phone || p.phone || "",
-    email: p.contact?.email || p.email || "",
-    equipment: p.equipment || "",
-    powerUnits: p.powerUnits || 0,
-    drivers: p.drivers || 0,
-    safetyRating: p.safetyRating || "",
-    authorityStatus: p.authorityStatus || "",
-    interestSignals: p.interestSignals || [],
-    sourceUrl: p.sourceUrl || "",
-    createdAt: serializeDate(p.createdAt),
-  }));
+  const recentProspects = rawProspects.map((p: any) => {
+    const loc = p.location;
+    const locStr = typeof loc === "string" ? loc : (loc?.city && loc?.state ? `${loc.city}, ${loc.state}` : JSON.stringify(loc));
+    const state = p.state || (typeof locStr === "string" ? locStr.split(",")?.[1]?.trim() : "");
+    return {
+      id: p._id?.toString(),
+      name: p.name || p.companyName || "Unknown Prospect",
+      dotNumber: p.dotNumber || p.dot || "",
+      location: locStr,
+      state,
+      score: p.aiScore || p.score || 0,
+      aiScore: p.aiScore || p.score || 0,
+      status: p.status || "new",
+      source: p.source || "FMCSA",
+      phone: p.contact?.phone || p.phone || "",
+      email: p.contact?.email || p.email || "",
+      equipment: p.equipment || "",
+      powerUnits: p.powerUnits || 0,
+      drivers: p.drivers || 0,
+      safetyRating: p.safetyRating || "",
+      authorityStatus: p.authorityStatus || "",
+      interestSignals: p.interestSignals || [],
+      sourceUrl: p.sourceUrl || "",
+      createdAt: serializeDate(p.createdAt),
+    };
+  });
 
   const onboardingSessions = rawSessions.map((s: any) => ({
     id: s._id?.toString(),
