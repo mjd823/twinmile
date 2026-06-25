@@ -345,9 +345,9 @@ function EventDetailDialog({
               )}
 
               {event.raw && Object.keys(event.raw).length > 0 && (
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                    Raw record ({Object.keys(event.raw).length} fields)
+                <details className="text-xs rounded-lg border border-border/60 bg-muted/10 p-3">
+                  <summary className="cursor-pointer text-muted-foreground hover:text-foreground font-medium">
+                    Technical record ({Object.keys(event.raw).length} fields) — for troubleshooting only
                   </summary>
                   <pre className="mt-2 p-2 rounded bg-muted/30 overflow-x-auto max-h-48 text-[10px]">
                     {JSON.stringify(event.raw, null, 2)}

@@ -94,13 +94,30 @@ const STAGES = [
   { key: "dispatchReady", label: "Dispatch Ready", icon: Truck, color: "emerald", description: "Approved and ready" },
 ];
 
-export function PipelineFlowDashboard() {
-  const [loading, setLoading] = React.useState(true);
-  const [funnel, setFunnel] = React.useState<FunnelData | null>(null);
-  const [prospects, setProspects] = React.useState<Prospect[]>([]);
-  const [sessions, setSessions] = React.useState<OnboardingSession[]>([]);
-  const [activity, setActivity] = React.useState<ActivityItem[]>([]);
-  const [agentStats, setAgentStats] = React.useState<AgentStat[]>([]);
+interface PipelineFlowDashboardProps {
+  initialData?: {
+    funnel: FunnelData;
+    recentProspects: Prospect[];
+    onboardingSessions: OnboardingSession[];
+    activityFeed: ActivityItem[];
+    agentStats: AgentStat[];
+    workflowHealth?: {
+      outreachQueue: string;
+      currentBottleneck: string;
+      nextBestActions: string[];
+    };
+  };
+}
+
+export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProps) {
+  const [loading, setLoading] = React.useState(!initialData);
+  const [error, setError] = React.useState<string | null>(null);
+  const [funnel, setFunnel] = React.useState<FunnelData | null>(initialData?.funnel ?? null);
+  const [prospects, setProspects] = React.useState<Prospect[]>(initialData?.recentProspects ?? []);
+  const [sessions, setSessions] = React.useState<OnboardingSession[]>(initialData?.onboardingSessions ?? []);
+  const [activity, setActivity] = React.useState<ActivityItem[]>(initialData?.activityFeed ?? []);
+  const [agentStats, setAgentStats] = React.useState<AgentStat[]>(initialData?.agentStats ?? []);
+  const [workflowHealth, setWorkflowHealth] = React.useState(initialData?.workflowHealth ?? null);
   const [expandedProspect, setExpandedProspect] = React.useState<string | null>(null);
   const [activeSection, setActiveSection] = React.useState<"prospects" | "onboarding" | "activity">("prospects");
   const [filterStage, setFilterStage] = React.useState<string>("all");
@@ -109,17 +126,22 @@ export function PipelineFlowDashboard() {
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/pipeline-funnel");
-      if (!res.ok) throw new Error("Failed to fetch");
+      const res = await fetch("/api/admin/pipeline-funnel", { cache: "no-store" });
+      if (!res.ok) throw new Error(`Failed to fetch pipeline data (${res.status})`);
       const data = await res.json();
-      setFunnel(data.data?.funnel);
-      setProspects(data.data?.recentProspects || []);
-      setSessions(data.data?.onboardingSessions || []);
-      setActivity(data.data?.activityFeed || []);
-      setAgentStats(data.data?.agentStats || []);
+      if (!data.success || !data.data) throw new Error(data.error || "Pipeline API returned no data");
+      setFunnel(data.data.funnel);
+      setProspects(data.data.recentProspects || []);
+      setSessions(data.data.onboardingSessions || []);
+      setActivity(data.data.activityFeed || []);
+      setAgentStats(data.data.agentStats || []);
+      setWorkflowHealth(data.data.workflowHealth || null);
       setLastRefresh(new Date());
+      setError(null);
     } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to refresh pipeline data";
       console.error(err);
+      setError(message);
     } finally {
       setLoading(false);
     }
@@ -164,6 +186,35 @@ export function PipelineFlowDashboard() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <Card className="border-red-500/30 bg-red-500/5">
+          <CardContent className="p-4 text-sm text-red-300">
+            Pipeline refresh failed: {error}. Showing last server-loaded data.
+          </CardContent>
+        </Card>
+      )}
+
+      {workflowHealth && (
+        <Card className="border-cyan-500/30 bg-cyan-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Zap className="h-4 w-4 text-cyan-400" />
+              Workflow Health & Next Steps
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            <p><span className="font-medium text-foreground">Outreach:</span> {workflowHealth.outreachQueue}</p>
+            <p><span className="font-medium text-foreground">Current bottleneck:</span> {workflowHealth.currentBottleneck}</p>
+            <div>
+              <p className="font-medium text-foreground mb-1">Next best actions:</p>
+              <ul className="list-disc pl-5 text-muted-foreground space-y-0.5">
+                {workflowHealth.nextBestActions.map((action, idx) => <li key={idx}>{action}</li>)}
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Conversion Summary */}
       <Card className="border-primary/30 bg-gradient-to-br from-primary/5 to-transparent pt-6">
