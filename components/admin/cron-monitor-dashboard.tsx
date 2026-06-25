@@ -52,17 +52,6 @@ interface EmailLog {
   sessionToken: string;
 }
 
-const CRON_JOB_DEFS: Record<string, { name: string; schedule: string; description: string; skill: string }> = {
-  "00796b3c6135": { name: "Process Outreach Tasks", schedule: "*/15 * * * *", description: "Processes pending outreach tasks every 15 minutes", skill: "claude-code" },
-  "93aaa6272b8c": { name: "Auto Onboarding Invitations", schedule: "0 8-20/2 * * *", description: "Sends onboarding invitations to qualified leads every 2 hours during business hours", skill: "claude-code" },
-  "10177a8ab2cf": { name: "Outbound Prospecting (FMCSA)", schedule: "0 8 * * *", description: "Sofia queries FMCSA Census API daily at 8am for real owner-operators", skill: "web" },
-  "8c53c6ce9d90": { name: "Daily AI Operations", schedule: "0 7 * * *", description: "Reviews overnight activity, processes pending onboarding tasks", skill: "web" },
-  "17a94fde883f": { name: "Weekly Strategic Review", schedule: "0 6 * * 1", description: "Analyzes past week metrics, conversion rates, pipeline health", skill: "web" },
-  "9ee75230bf31": { name: "Monthly Business Intelligence", schedule: "0 5 1 * *", description: "Aggregates monthly metrics for business intelligence report", skill: "web" },
-  "e8dd1c631f6a": { name: "Driver Engagement", schedule: "0 9 * * *", description: "Checks for drivers needing engagement, sends follow-up messages", skill: "web" },
-  "2395ac48f817": { name: "Auto Onboarding Invite", schedule: "0 8,10,12,14,16,18,20 * * 1-5", description: "Invites qualified prospects to onboarding portal on weekdays", skill: "claude-code" },
-};
-
 export function CronMonitorDashboard() {
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -80,30 +69,26 @@ export function CronMonitorDashboard() {
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
 
-      // Merge static job definitions with live data
-      const liveJobs = data.data?.cronJobs || [];
-      const mergedJobs = Object.entries(CRON_JOB_DEFS).map(([id, def]) => {
-        const live = liveJobs.find((j: any) => j.job_id === id || j.id === id);
-        return {
-          id,
-          name: def.name,
-          schedule: def.schedule,
-          description: def.description,
-          skill: def.skill,
-          lastRun: live?.lastRun || live?.last_run_at || null,
-          lastStatus: live?.lastStatus || live?.last_status || null,
-          lastResult: live?.lastResult || null,
-          nextRun: live?.nextRun || live?.next_run_at || null,
-          todayCount: live?.todayCount || 0,
-          enabled: live?.enabled ?? true,
-          model: live?.model || "glm-5.2",
-          provider: live?.provider || "ollama-cloud",
-          promptPreview: live?.prompt_preview || "",
-          workdir: live?.workdir,
-        };
-      });
+      // Use live data from API (includes all 14 jobs from Hermes)
+      const liveJobs: CronJob[] = (data.data?.cronJobs || []).map((j: any) => ({
+        id: j.id,
+        name: j.name,
+        schedule: j.schedule,
+        description: j.description || "",
+        skill: j.skill || "web",
+        lastRun: j.lastRun || j.last_run_at || null,
+        lastStatus: j.lastStatus || j.last_status || null,
+        lastResult: j.lastResult || null,
+        nextRun: j.nextRun || j.next_run_at || null,
+        todayCount: j.todayCount || 0,
+        enabled: j.enabled ?? true,
+        model: j.model || "openrouter/owl-alpha",
+        provider: j.provider || "openrouter",
+        promptPreview: j.prompt_preview || "",
+        workdir: j.workdir,
+      }));
 
-      setCronJobs(mergedJobs);
+      setCronJobs(liveJobs);
       setActivityLogs(data.data?.activityLogs || []);
       setEmailLogs(data.data?.emailLogs || []);
       setLastRefresh(new Date());
@@ -400,6 +385,28 @@ function ActivityFeed({ logs }: { logs: ActivityLog[] }) {
     return <EmptyState icon={<Zap className="h-12 w-12" />} message="No activity recorded yet" />;
   }
 
+  const actionLabels: Record<string, string> = {
+    "outreach_processing": "Processing Outreach",
+    "outreach_cron": "Outreach Processed",
+    "fmcsa_prospecting": "FMCSA Search",
+    "outbound_prospecting": "Prospecting Run",
+    "web_prospecting": "Web Search",
+    "browser_prospecting": "Browser Research",
+    "onboarding_invite": "Onboarding Invite",
+    "auto_onboarding_invite": "Onboarding Invite",
+    "daily_ai_ops": "Daily Ops Review",
+    "daily_sales_review": "Sales Review",
+    "daily_ops_check": "Ops Check",
+    "hr_onboarding_review": "HR Review",
+    "daily_finance_review": "Finance Review",
+    "customer_success_check": "Customer Success",
+    "driver_engagement": "Driver Engagement",
+    "marketing_analysis": "Marketing Analysis",
+    "ceo_strategic_review": "CEO Review",
+    "supervisor_monitoring": "Supervisor Check",
+    "monthly_bi": "Monthly BI",
+  };
+
   return (
     <div className="space-y-2">
       {logs.map((log) => (
@@ -412,7 +419,9 @@ function ActivityFeed({ logs }: { logs: ActivityLog[] }) {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-sm">{log.agent}</span>
                 <Badge variant="outline" className="text-[10px]">{log.agentRole}</Badge>
-                <Badge variant="secondary" className="text-[10px]">{log.action}</Badge>
+                <Badge variant="secondary" className="text-[10px]">
+                  {actionLabels[log.action] || log.action}
+                </Badge>
               </div>
               {log.result && (
                 <div className="mt-1 text-xs text-muted-foreground">

@@ -74,10 +74,28 @@ export async function GET() {
             createdAt: { $gte: twentyFourHoursAgo },
           });
 
+        // Check if there's been any successful run in the last 24 hours
+        const recentSuccess = await db.collection("agent_activity")
+          .countDocuments({
+            action: { $in: activityTypes },
+            success: true,
+            createdAt: { $gte: twentyFourHoursAgo },
+          });
+
         const last = lastActivity[0];
         const lastRun = last?.createdAt || null;
-        const lastStatus = last ? (last.success ? "ok" : "error") : null;
+        const lastSuccess = last ? last.success : null;
         const lastResult = last?.result || null;
+
+        // Determine status: green if any recent success, red if last run was error, gray if never run
+        let lastStatus: string | null;
+        if (recentSuccess > 0) {
+          lastStatus = "ok";
+        } else if (lastSuccess === false) {
+          lastStatus = "error";
+        } else {
+          lastStatus = null; // never run or no recent activity
+        }
 
         // Calculate next run based on schedule (simplified)
         const nextRun = calculateNextRun(def.schedule);
@@ -94,8 +112,8 @@ export async function GET() {
           nextRun,
           todayCount,
           enabled: true,
-          model: "glm-5.2",
-          provider: "ollama-cloud",
+          model: "openrouter/owl-alpha",
+          provider: "openrouter",
         };
       })
     );
