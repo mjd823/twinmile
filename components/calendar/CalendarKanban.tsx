@@ -21,7 +21,6 @@ import {
   FileText,
   Zap,
   User,
-  AlertCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,21 +69,6 @@ interface PipelineData {
   leaseAgreements: Record<string, unknown>[];
 }
 
-interface CronJobSummary {
-  id: string;
-  name: string;
-  schedule: string;
-  description?: string;
-  skill?: string;
-  lastRun: string | null;
-  lastStatus: string | null;
-  nextRun: string | null;
-  todayCount?: number;
-  enabled: boolean;
-  model?: string | null;
-  provider?: string | null;
-}
-
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -109,140 +93,6 @@ const TYPE_COLORS: Record<CalendarEvent["type"], string> = {
 
 const toSafeDate = (d: Date | string): Date =>
   d instanceof Date ? d : new Date(d);
-
-const scheduleToHuman = (sched: string): string => {
-  const [minute, hour, dom, , dow] = sched.split(" ");
-  if (minute.startsWith("*/")) return `Every ${minute.slice(2)} minutes`;
-  const dowMap: Record<string, string> = {
-    "0": "Sunday",
-    "1": "Monday",
-    "2": "Tuesday",
-    "3": "Wednesday",
-    "4": "Thursday",
-    "5": "Friday",
-    "6": "Saturday",
-  };
-  if (dow && dow !== "*") {
-    const day = dowMap[dow] || `day ${dow}`;
-    return `${day} at ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  }
-  if (dom && dom !== "*") return `Monthly on day ${dom} at ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  if (hour.includes("-") && hour.includes("/")) {
-    const [range, step] = hour.split("/");
-    const [start] = range.split("-");
-    return `Every ${step} hours from ${start.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-  }
-  return `Daily at ${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-};
-
-// ---------------------------------------------------------------------------
-// Cron Sidebar (real data from API)
-// ---------------------------------------------------------------------------
-
-function CronJobsSidebar() {
-  const [jobs, setJobs] = React.useState<CronJobSummary[]>([]);
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/cron-monitor");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        if (!active) return;
-        setJobs(json?.data?.cronJobs ?? []);
-        setError(null);
-      } catch (e) {
-        if (!active) return;
-        setError(e instanceof Error ? e.message : "Failed to load");
-      } finally {
-        if (active) setLoading(false);
-      }
-    })();
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  return (
-    <Card className="border-border/60">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <span className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
-            <span className="text-purple-500 text-xl">⚙️</span>
-          </span>
-          Cron Jobs
-          <Badge variant="secondary" className="text-[10px] ml-1">
-            {loading ? "…" : jobs.length}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2 max-h-[640px] overflow-y-auto pr-1">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Loading cron jobs…</p>
-        ) : error ? (
-          <p className="text-sm text-red-400 flex items-center gap-2">
-            <AlertCircle className="h-4 w-4" />
-            {error}
-          </p>
-        ) : jobs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No cron jobs found.</p>
-        ) : (
-          jobs.map((job) => {
-            const ok = job.lastStatus === "ok";
-            const err = job.lastStatus === "error";
-            return (
-              <div
-                key={job.id}
-                className="flex items-center justify-between p-3 rounded-lg border border-border/60 bg-card/50"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full shrink-0 ${
-                      ok
-                        ? "bg-green-500"
-                        : err
-                          ? "bg-red-500"
-                          : "bg-amber-500"
-                    }`}
-                  />
-                  <div className="min-w-0">
-                    <p className="font-medium text-sm truncate">{job.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {scheduleToHuman(job.schedule)}
-                      {job.skill ? ` • ${job.skill}` : ""}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <Badge
-                    variant="outline"
-                    className={`text-[10px] ${
-                      ok
-                        ? "bg-green-500/10 text-green-400 border-green-500/30"
-                        : err
-                          ? "bg-red-500/10 text-red-400 border-red-500/30"
-                          : "bg-gray-500/10 text-gray-400 border-gray-500/30"
-                    }`}
-                  >
-                    {ok ? "active" : err ? "error" : "idle"}
-                  </Badge>
-                  {typeof job.todayCount === "number" && (
-                    <span className="text-[10px] text-muted-foreground">
-                      {job.todayCount} today
-                    </span>
-                  )}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </CardContent>
-    </Card>
-  );
-}
 
 // ---------------------------------------------------------------------------
 // Event Detail Dialog
@@ -420,6 +270,97 @@ function EventDetailDialog({
 }
 
 // ---------------------------------------------------------------------------
+// Day Cell Component — square with hover expand
+// ---------------------------------------------------------------------------
+
+const MAX_VISIBLE_EVENTS = 3;
+
+function DayCell({
+  day,
+  dayEvents,
+  isCurrentMonth,
+  isTodayDate,
+  onEventClick,
+}: {
+  day: Date;
+  dayEvents: CalendarEvent[];
+  isCurrentMonth: boolean;
+  isTodayDate: boolean;
+  onEventClick?: (event: CalendarEvent) => void;
+}) {
+  const [hovered, setHovered] = React.useState(false);
+  const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
+  const remainingCount = dayEvents.length - MAX_VISIBLE_EVENTS;
+
+  return (
+    <div
+      className={`relative p-1.5 border-b border-r border-border/60 flex flex-col transition-all duration-200 ${
+        !isCurrentMonth ? "bg-muted/20 text-muted-foreground/50" : ""
+      } ${isTodayDate ? "bg-primary/5 ring-2 ring-primary/20" : ""} ${
+        hovered
+          ? "z-20 shadow-lg shadow-black/20 bg-card row-span-2 min-h-[200px]"
+          : "min-h-[100px] max-h-[100px] overflow-hidden"
+      }`}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Day number */}
+      <div className="text-xs font-medium mb-0.5 shrink-0 flex items-center justify-between">
+        <span>{format(day, "d")}</span>
+        {dayEvents.length > 0 && !hovered && (
+          <span className="flex items-center gap-0.5">
+            {dayEvents.slice(0, 3).map((ev, i) => (
+              <span
+                key={i}
+                className={`w-1.5 h-1.5 rounded-full ${ev.color}`}
+              />
+            ))}
+            {dayEvents.length > 3 && (
+              <span className="text-[9px] text-muted-foreground ml-0.5">
+                +{dayEvents.length - 3}
+              </span>
+            )}
+          </span>
+        )}
+      </div>
+
+      {/* Event list */}
+      <div
+        className={`flex-1 min-h-0 ${
+          hovered ? "overflow-y-auto space-y-0.5" : "overflow-hidden space-y-0.5"
+        }`}
+      >
+        {(hovered ? dayEvents : visibleEvents).map((event) => (
+          <div
+            key={event.id}
+            className={`text-[10px] px-1 py-0.5 rounded truncate cursor-pointer hover:brightness-110 transition-all ${event.color}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onEventClick?.(event);
+            }}
+            title={event.title}
+          >
+            {event.title}
+          </div>
+        ))}
+        {hovered && remainingCount > 0 && (
+          <div className="text-[9px] text-muted-foreground px-1 py-0.5">
+            {remainingCount} more event{remainingCount !== 1 ? "s" : ""}
+          </div>
+        )}
+      </div>
+
+      {/* "+N more" indicator when not hovered and there are hidden events */}
+      {!hovered && remainingCount > 0 && (
+        <div className="text-[9px] text-muted-foreground px-1 mt-auto shrink-0">
+          +{remainingCount} more
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Calendar View
 // ---------------------------------------------------------------------------
 
@@ -578,30 +519,14 @@ export function CalendarView({
             const isTodayDate = isSameDay(day, new Date());
 
             return (
-              <div
+              <DayCell
                 key={day.toISOString()}
-                className={`min-h-[110px] p-2 border-b border-r border-border/60 relative flex flex-col ${
-                  !isCurrentMonth ? "bg-muted/20 text-muted-foreground/50" : ""
-                } ${isTodayDate ? "bg-primary/5 ring-2 ring-primary/20" : ""}`}
-              >
-                <div className="text-sm font-medium mb-1 shrink-0">
-                  {format(day, "d")}
-                </div>
-                <div className="space-y-1 flex-1 overflow-y-auto scrollbar-hide min-h-0">
-                  {dayEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer hover:brightness-110 hover:scale-[1.02] transition-all ${event.color}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEventClick?.(event);
-                      }}
-                    >
-                      {event.title}
-                    </div>
-                  ))}
-                </div>
-              </div>
+                day={day}
+                dayEvents={dayEvents}
+                isCurrentMonth={isCurrentMonth}
+                isTodayDate={isTodayDate}
+                onEventClick={onEventClick}
+              />
             );
           })}
         </div>
@@ -751,7 +676,7 @@ export function KanbanView({
               No {type}s in this stage
             </div>
           ) : (
-            leads.map((lead: any) => {
+            leads.map((lead: Record<string, unknown>) => {
               const id = (lead._id ?? lead.id) as string | undefined;
               return (
                 <div
@@ -765,9 +690,9 @@ export function KanbanView({
                       : (lead.name as string) || (lead.company as string)}
                   </div>
                   <div className="flex items-center gap-2 text-[10px] text-muted-foreground mt-1 flex-wrap">
-                    {type === "driver" && lead.truckType && (
+                    {type === "driver" && typeof lead.truckType === "string" && (
                       <span className="px-1 py-0.5 bg-blue-500/10 text-blue-300 rounded">
-                        {String(lead.truckType)}
+                        {lead.truckType}
                       </span>
                     )}
                     {typeof lead.score === "number" && (
@@ -778,9 +703,9 @@ export function KanbanView({
                         {Number(lead.score)}
                       </Badge>
                     )}
-                    {Array.isArray(lead.leads) && lead.leads.length > 0 && (
+                    {Array.isArray(lead.leads) && (lead.leads as unknown[]).length > 0 && (
                       <span className="px-1 py-0.5 bg-purple-500/10 text-purple-300 rounded text-[10px]">
-                        {lead.leads.length} docs
+                        {(lead.leads as unknown[]).length} docs
                       </span>
                     )}
                   </div>
@@ -834,7 +759,7 @@ export function KanbanView({
 }
 
 // ---------------------------------------------------------------------------
-// Calendar + Kanban Page (client) — tabs + detail panels + cron sidebar
+// Calendar + Kanban Page (client) — tabs + detail panels (no cron sidebar)
 // ---------------------------------------------------------------------------
 
 interface CalendarKanbanPageProps {
@@ -906,42 +831,34 @@ export function CalendarKanbanPage({
         </div>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <Tabs defaultValue="calendar">
-            <TabsList className="mb-4">
-              <TabsTrigger value="calendar" className="gap-2">
-                <CalendarIcon className="h-4 w-4" />
-                Calendar
-              </TabsTrigger>
-              <TabsTrigger value="kanban" className="gap-2">
-                <Zap className="h-4 w-4" />
-                Kanban
-              </TabsTrigger>
-            </TabsList>
+      <Tabs defaultValue="calendar">
+        <TabsList className="mb-4">
+          <TabsTrigger value="calendar" className="gap-2">
+            <CalendarIcon className="h-4 w-4" />
+            Calendar
+          </TabsTrigger>
+          <TabsTrigger value="kanban" className="gap-2">
+            <Zap className="h-4 w-4" />
+            Kanban
+          </TabsTrigger>
+        </TabsList>
 
-            <TabsContent value="calendar">
-              <CalendarView
-                events={events}
-                onEventClick={setSelectedEvent}
-              />
-            </TabsContent>
+        <TabsContent value="calendar">
+          <CalendarView
+            events={events}
+            onEventClick={setSelectedEvent}
+          />
+        </TabsContent>
 
-            <TabsContent value="kanban">
-              <KanbanView
-                quoteLeads={pipeline.quoteLeads}
-                driverLeads={pipeline.driverLeads}
-                leaseAgreements={pipeline.leaseAgreements}
-                onLeadClick={handleLeadClick}
-              />
-            </TabsContent>
-          </Tabs>
-        </div>
-
-        <div className="space-y-4">
-          <CronJobsSidebar />
-        </div>
-      </div>
+        <TabsContent value="kanban">
+          <KanbanView
+            quoteLeads={pipeline.quoteLeads}
+            driverLeads={pipeline.driverLeads}
+            leaseAgreements={pipeline.leaseAgreements}
+            onLeadClick={handleLeadClick}
+          />
+        </TabsContent>
+      </Tabs>
 
       <EventDetailDialog
         event={selectedEvent}

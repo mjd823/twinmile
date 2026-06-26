@@ -8,7 +8,7 @@
 import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
 
-import { MongoClient } from 'mongodb'
+import { MongoClient, ObjectId } from 'mongodb'
 import { Resend } from 'resend'
 
 const MONGODB_URI = process.env.MONGODB_URI
@@ -61,6 +61,11 @@ const EMAIL_TEMPLATES = {
     html: (lead, p) => `<p>Hi ${lead.name},</p><p>Following up on your application to drive with Twin Mile (${lead.truckType || 'driving'}).</p>`,
     text: (lead, p) => `Hi ${lead.name},\n\nFollowing up on your application to drive with Twin Mile (${lead.truckType || 'driving'}).`
   },
+  prospect_outreach: {
+    subject: (lead) => `${lead.name || 'Your business'} — Drive with Twin Mile`,
+    html: (lead, p) => `<p>Hi ${p.name || lead.name},</p><p>We found your carrier on FMCSA and wanted to reach out about partnering with Twin Mile. We're looking for owner-operators like yourself to join our fleet.</p><p><strong>Why Twin Mile?</strong></p><ul><li>Competitive pay per mile</li><li>Flexible scheduling</li><li>24/7 driver support</li></ul><p>Ready to learn more? <a href="https://twinmile.com/drive-with-us">Click here to get started</a> or reply to this email.</p><p>Best regards,<br/>Twin Mile Recruiting Team</p>`,
+    text: (lead, p) => `Hi ${p.name || lead.name},\n\nWe found your carrier on FMCSA and wanted to reach out about partnering with Twin Mile. We're looking for owner-operators like yourself to join our fleet.\n\nWhy Twin Mile?\n- Competitive pay per mile\n- Flexible scheduling\n- 24/7 driver support\n\nReady to learn more? Visit https://twinmile.com/drive-with-us or reply to this email.\n\nBest regards,\nTwin Mile Recruiting Team`
+  },
 }
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)) }
@@ -74,8 +79,9 @@ async function sendEmailViaResend(to, subject, html, text) {
 }
 
 async function sendSmsPlaceholder(lead, name, p) {
-  if (!lead.phone) return { success: false, error: 'No phone' }
-  console.log(`[SMS PLACEHOLDER] To: ${lead.phone} | Template: ${name}`)
+  const phone = lead.phone || (lead.contact && lead.contact.phone) || p.phone
+  if (!phone) return { success: false, error: 'No phone' }
+  console.log(`[SMS PLACEHOLDER] To: ${phone} | Template: ${name}`)
   return { success: true, mock: true }
 }
 
@@ -107,19 +113,34 @@ async function processOutreachTasks() {
     for (const task of tasks) {
       console.log(`[process-outreach-cron] Task ${task._id} (${task.template}, ${task.priority})`)
       try {
-        const coll = task.leadType === 'quote' ? 'leads_quotes' : 'leads_drivers'
-        const lead = await db.collection(coll).findOne({ _id: task.leadId })
-        if (!lead) throw new Error(`Lead not found: ${task.leadId}`)
-        const p = { ...task.personalization, name: lead.name, email: lead.email, phone: lead.phone, serviceType: lead.serviceType, pickupLocation: lead.pickupLocation, dropoffLocation: lead.dropoffLocation, truckType: lead.truckType, yearsExperience: lead.yearsExperience, company: lead.company }
+        const coll = task.leadType === 'quote' ? 'leads_quotes' : 
+                     task.leadType === 'outbound_prospect' ? 'outbound_prospects' : 
+                     task.leadCollection === 'outbound_prospects' ? 'outbound_prospects' :
+                     'leads_drivers'
+        // leadId may be stored as string or ObjectId — try both
+        let lead = await db.collection(coll).findOne({ _id: task.leadId })
+        if (!lead && typeof task.leadId === 'string') {
+          try { lead = await db.collection(coll).findOne({ _id: new ObjectId(task.leadId) }) } catch(e) {}
+        }
+        if (!lead && task.leadEmail) {
+          // Fallback: find by email
+          lead = await db.collection(coll).findOne({ $or: [{ 'contact.email': task.leadEmail }, { email: task.leadEmail }] })
+        }
+        if (!lead) throw new Error(`Lead not found in ${coll}: leadId=${task.leadId} (leadType: ${task.leadType}), email=${task.leadEmail}`)
+        // Normalize lead data — outbound_prospects use nested contact.email/phone
+        const leadName = lead.name || lead.company || lead.legal_name || 'Carrier'
+        const leadEmail = lead.email || (lead.contact && lead.contact.email) || task.leadEmail
+        const leadPhone = lead.phone || (lead.contact && lead.contact.phone) || null
+        const p = { ...task.personalization, name: leadName, email: leadEmail, phone: leadPhone, serviceType: lead.serviceType, pickupLocation: lead.pickupLocation, dropoffLocation: lead.dropoffLocation, truckType: lead.truckType, yearsExperience: lead.yearsExperience, company: lead.company }
         let result
-        if (task.channel === 'email') { const t = getTemplate(task.template, lead, p); result = await sendEmailViaResend(lead.email, t.subject, t.html, t.text) }
+        if (task.channel === 'email') { const t = getTemplate(task.template, lead, p); result = await sendEmailViaResend(leadEmail, t.subject, t.html, t.text) }
         else if (task.channel === 'sms') { result = await sendSmsPlaceholder(lead, task.template, p) }
         else throw new Error(`Unknown channel: ${task.channel}`)
         if (result.success) {
           await db.collection('outreach_tasks').updateOne({ _id: task._id }, { $set: { status: 'sent', sentAt: new Date(), updatedAt: new Date(), error: null }, $inc: { attempts: 1 } })
           await logActivity(db, task, lead, result, 'sent')
           sentCount++
-          console.log(`[process-outreach-cron] Sent ${task.template} to ${lead.email}`)
+          console.log(`[process-outreach-cron] Sent ${task.template} to ${leadEmail}`)
         } else throw new Error(result.error || 'Send error')
         await sleep(100)
       } catch (e) {
@@ -127,7 +148,8 @@ async function processOutreachTasks() {
         const na = (task.attempts || 0) + 1
         const max = na >= (task.maxAttempts || MAX_ATTEMPTS)
         await db.collection('outreach_tasks').updateOne({ _id: task._id }, { $set: { status: max?'failed':'retrying', error: e.message, updatedAt: new Date(), scheduledAt: max?task.scheduledAt:new Date(Date.now()+calculateBackoff(na)) }, $inc: { attempts: 1 } })
-        await logActivity(db, task, lead, { success: false, error: e.message }, max ? 'failed' : 'retrying')
+        const fallbackLead = lead || { name: task.leadName || 'Unknown', email: task.leadEmail || 'N/A' }
+        await logActivity(db, task, fallbackLead, { success: false, error: e.message }, max ? 'failed' : 'retrying')
         failedCount++
         errors.push({ taskId: task._id.toString(), error: e.message })
         await sleep(100)

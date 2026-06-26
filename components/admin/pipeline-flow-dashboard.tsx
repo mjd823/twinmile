@@ -9,6 +9,7 @@ import {
   Signature, Truck, ChevronDown, ChevronRight, RefreshCw,
   TrendingUp, Users, Zap, ExternalLink, XCircle,
 } from "lucide-react";
+import { Phone } from "lucide-react";
 
 interface FunnelData {
   totalProspects: number;
@@ -78,6 +79,16 @@ interface AgentStat {
   isActive: boolean;
 }
 
+interface ColdCallProspect {
+  id: string;
+  name: string;
+  aiScore: number;
+  phone: string;
+  state: string;
+  source: string;
+  status: string;
+}
+
 const ALL_AGENTS = [
   { name: "Sofia Rodriguez", role: "Lead Generation", dept: "Sales", icon: "🔍", color: "cyan" },
   { name: "Marcus Chen", role: "Sales Director", dept: "Sales", icon: "💼", color: "blue" },
@@ -107,6 +118,7 @@ interface PipelineFlowDashboardProps {
     activityFeed: ActivityItem[];
     agentStats: AgentStat[];
     sourceBreakdown?: SourceBreakdown[];
+    coldCallQueue?: ColdCallProspect[];
     workflowHealth?: {
       outreachQueue: string;
       currentBottleneck: string;
@@ -124,6 +136,7 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
   const [activity, setActivity] = React.useState<ActivityItem[]>(initialData?.activityFeed ?? []);
   const [agentStats, setAgentStats] = React.useState<AgentStat[]>(initialData?.agentStats ?? []);
   const [sourceBreakdown, setSourceBreakdown] = React.useState<SourceBreakdown[]>(initialData?.sourceBreakdown ?? []);
+  const [coldCallQueue, setColdCallQueue] = React.useState<ColdCallProspect[]>(initialData?.coldCallQueue ?? []);
   const [workflowHealth, setWorkflowHealth] = React.useState(initialData?.workflowHealth ?? null);
   const [expandedProspect, setExpandedProspect] = React.useState<string | null>(null);
   const [activeSection, setActiveSection] = React.useState<"prospects" | "onboarding" | "activity">("prospects");
@@ -218,6 +231,36 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
               <ul className="list-disc pl-5 text-muted-foreground space-y-0.5">
                 {workflowHealth.nextBestActions.map((action, idx) => <li key={idx}>{action}</li>)}
               </ul>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Cold Call Queue */}
+      {coldCallQueue.length > 0 && (
+        <Card className="border-amber-500/30 bg-amber-500/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Phone className="h-4 w-4 text-amber-400" />
+              Cold Call Queue — {coldCallQueue.length} prospects (phone only, no email)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              {coldCallQueue.slice(0, 8).map((p) => (
+                <div key={p.id} className="p-2 rounded-md bg-background/60 border border-border/40">
+                  <p className="text-xs font-medium truncate">{p.name}</p>
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-[10px] text-muted-foreground">{p.phone}</span>
+                    <span className="text-[10px] bg-primary/10 text-primary px-1 rounded">{p.aiScore}</span>
+                  </div>
+                </div>
+              ))}
+              {coldCallQueue.length > 8 && (
+                <div className="p-2 rounded-md bg-background/40 border border-dashed border-border/40 flex items-center justify-center">
+                  <span className="text-xs text-muted-foreground">+{coldCallQueue.length - 8} more</span>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

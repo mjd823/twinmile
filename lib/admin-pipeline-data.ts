@@ -1,5 +1,15 @@
 import clientPromise from "@/lib/mongodb";
 
+// Cold Call Queue types
+interface ColdCallProspect {
+  id: string;
+  name: string;
+  aiScore: number;
+  phone: string;
+  state: string;
+  source: string;
+  status: string;
+}
 const ACTION_LABELS: Record<string, string> = {
   outreach_processing: "Processing Outreach Tasks",
   outreach_cron: "Outreach Task Processed",
@@ -208,6 +218,23 @@ export async function getPipelineFunnelData() {
     { $sort: { count: -1 } },
   ]).toArray();
 
+  // Cold Call Queue: prospects with phone but no email, ready for outreach
+  const coldCallProspects = await db.collection("outbound_prospects").find({
+    status: "reviewed",
+    "contact.email": { $exists: false },
+    "contact.phone": { $exists: true },
+  }).sort({ aiScore: -1 }).toArray();
+
+  const coldCallQueue: ColdCallProspect[] = coldCallProspects.map((p: any) => ({
+    id: p._id?.toString(),
+    name: p.name || "Unknown",
+    aiScore: p.aiScore || 0,
+    phone: p.contact?.phone || "",
+    state: p.state || "",
+    source: p.source || "",
+    status: p.status || "",
+  }));
+
   return {
     funnel: {
       totalProspects,
@@ -223,6 +250,7 @@ export async function getPipelineFunnelData() {
     activityFeed,
     agentStats,
     sourceBreakdown,
+    coldCallQueue,
     workflowHealth: {
       outreachQueue: "System automation sends queued emails every 15 minutes; this is not Sofia. Sofia creates/scoring prospects upstream.",
       currentBottleneck:

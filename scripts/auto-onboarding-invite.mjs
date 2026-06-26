@@ -1,145 +1,142 @@
-// auto-onboarding-invite.mjs — runs every 2 hrs 8AM-8PM
-// Moves qualified prospects (status "reviewed", aiScore >= 75) into onboarding
 import { MongoClient, ObjectId } from 'mongodb';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
 import crypto from 'crypto';
+import dotenv from 'dotenv';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const envContent = fs.readFileSync(path.join(__dirname, '..', '.env.local'), 'utf8');
-const MONGODB_URI = envContent.match(/MONGODB_URI=(.+)/)?.[1]?.trim();
+dotenv.config({ path: '.env.local' });
 
-if (!MONGODB_URI) {
-  console.error('ERROR: MONGODB_URI not found in .env.local');
-  process.exit(1);
-}
+const MONGODB_URI = process.env.MONGODB_URI;
+const DB_NAME = 'twinmile';
+const MAX_PER_RUN = 50;
 
-const client = new MongoClient(MONGODB_URI, { serverSelectionTimeoutMS: 15000 });
-await client.connect();
-const db = client.db();
+async function run() {
+  const client = new MongoClient(MONGODB_URI);
+  await client.connect();
+  const db = client.db(DB_NAME);
 
-console.log(`Connected to MongoDB: ${client.db().databaseName}`);
+  console.log('Connected to MongoDB');
 
-// Step 1: Query qualified prospects
-const qualifiedProspects = await db.collection('outbound_prospects').find({
-  status: 'reviewed',
-  aiScore: { $gte: 75 }
-}).limit(50).toArray();
+  // Step 1: Query qualified prospects (status "reviewed" AND aiScore >= 75)
+  const prospects = await db.collection('outbound_prospects')
+    .find({
+      status: 'reviewed',
+      aiScore: { $gte: 75 }
+    })
+    .limit(MAX_PER_RUN)
+    .toArray();
 
-console.log(`Found ${qualifiedProspects.length} qualified prospects (status: reviewed, aiScore >= 75)`);
+  console.log(`Found ${prospects.length} qualified prospects (status=reviewed, aiScore>=75)`);
 
-let sessionsCreated = 0;
-let tasksCreated = 0;
-let skipped = 0;
-const processedIds = [];
-
-for (const prospect of qualifiedProspects) {
-  // Validate email exists and is not empty
-  const email = prospect.contact?.email;
-  if (!email || email.trim() === '') {
-    console.log(`  SKIP: ${prospect.name} — no valid email`);
-    skipped++;
-    continue;
-  }
-
-  // Check if prospect already has an onboarding session
-  const existingSession = await db.collection('onboarding_sessions').findOne({
-    email: email,
-    leadType: 'outbound_prospect'
-  });
-
-  if (existingSession) {
-    console.log(`  SKIP: ${prospect.name} (${email}) — already has session`);
-    skipped++;
-    continue;
-  }
-
-  // Step 3a: Create onboarding session
-  const rawToken = crypto.randomUUID();
+  let sessionsCreated = 0;
+  let tasksCreated = 0;
+  let skipped = 0;
   const now = new Date();
-  const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-  const sessionDoc = {
-    name: prospect.name,
-    email: email,
-    leadType: 'outbound_prospect',
-    status: 'pending',
-    rawToken: rawToken,
-    expiresAt: expiresAt,
-    metadata: {
-      aiScore: prospect.aiScore,
-      source: prospect.source,
-      phone: prospect.contact?.phone || null
-    },
-    createdAt: now
-  };
+  for (const prospect of prospects) {
+    // Validate email
+    const email = prospect.contact?.email;
+    if (!email || email.trim() === '') {
+      console.log(`  SKIP: ${prospect.name} — no valid email`);
+      skipped++;
+      continue;
+    }
 
-  const sessionResult = await db.collection('onboarding_sessions').insertOne(sessionDoc);
-  console.log(`  SESSION CREATED: ${prospect.name} (${email}) — token: ${rawToken.slice(0, 8)}...`);
-  sessionsCreated++;
+    // Step 2: Check if onboarding session already exists
+    const existingSession = await db.collection('onboarding_sessions').findOne({
+      email: email,
+      leadType: 'outbound_prospect'
+    });
 
-  // Step 3b: Create outreach task
-  const priority = prospect.aiScore >= 85 ? 'urgent' : 'high';
-  const state = prospect.location?.split(',')[1]?.trim() || '';
+    if (existingSession) {
+      console.log(`  SKIP: ${prospect.name} — onboarding session already exists`);
+      skipped++;
+      continue;
+    }
 
-  const taskDoc = {
-    leadId: prospect._id,
-    leadType: 'outbound_prospect',
-    leadEmail: email,
-    leadName: prospect.name,
-    template: 'prospect_outreach',
-    channel: 'email',
-    priority: priority,
-    scheduledAt: now,
-    status: 'pending',
-    attempts: 0,
-    maxAttempts: 3,
-    personalization: {
+    // Step 3a: Create onboarding session
+    const expiresAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const rawToken = crypto.randomUUID();
+
+    const sessionDoc = {
       name: prospect.name,
-      state: state
+      email: email,
+      leadType: 'outbound_prospect',
+      status: 'pending',
+      rawToken: rawToken,
+      expiresAt: expiresAt,
+      metadata: {
+        aiScore: prospect.aiScore,
+        source: prospect.source || '',
+        phone: prospect.contact?.phone || ''
+      },
+      createdAt: now
+    };
+
+    const sessionResult = await db.collection('onboarding_sessions').insertOne(sessionDoc);
+    sessionsCreated++;
+    console.log(`  SESSION: Created onboarding session for ${prospect.name} (${email}), token=${rawToken.slice(0,8)}...`);
+
+    // Step 3b: Create outreach task
+    const state = prospect.location?.split(',')[1]?.trim() || '';
+    const priority = prospect.aiScore >= 85 ? 'urgent' : 'high';
+
+    const taskDoc = {
+      leadId: prospect._id,
+      leadType: 'outbound_prospect',
+      leadEmail: email,
+      leadName: prospect.name,
+      template: 'prospect_outreach',
+      channel: 'email',
+      priority: priority,
+      scheduledAt: now,
+      status: 'pending',
+      attempts: 0,
+      maxAttempts: 3,
+      personalization: {
+        name: prospect.name,
+        state: state
+      },
+      createdAt: now
+    };
+
+    await db.collection('outreach_tasks').insertOne(taskDoc);
+    tasksCreated++;
+    console.log(`  TASK: Created outreach task for ${prospect.name}, priority=${priority}`);
+
+    // Step 3c: Update prospect status to "onboarding_invited"
+    await db.collection('outbound_prospects').updateOne(
+      { _id: prospect._id },
+      { $set: { status: 'onboarding_invited', updatedAt: now } }
+    );
+    console.log(`  STATUS: Updated ${prospect.name} → onboarding_invited`);
+  }
+
+  // Step 4: Log to agent_activity
+  const activityDoc = {
+    agent: {
+      name: 'Auto Onboarding Processor',
+      role: 'Onboarding',
+      department: 'Operations'
     },
-    createdAt: now
+    action: 'auto_onboarding_invite',
+    result: {
+      qualifiedProspects: prospects.length,
+      sessionsCreated: sessionsCreated,
+      tasksCreated: tasksCreated,
+      skipped: skipped
+    },
+    success: true,
+    createdAt: now,
+    timestamp: now
   };
 
-  await db.collection('outreach_tasks').insertOne(taskDoc);
-  console.log(`  TASK CREATED: ${prospect.name} — priority: ${priority}`);
-  tasksCreated++;
+  await db.collection('agent_activity').insertOne(activityDoc);
+  console.log(`\nActivity logged: ${sessionsCreated} sessions, ${tasksCreated} tasks, ${skipped} skipped`);
 
-  // Step 3c: Update prospect status to "onboarding_invited"
-  await db.collection('outbound_prospects').updateOne(
-    { _id: prospect._id },
-    { $set: { status: 'onboarding_invited', updatedAt: now } }
-  );
-  console.log(`  PROSPECT UPDATED: ${prospect.name} → status: onboarding_invited`);
-
-  processedIds.push(prospect._id);
+  await client.close();
+  console.log('Done.');
 }
 
-// Step 4: Log to agent_activity
-const activityLog = {
-  timestamp: new Date(),
-  agent: { name: 'Auto Onboarding Processor', role: 'Onboarding', department: 'Operations' },
-  action: 'auto_onboarding_invite',
-  result: {
-    qualifiedProspects: qualifiedProspects.length,
-    sessionsCreated: sessionsCreated,
-    tasksCreated: tasksCreated,
-    skipped: skipped
-  },
-  success: true
-};
-
-await db.collection('agent_activity').insertOne(activityLog);
-console.log(`\nActivity logged to agent_activity`);
-
-// Summary
-console.log('\n=== AUTO ONBOARDING SUMMARY ===');
-console.log(`Qualified prospects found: ${qualifiedProspects.length}`);
-console.log(`Sessions created: ${sessionsCreated}`);
-console.log(`Outreach tasks created: ${tasksCreated}`);
-console.log(`Skipped (no email / already has session): ${skipped}`);
-console.log(`================================`);
-
-await client.close();
-console.log('Done. Connection closed.');
+run().catch(err => {
+  console.error('ERROR:', err.message);
+  process.exit(1);
+});
