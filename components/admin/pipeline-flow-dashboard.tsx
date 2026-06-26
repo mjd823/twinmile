@@ -41,6 +41,11 @@ interface Prospect {
   createdAt: string;
 }
 
+interface SourceBreakdown {
+  _id: string;
+  count: number;
+}
+
 interface OnboardingSession {
   id: string;
   leadName: string;
@@ -85,7 +90,7 @@ const ALL_AGENTS = [
 ];
 
 const STAGES = [
-  { key: "totalProspects", label: "Prospects Found", icon: Search, color: "blue", description: "Real carriers from FMCSA" },
+  { key: "totalProspects", label: "Prospects Found", icon: Search, color: "blue", description: "All prospects" },
   { key: "qualified", label: "Qualified (≥75)", icon: CheckCircle2, color: "green", description: "AI scored and qualified" },
   { key: "onboardingInvited", label: "Onboarding Invited", icon: Mail, color: "cyan", description: "Email sent with token link" },
   { key: "onboardingStarted", label: "Onboarding Started", icon: UserCheck, color: "purple", description: "Prospect clicked link" },
@@ -101,6 +106,7 @@ interface PipelineFlowDashboardProps {
     onboardingSessions: OnboardingSession[];
     activityFeed: ActivityItem[];
     agentStats: AgentStat[];
+    sourceBreakdown?: SourceBreakdown[];
     workflowHealth?: {
       outreachQueue: string;
       currentBottleneck: string;
@@ -117,6 +123,7 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
   const [sessions, setSessions] = React.useState<OnboardingSession[]>(initialData?.onboardingSessions ?? []);
   const [activity, setActivity] = React.useState<ActivityItem[]>(initialData?.activityFeed ?? []);
   const [agentStats, setAgentStats] = React.useState<AgentStat[]>(initialData?.agentStats ?? []);
+  const [sourceBreakdown, setSourceBreakdown] = React.useState<SourceBreakdown[]>(initialData?.sourceBreakdown ?? []);
   const [workflowHealth, setWorkflowHealth] = React.useState(initialData?.workflowHealth ?? null);
   const [expandedProspect, setExpandedProspect] = React.useState<string | null>(null);
   const [activeSection, setActiveSection] = React.useState<"prospects" | "onboarding" | "activity">("prospects");
@@ -236,6 +243,28 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
           </div>
         </CardContent>
       </Card>
+
+      {/* Source Breakdown */}
+      {sourceBreakdown.length > 0 && (
+        <Card className="border-border/60">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2">
+              <Search className="h-4 w-4 text-blue-400" />
+              Prospect Sources
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {sourceBreakdown.map((s) => (
+                <div key={s._id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/40 border border-border/40">
+                  <span className="text-xs font-medium">{s._id.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
+                  <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-bold">{s.count}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Pipeline Funnel Visualization */}
       <div className="space-y-2">

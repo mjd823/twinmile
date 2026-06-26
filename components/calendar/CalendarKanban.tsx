@@ -9,7 +9,6 @@ import {
   endOfWeek,
   addDays,
   addMonths,
-  subMonths,
   isSameMonth,
   isSameDay,
   eachDayOfInterval,
@@ -21,8 +20,6 @@ import {
   Truck,
   FileText,
   Zap,
-  X,
-  Clock,
   User,
   AlertCircle,
 } from "lucide-react";
@@ -258,9 +255,51 @@ function EventDetailDialog({
   event: CalendarEvent | null;
   onOpenChange: (open: boolean) => void;
 }) {
+  // Build a plain-English summary for the admin
+  const buildSummary = (e: CalendarEvent): string => {
+    const parts: string[] = [];
+    const time = format(toSafeDate(e.date), "h:mm a");
+
+    if (e.type === "agent_action") {
+      parts.push(`${e.agent || "An agent"} performed an action at ${time}.`);
+      if (e.serviceType) parts.push(`Service: ${e.serviceType}.`);
+      if (e.origin && e.destination)
+        parts.push(`Route: ${e.origin} → ${e.destination}.`);
+      if (e.truckType) parts.push(`Truck type: ${e.truckType}.`);
+      if (e.estimatedValue)
+        parts.push(`Estimated value: $${e.estimatedValue}.`);
+    } else if (e.type === "cron") {
+      parts.push(`Scheduled task "${e.title}" ran at ${time}.`);
+      if (e.agent) parts.push(`Handled by agent: ${e.agent}.`);
+    } else if (e.type === "pipeline") {
+      parts.push(`Pipeline event at ${time}.`);
+      if (e.serviceType) parts.push(`Service: ${e.serviceType}.`);
+      if (e.origin && e.destination)
+        parts.push(`Route: ${e.origin} → ${e.destination}.`);
+      if (e.estimatedValue)
+        parts.push(`Estimated value: $${e.estimatedValue}.`);
+    } else if (e.type === "onboarding") {
+      parts.push(`Onboarding activity at ${time}.`);
+      if (e.truckType) parts.push(`Truck: ${e.truckType}.`);
+      if (e.yearsExperience)
+        parts.push(`Experience: ${e.yearsExperience} years.`);
+    } else if (e.type === "lease") {
+      parts.push(`Lease event at ${time}.`);
+      if (e.serviceType) parts.push(`Service: ${e.serviceType}.`);
+    } else if (e.type === "meeting") {
+      parts.push(`Meeting scheduled at ${time}.`);
+    } else {
+      parts.push(`${TYPE_LABELS[e.type]} event at ${time}.`);
+    }
+
+    if (e.details) parts.push(e.details);
+
+    return parts.join(" ");
+  };
+
   return (
     <Dialog open={!!event} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
         {event && (
           <>
             <DialogHeader>
@@ -272,159 +311,105 @@ function EventDetailDialog({
                 {format(toSafeDate(event.date), "EEEE, MMM d, yyyy 'at' h:mm a")}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-3 text-sm">
-              <div className="flex items-center gap-2">
-                <Badge
-                  variant="outline"
-                  className={TYPE_COLORS[event.type]}
-                >
-                  {TYPE_LABELS[event.type]}
-                </Badge>
-                {event.agentId && (
-                  <Badge variant="outline" className="text-[10px]">
-                    <User className="h-3 w-3 mr-1" />
-                    {event.agent || event.agentId}
+            <div className="space-y-4 text-sm">
+              {/* Admin-friendly summary */}
+              <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
+                <p className="text-xs uppercase tracking-wide text-primary mb-1 font-semibold">
+                  Summary
+                </p>
+                <p className="leading-relaxed">{buildSummary(event)}</p>
+              </div>
+
+              {/* Key fields grid */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Type
+                  </p>
+                  <Badge
+                    variant="outline"
+                    className={`mt-1 text-[10px] ${TYPE_COLORS[event.type]}`}
+                  >
+                    {TYPE_LABELS[event.type]}
                   </Badge>
+                </div>
+                {event.agentId && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Agent
+                    </p>
+                    <p className="font-medium text-xs mt-1 flex items-center gap-1">
+                      <User className="h-3 w-3" />
+                      {event.agent || event.agentId}
+                    </p>
+                  </div>
+                )}
+                {event.serviceType && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Service
+                    </p>
+                    <p className="font-medium text-xs mt-1">{String(event.serviceType)}</p>
+                  </div>
+                )}
+                {event.truckType && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Truck
+                    </p>
+                    <p className="font-medium text-xs mt-1">{String(event.truckType)}</p>
+                  </div>
+                )}
+                {event.origin && event.destination && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50 col-span-2">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Route
+                    </p>
+                    <p className="font-medium text-xs mt-1">
+                      {String(event.origin)} → {String(event.destination)}
+                    </p>
+                  </div>
+                )}
+                {event.yearsExperience != null && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Experience
+                    </p>
+                    <p className="font-medium text-xs mt-1">{String(event.yearsExperience)} yrs</p>
+                  </div>
+                )}
+                {event.estimatedValue != null && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Value
+                    </p>
+                    <p className="font-medium text-xs mt-1">${String(event.estimatedValue)}</p>
+                  </div>
                 )}
               </div>
 
+              {/* Free-form details if present */}
               {event.details && (
                 <div className="p-3 rounded-lg border border-border/60 bg-card/50">
                   <p className="text-xs uppercase tracking-wide text-muted-foreground mb-1">
-                    Details
+                    Additional Notes
                   </p>
-                  <p className="whitespace-pre-wrap break-words">
+                  <p className="whitespace-pre-wrap break-words text-xs">
                     {event.details}
                   </p>
                 </div>
               )}
 
-              {event.serviceType && (
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  {event.serviceType && (
-                    <span>
-                      <span className="text-foreground font-medium">
-                        Service:
-                      </span>{" "}
-                      {String(event.serviceType)}
-                    </span>
-                  )}
-                  {event.origin && event.destination && (
-                    <span>
-                      <span className="text-foreground font-medium">
-                        Route:
-                      </span>{" "}
-                      {String(event.origin)} → {String(event.destination)}
-                    </span>
-                  )}
-                  {event.truckType && (
-                    <span>
-                      <span className="text-foreground font-medium">
-                        Truck:
-                      </span>{" "}
-                      {String(event.truckType)}
-                    </span>
-                  )}
-                  {event.yearsExperience != null && (
-                    <span>
-                      <span className="text-foreground font-medium">
-                        Experience:
-                      </span>{" "}
-                      {String(event.yearsExperience)} yrs
-                    </span>
-                  )}
-                  {event.estimatedValue != null && (
-                    <span>
-                      <span className="text-foreground font-medium">
-                        Value:
-                      </span>{" "}
-                      ${String(event.estimatedValue)}
-                    </span>
-                  )}
-                </div>
-              )}
-
+              {/* Raw technical record — collapsed behind details */}
               {event.raw && Object.keys(event.raw).length > 0 && (
                 <details className="text-xs rounded-lg border border-border/60 bg-muted/10 p-3">
                   <summary className="cursor-pointer text-muted-foreground hover:text-foreground font-medium">
-                    Technical record ({Object.keys(event.raw).length} fields) — for troubleshooting only
+                    Raw technical record ({Object.keys(event.raw).length} fields) — click to expand
                   </summary>
                   <pre className="mt-2 p-2 rounded bg-muted/30 overflow-x-auto max-h-48 text-[10px]">
                     {JSON.stringify(event.raw, null, 2)}
                   </pre>
                 </details>
-              )}
-            </div>
-          </>
-        )}
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Day Events Popover (for "+N more")
-// ---------------------------------------------------------------------------
-
-function DayEventsDialog({
-  day,
-  events,
-  onOpenChange,
-  onEventSelect,
-}: {
-  day: Date | null;
-  events: CalendarEvent[];
-  onOpenChange: (open: boolean) => void;
-  onEventSelect: (e: CalendarEvent) => void;
-}) {
-  return (
-    <Dialog open={!!day} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[80vh] overflow-y-auto">
-        {day && (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <CalendarIcon className="h-5 w-5 text-primary" />
-                {format(day, "EEEE, MMM d, yyyy")}
-              </DialogTitle>
-              <DialogDescription>
-                {events.length} event{events.length === 1 ? "" : "s"} on this
-                day
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-2">
-              {events.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No events.</p>
-              ) : (
-                events.map((e) => (
-                  <button
-                    key={e.id}
-                    type="button"
-                    className="w-full text-left p-3 rounded-lg border border-border/60 bg-card/50 hover:border-primary/40 hover:bg-card transition-colors flex items-start gap-3"
-                    onClick={() => {
-                      onEventSelect(e);
-                      onOpenChange(false);
-                    }}
-                  >
-                    <span
-                      className={`w-2.5 h-2.5 rounded-full mt-1 shrink-0 ${e.color}`}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-sm truncate">{e.title}</p>
-                      <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                        <Clock className="h-3 w-3" />
-                        {format(toSafeDate(e.date), "h:mm a")}
-                        <span className="mx-1">•</span>
-                        {TYPE_LABELS[e.type]}
-                      </p>
-                      {e.details && (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">
-                          {e.details}
-                        </p>
-                      )}
-                    </div>
-                  </button>
-                ))
               )}
             </div>
           </>
@@ -441,13 +426,11 @@ function DayEventsDialog({
 interface CalendarViewProps {
   events: CalendarEvent[];
   onEventClick?: (event: CalendarEvent) => void;
-  onMoreClick?: (day: Date) => void;
 }
 
 export function CalendarView({
   events,
   onEventClick,
-  onMoreClick,
 }: CalendarViewProps) {
   const [currentMonth, setCurrentMonth] = React.useState(new Date());
   const [view, setView] = React.useState<"month" | "week">("month");
@@ -593,20 +576,19 @@ export function CalendarView({
             const dayEvents = getEventsForDay(day);
             const isCurrentMonth = isSameMonth(day, currentMonth);
             const isTodayDate = isSameDay(day, new Date());
-            const moreCount = dayEvents.length - 3;
 
             return (
               <div
                 key={day.toISOString()}
-                className={`min-h-[110px] p-2 border-b border-r border-border/60 relative ${
+                className={`min-h-[110px] p-2 border-b border-r border-border/60 relative flex flex-col ${
                   !isCurrentMonth ? "bg-muted/20 text-muted-foreground/50" : ""
                 } ${isTodayDate ? "bg-primary/5 ring-2 ring-primary/20" : ""}`}
               >
-                <div className="text-sm font-medium mb-1">
+                <div className="text-sm font-medium mb-1 shrink-0">
                   {format(day, "d")}
                 </div>
-                <div className="space-y-1 overflow-hidden max-h-[82px]">
-                  {dayEvents.slice(0, 3).map((event) => (
+                <div className="space-y-1 flex-1 overflow-y-auto scrollbar-hide min-h-0">
+                  {dayEvents.map((event) => (
                     <div
                       key={event.id}
                       className={`text-[10px] px-1.5 py-0.5 rounded truncate cursor-pointer hover:brightness-110 hover:scale-[1.02] transition-all ${event.color}`}
@@ -618,18 +600,6 @@ export function CalendarView({
                       {event.title}
                     </div>
                   ))}
-                  {moreCount > 0 && (
-                    <button
-                      type="button"
-                      className="text-[10px] text-primary hover:text-primary/80 hover:underline cursor-pointer text-center w-full bg-primary/5 rounded px-1 py-0.5 transition-colors"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onMoreClick?.(day);
-                      }}
-                    >
-                      +{moreCount} more
-                    </button>
-                  )}
                 </div>
               </div>
             );
@@ -879,14 +849,6 @@ export function CalendarKanbanPage({
   const [selectedEvent, setSelectedEvent] = React.useState<CalendarEvent | null>(
     null,
   );
-  const [selectedDay, setSelectedDay] = React.useState<Date | null>(null);
-
-  const dayEvents = React.useMemo(() => {
-    if (!selectedDay) return [];
-    return events.filter((e) =>
-      isSameDay(toSafeDate(e.date), selectedDay),
-    );
-  }, [events, selectedDay]);
 
   const handleLeadClick = (
     lead: Record<string, unknown>,
@@ -962,7 +924,6 @@ export function CalendarKanbanPage({
               <CalendarView
                 events={events}
                 onEventClick={setSelectedEvent}
-                onMoreClick={setSelectedDay}
               />
             </TabsContent>
 
@@ -987,14 +948,6 @@ export function CalendarKanbanPage({
         onOpenChange={(open) => {
           if (!open) setSelectedEvent(null);
         }}
-      />
-      <DayEventsDialog
-        day={selectedDay}
-        events={dayEvents}
-        onOpenChange={(open) => {
-          if (!open) setSelectedDay(null);
-        }}
-        onEventSelect={setSelectedEvent}
       />
     </div>
   );

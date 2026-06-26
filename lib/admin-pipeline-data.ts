@@ -202,6 +202,12 @@ export async function getPipelineFunnelData() {
     isActive: a.lastActivity && Date.now() - new Date(a.lastActivity).getTime() < 24 * 60 * 60 * 1000,
   }));
 
+  // Source breakdown for the pipeline
+  const sourceBreakdown = await db.collection("outbound_prospects").aggregate([
+    { $group: { _id: { $ifNull: ["$source", "unknown"] }, count: { $sum: 1 } } },
+    { $sort: { count: -1 } },
+  ]).toArray();
+
   return {
     funnel: {
       totalProspects,
@@ -216,6 +222,7 @@ export async function getPipelineFunnelData() {
     onboardingSessions,
     activityFeed,
     agentStats,
+    sourceBreakdown,
     workflowHealth: {
       outreachQueue: "System automation sends queued emails every 15 minutes; this is not Sofia. Sofia creates/scoring prospects upstream.",
       currentBottleneck:
