@@ -42,6 +42,18 @@ Do not send real emails, mutate production logistics data, change customer recor
 
 Draft reports, local builds, read-only checks, and local code changes are allowed.
 
+## Scheduled Jobs (Vercel Crons)
+
+All scheduled jobs now run as Vercel crons (see `vercel.json`) — the old laptop "Hermes" jobs can be disabled. Routes live in `app/api/cron/*` and are gated by `CRON_SECRET` (`lib/cron-auth.ts`); job expectations are registered in `lib/cron-jobs.ts`. Schedules are UTC:
+
+- `/api/cron/process-outreach` — every 15 min, sends queued outreach emails.
+- `/api/cron/onboarding-invites` — every 2h 14:00–23:00 UTC, invites qualified prospects.
+- `/api/cron/supervisor-report` — 12:00 UTC daily, pipeline/cron-health/bottleneck report (+ daily_ops heartbeat).
+- `/api/cron/prospecting` — 13:00 UTC daily, Sofia's FMCSA Census prospecting.
+- `/api/cron/agent-reviews` — 16:00 UTC daily, deterministic agent reviews (Marcus/David/Jennifer/Robert/Emily daily; Isabella/Alexandra Mondays America/Chicago).
+
+Status/timesheet: `GET /api/admin/agent-status` with `x-cron-secret: <CRON_SECRET>` returns per-job last-run + on-time status plus headline business counts.
+
 ## Key Surfaces
 
 - Admin: `app/admin`
