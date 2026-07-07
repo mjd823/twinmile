@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import clientPromise from '@/lib/mongodb'
+import { runFmcsaProspecting } from '@/lib/fmcsa-prospecting-core'
+
+// The outbound_prospecting action runs a live FMCSA Census API pass
+// (5 states, rate-limited) — allow up to 60s.
+export const maxDuration = 60
 
 export async function GET() {
   try {
@@ -244,50 +249,68 @@ export async function POST(request: NextRequest) {
     // ========== AGENT-SPECIFIC ACTIONS ==========
     
     else if (action === 'outbound_prospecting') {
-      // Sofia - Lead Generation
-      const today = new Date()
-      today.setHours(0, 0, 0, 0)
-      
-      const existingToday = await db.collection('outbound_prospects').countDocuments({
-        createdAt: { $gte: today }
+      // Sofia - Lead Generation: REAL on-demand FMCSA Company Census run.
+      // Same core as the daily cron (lib/fmcsa-prospecting-core.ts), smaller batch.
+      const report = await runFmcsaProspecting(db, { maxResults: 10 })
+
+      // Honest run record — real counts, 0 found is a valid result.
+      await db.collection('agent_activity').insertOne({
+        timestamp: new Date(),
+        agent: { name: 'Sofia Rodriguez', role: 'Lead Generation Specialist' },
+        activity: `FMCSA prospecting run (on-demand): ${report.carriersFound} carriers reviewed, ${report.qualified} qualified, ${report.saved} new prospects saved (${report.targetStates.join(', ')})`,
+        type: 'outbound_prospecting',
+        action: 'outbound_prospecting',
+        agentId: 'lead_generation',
+        details: {
+          carriersFound: report.carriersFound,
+          qualified: report.qualified,
+          saved: report.saved,
+          targetStates: report.targetStates,
+          dataSource: 'FMCSA Company Census API (data.transportation.gov)',
+          source: 'admin-dashboard',
+        },
       })
-      
-      // Search for new prospects (in production calls FMCSA/DAT/LinkedIn)
-      const mockProspects = [
-        { name: 'James Rodriguez', email: 'j.rodriguez@trucking.com', phone: '555-0101', equipment: 'Dry Van', experience: '15 years', authority: 'Active', score: 82, lanes: ['TX-LA', 'TX-NM'] },
-        { name: 'Maria Santos', email: 'msantos@freight.com', phone: '555-0102', equipment: 'Flatbed', experience: '8 years', authority: 'Active', score: 76, lanes: ['TX-OK', 'TX-AR'] },
-        { name: 'David Chen', email: 'dchen@logistics.com', phone: '555-0103', equipment: 'Reefer', experience: '12 years', authority: 'Active', score: 89, lanes: ['TX-CA', 'TX-NV'] },
+
+      result.message = report.saved > 0
+        ? `🔍 Sofia prospecting complete: ${report.saved} new prospects saved (${report.carriersFound} carriers reviewed, ${report.qualified} qualified)`
+        : `🔍 Sofia prospecting complete: no new prospects this run (${report.carriersFound} carriers reviewed — already in database or below threshold)`
+      result.details = report
+    }
+
+    else if (action === 'cleanup_fake_prospects') {
+      // One-time cleanup: remove the three hardcoded demo prospects that the
+      // old outbound_prospecting action inserted on every button press, plus
+      // the fabricated "Found new prospect" activity entries they generated.
+      const fakeProspects = [
+        { name: 'James Rodriguez', email: 'j.rodriguez@trucking.com' },
+        { name: 'Maria Santos', email: 'msantos@freight.com' },
+        { name: 'David Chen', email: 'dchen@logistics.com' },
       ]
-      
-      let created = 0
-      for (const p of mockProspects) {
-        await db.collection('outbound_prospects').insertOne({
-          ...p,
-          contact: { email: p.email, phone: p.phone },
-          equipment: [p.equipment],
-          experience: p.experience,
-          authority: p.authority,
-          score: p.score,
-          lanes: p.lanes,
-          source: 'fmcsa_search',
-          status: 'new',
-          createdAt: new Date(),
-          updatedAt: new Date(),
+
+      let prospectsDeleted = 0
+      for (const fake of fakeProspects) {
+        const res = await db.collection('outbound_prospects').deleteMany({
+          name: fake.name,
+          $or: [{ email: fake.email }, { 'contact.email': fake.email }],
         })
-        created++
-        
-        await db.collection('agent_activity').insertOne({
-          timestamp: new Date(),
-          agent: { name: 'Sofia Rodriguez', role: 'Lead Generation Specialist' },
-          activity: `Found new prospect: ${p.name} (score: ${p.score}, lanes: ${p.lanes.join(', ')})`,
-          type: 'outbound_prospecting',
-          agentId: 'lead_generation',
-          details: { prospectName: p.name, score: p.score, lanes: p.lanes },
-        })
+        prospectsDeleted += res.deletedCount
       }
-      
-      result.message = `🔍 Sofia prospecting complete: ${created} new prospects found (today total: ${existingToday + created})`
-      result.details = { created, existingToday, totalToday: existingToday + created }
+
+      const activityRes = await db.collection('agent_activity').deleteMany({
+        type: 'outbound_prospecting',
+        'details.prospectName': { $in: fakeProspects.map((f) => f.name) },
+      })
+
+      await db.collection('agent_activity').insertOne({
+        timestamp: new Date(),
+        agent: 'AI Supervisor',
+        activity: `Cleanup: removed ${prospectsDeleted} fake demo prospects and ${activityRes.deletedCount} fabricated activity entries`,
+        type: 'cleanup_fake_prospects',
+        details: { prospectsDeleted, fakeActivitiesDeleted: activityRes.deletedCount },
+      })
+
+      result.message = `🧹 Cleanup complete: ${prospectsDeleted} fake demo prospects and ${activityRes.deletedCount} fabricated activity entries removed`
+      result.details = { prospectsDeleted, fakeActivitiesDeleted: activityRes.deletedCount }
     }
     
     else if (action === 'find_customers') {

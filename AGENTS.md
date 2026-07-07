@@ -59,7 +59,7 @@ Status/timesheet: `GET /api/admin/agent-status` with `x-cron-secret: <CRON_SECRE
 - Admin: `app/admin`
 - Lead capture: `app/get-a-quote`, `app/drive-with-us`, `app/api/quote`, `app/api/driver-application`
 - Fleet/loads/maintenance: `app/admin/fleet`, `app/admin/loads`, `app/admin/maintenance`
-- Business AI: `lib/ai-business-integration.ts`, `lib/business-organization.ts`, `lib/ai-agents.ts`
+- Business AI: `lib/business-organization.ts`, `lib/ai-agents.ts`, `lib/fmcsa-prospecting-core.ts`
 - Data/API: `db`, `app/api/admin`
 - Auth: `lib/auth`, `app/api/auth`
 
