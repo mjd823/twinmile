@@ -1,4 +1,7 @@
 import clientPromise from "@/lib/mongodb";
+import { CRON_JOBS } from "@/lib/cron-jobs";
+import { cronOccurrences } from "@/lib/cron-schedule";
+import { computeJobStatuses, type JobStatus } from "@/lib/agent-status";
 import {
   CalendarKanbanPage,
   type CalendarEvent,
@@ -210,31 +213,55 @@ const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
       }),
     );
 
-    // Nighttime prep events — each agent's proactive prep schedule
+    // Real work schedule — one occurrence per job per scheduled day, expanded
+    // from the Vercel cron registry (lib/cron-jobs.ts) and colored by each
+    // job's LIVE freshness status (same logic as /api/admin/agent-status).
     const now = new Date();
-    const todayStr = now.toISOString().split('T')[0];
-    const AGENT_PREP = [
-      { name: "Sofia Rodriguez", time: "22:00", task: "🧠 Nighttime Prep — Review today's FMCSA finds, prepare search strategies for tomorrow", color: "bg-cyan-500/40" },
-      { name: "Marcus Chen", time: "21:00", task: "🧠 Nighttime Prep — Draft outreach messages, review qualified leads pipeline", color: "bg-blue-500/40" },
-      { name: "David Kumar", time: "20:00", task: "🧠 Nighttime Prep — Analyze freight trends, plan dispatch capacity for tomorrow", color: "bg-green-500/40" },
-      { name: "Jennifer Foster", time: "21:00", task: "🧠 Nighttime Prep — Prepare compliance checklists, review expiring sessions", color: "bg-orange-500/40" },
-      { name: "Robert Chang", time: "22:00", task: "🧠 Nighttime Prep — Review unpaid invoices, prepare financial summary", color: "bg-amber-500/40" },
-      { name: "Emily Watson", time: "20:00", task: "🧠 Nighttime Prep — Review customer feedback, prepare retention strategies", color: "bg-red-500/40" },
-      { name: "Alexandra Sterling", time: "19:00", task: "🧠 Nighttime Prep — Weekly performance review, strategic planning", color: "bg-purple-500/40" },
-      { name: "Team Lead", time: "01:00", task: "⭐ Supervisor Review — Check all agent performance, generate nightly summary", color: "bg-pink-500/60" },
-    ];
-    AGENT_PREP.forEach(p => {
-      const prepDate = new Date(`${todayStr}T${p.time}:00`);
+    const statusReport = await computeJobStatuses(db, now);
+    const statusById = new Map(statusReport.jobs.map((j) => [j.id, j]));
+
+    const STATUS_COLOR: Record<JobStatus, string> = {
+      on_time: "bg-emerald-500/70 text-emerald-50",
+      late: "bg-amber-500/80 text-amber-950",
+      error: "bg-red-500/80 text-red-50",
+      never_ran: "bg-zinc-500/60 text-zinc-100",
+    };
+
+    // Window: first day of last month through last day of next month.
+    const windowStart = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)
+    );
+    const windowEnd = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 2, 0, 23, 59, 59)
+    );
+
+    for (const occ of cronOccurrences(CRON_JOBS, windowStart, windowEnd)) {
+      const live = statusById.get(occ.job.id);
+      const status: JobStatus = live?.status ?? "never_ran";
       events.push({
-        id: `prep-${p.name.replace(/\s+/g, '-')}`,
-        title: p.task,
-        date: prepDate,
-        type: "agent_action",
-        agent: p.name,
-        details: `After-hours proactive work — ${p.name} preparing for next day`,
-        color: p.color,
+        id: `cron-${occ.job.id}-${occ.date.toISOString().slice(0, 10)}`,
+        title: `${occ.job.agentName} — ${occ.job.name}`,
+        date: occ.date,
+        type: "cron",
+        agent: occ.job.agentName,
+        status,
+        schedule: occ.job.schedule,
+        freqLabel: occ.freqLabel,
+        lastRun: live?.lastRun ?? null,
+        details:
+          `${occ.freqLabel}. ` +
+          (live?.lastRun
+            ? `Last run ${new Date(live.lastRun).toLocaleString("en-US", {
+                timeZone: "America/Chicago",
+                month: "short",
+                day: "numeric",
+                hour: "numeric",
+                minute: "2-digit",
+              })} CT (${live.hoursSinceLastRun}h ago).`
+            : "Has never logged a run."),
+        color: STATUS_COLOR[status],
       });
-    });
+    }
 
     return events;
   } catch (error) {

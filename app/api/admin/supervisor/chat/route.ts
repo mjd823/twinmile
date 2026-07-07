@@ -156,7 +156,10 @@ export async function POST(req: Request) {
 
     // Help / default
     else if (message.includes("help") || message.includes("what can you")) {
-      response = `🤖 **AI Supervisor — What I Can Do**\n\nI have real-time access to your database. You can ask me:\n\n• **"Pipeline status"** — Full funnel overview\n• **"Why no emails?"** — Diagnose outreach issues\n• **"Show idle agents"** — See who's not working\n• **"Prospects today"** — New finds and sources\n• **"Cron jobs"** — Job run counts\n• **"Cold call queue"** — Prospects needing phone outreach\n\nI can also trigger cron jobs and score unscored prospects automatically.`;
+      // NOTE: do not claim cron-trigger/auto-fix powers here — this keyword
+      // chat is read-only. Automated fixing of broken jobs is handled by the
+      // Mission Control hub watchdog (Projects/hub), not this endpoint.
+      response = `🤖 **AI Supervisor — What I Can Do**\n\nI have real-time access to your database. You can ask me:\n\n• **"Pipeline status"** — Full funnel overview\n• **"Why no emails?"** — Diagnose outreach issues\n• **"Show idle agents"** — See who's not working\n• **"Prospects today"** — New finds and sources\n• **"Cron jobs"** — Job run counts\n• **"Cold call queue"** — Prospects needing phone outreach\n\nBroken or stale jobs are detected and auto-fixed by the Mission Control watchdog.`;
     }
 
     // Fallback — try to answer from data

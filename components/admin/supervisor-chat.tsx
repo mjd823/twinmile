@@ -16,14 +16,19 @@ interface ChatMessage {
 
 interface SupervisorChatProps {
   agentName?: string;
+  /** ISO timestamp of the live data snapshot backing this page render */
+  dataAsOf?: string | null;
 }
 
-export function SupervisorChat({ agentName = "AI Supervisor" }: SupervisorChatProps) {
+export function SupervisorChat({
+  agentName = "AI Supervisor",
+  dataAsOf = null,
+}: SupervisorChatProps) {
   const [messages, setMessages] = React.useState<ChatMessage[]>([
     {
       id: "welcome",
       role: "assistant",
-      content: `Hello! I'm the ${agentName}. I monitor all 8 AI agents, manage cron jobs, and keep the pipeline running. You can ask me things like:\n\n• "What's the pipeline status?"\n• "Why are no emails sending?"\n• "Show me idle agents"\n• "Trigger the outreach cron"\n• "How many prospects do we have?"\n\nWhat would you like to know?`,
+      content: `Hello! I'm the ${agentName}. I monitor all 8 AI agents and the cron schedule, straight from the live database. You can ask me things like:\n\n• "What's the pipeline status?"\n• "Why are no emails sending?"\n• "Show me idle agents"\n• "How are the cron jobs?"\n• "How many prospects do we have?"\n\nWhat would you like to know?`,
       timestamp: new Date(),
     },
   ]);
@@ -100,6 +105,15 @@ export function SupervisorChat({ agentName = "AI Supervisor" }: SupervisorChatPr
           Chat with {agentName}
           <Badge variant="outline" className="text-[10px] ml-1">Live</Badge>
         </CardTitle>
+        {dataAsOf && (
+          <p className="text-[11px] text-muted-foreground">
+            Answers query the live database · page data refreshed{" "}
+            {new Date(dataAsOf).toLocaleTimeString("en-US", {
+              hour: "numeric",
+              minute: "2-digit",
+            })}
+          </p>
+        )}
       </CardHeader>
 
       {/* Messages */}

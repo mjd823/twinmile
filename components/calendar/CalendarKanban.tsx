@@ -43,6 +43,8 @@ import {
 // Types
 // ---------------------------------------------------------------------------
 
+export type JobStatus = "on_time" | "late" | "error" | "never_ran";
+
 export interface CalendarEvent {
   id: string;
   title: string;
@@ -61,6 +63,11 @@ export interface CalendarEvent {
   truckType?: string;
   yearsExperience?: number | string;
   raw?: Record<string, unknown>;
+  // Scheduled-job metadata (type "cron"): live health from agent-status logic
+  status?: JobStatus;
+  schedule?: string;
+  freqLabel?: string;
+  lastRun?: string | null;
 }
 
 interface PipelineData {
@@ -91,8 +98,38 @@ const TYPE_COLORS: Record<CalendarEvent["type"], string> = {
   meeting: "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
 };
 
+/** Live health of a scheduled job (mirrors /api/admin/agent-status). */
+export const JOB_STATUS_META: Record<
+  JobStatus,
+  { label: string; dot: string; pill: string }
+> = {
+  on_time: {
+    label: "On time",
+    dot: "bg-emerald-500",
+    pill: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  },
+  late: {
+    label: "Late",
+    dot: "bg-amber-500",
+    pill: "bg-amber-500/15 text-amber-400 border-amber-500/30",
+  },
+  error: {
+    label: "Error",
+    dot: "bg-red-500",
+    pill: "bg-red-500/15 text-red-400 border-red-500/30",
+  },
+  never_ran: {
+    label: "Never ran",
+    dot: "bg-zinc-500",
+    pill: "bg-zinc-500/15 text-zinc-400 border-zinc-500/30",
+  },
+};
+
 const toSafeDate = (d: Date | string): Date =>
   d instanceof Date ? d : new Date(d);
+
+const sortByTime = (a: CalendarEvent, b: CalendarEvent) =>
+  toSafeDate(a.date).getTime() - toSafeDate(b.date).getTime();
 
 // ---------------------------------------------------------------------------
 // Event Detail Dialog
@@ -119,8 +156,10 @@ function EventDetailDialog({
       if (e.estimatedValue)
         parts.push(`Estimated value: $${e.estimatedValue}.`);
     } else if (e.type === "cron") {
-      parts.push(`Scheduled task "${e.title}" ran at ${time}.`);
-      if (e.agent) parts.push(`Handled by agent: ${e.agent}.`);
+      parts.push(`Scheduled job, runs at ${time}.`);
+      if (e.agent) parts.push(`Handled by ${e.agent}.`);
+      if (e.status)
+        parts.push(`Current health: ${JOB_STATUS_META[e.status].label.toLowerCase()}.`);
     } else if (e.type === "pipeline") {
       parts.push(`Pipeline event at ${time}.`);
       if (e.serviceType) parts.push(`Service: ${e.serviceType}.`);
@@ -183,7 +222,50 @@ function EventDetailDialog({
                     {TYPE_LABELS[event.type]}
                   </Badge>
                 </div>
-                {event.agentId && (
+                {event.status && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Live status
+                    </p>
+                    <Badge
+                      variant="outline"
+                      className={`mt-1 text-[10px] ${JOB_STATUS_META[event.status].pill}`}
+                    >
+                      {JOB_STATUS_META[event.status].label}
+                    </Badge>
+                  </div>
+                )}
+                {event.freqLabel && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Frequency
+                    </p>
+                    <p className="font-medium text-xs mt-1">{event.freqLabel}</p>
+                  </div>
+                )}
+                {event.schedule && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Cron (UTC)
+                    </p>
+                    <p className="font-mono text-[11px] mt-1 break-all">
+                      {event.schedule}
+                    </p>
+                  </div>
+                )}
+                {event.type === "cron" && (
+                  <div className="p-2 rounded-lg border border-border/60 bg-card/50">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                      Last run
+                    </p>
+                    <p className="font-medium text-xs mt-1 tabular-nums">
+                      {event.lastRun
+                        ? format(new Date(event.lastRun), "MMM d, h:mm a")
+                        : "Never"}
+                    </p>
+                  </div>
+                )}
+                {(event.agent || event.agentId) && (
                   <div className="p-2 rounded-lg border border-border/60 bg-card/50">
                     <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
                       Agent
@@ -270,7 +352,101 @@ function EventDetailDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Day Cell Component — square with hover expand
+// Day Detail Dialog — tap a day cell (essential on mobile, where hover-expand
+// doesn't exist) to get every event for that day, each tappable for detail.
+// ---------------------------------------------------------------------------
+
+function DayDetailDialog({
+  day,
+  events,
+  onOpenChange,
+  onEventClick,
+}: {
+  day: Date | null;
+  events: CalendarEvent[];
+  onOpenChange: (open: boolean) => void;
+  onEventClick?: (event: CalendarEvent) => void;
+}) {
+  const sorted = [...events].sort(sortByTime);
+  const jobs = sorted.filter((e) => e.type === "cron");
+  const rest = sorted.filter((e) => e.type !== "cron");
+
+  const renderRow = (event: CalendarEvent) => (
+    <button
+      key={event.id}
+      onClick={() => {
+        onOpenChange(false);
+        onEventClick?.(event);
+      }}
+      className="w-full flex items-center gap-2.5 p-2 rounded-lg border border-border/40 bg-card/50 hover:border-primary/30 hover:bg-muted/30 active:bg-muted/40 transition-colors text-left"
+    >
+      <span className="text-[11px] font-medium text-muted-foreground tabular-nums w-16 shrink-0">
+        {format(toSafeDate(event.date), "h:mm a")}
+      </span>
+      <span
+        className={`w-2 h-2 rounded-full shrink-0 ${
+          event.status ? JOB_STATUS_META[event.status].dot : event.color
+        }`}
+      />
+      <span className="flex-1 min-w-0">
+        <span className="block text-xs font-medium truncate">{event.title}</span>
+        {event.details && (
+          <span className="block text-[10px] text-muted-foreground truncate">
+            {event.details}
+          </span>
+        )}
+      </span>
+      {event.status && (
+        <Badge
+          variant="outline"
+          className={`text-[9px] px-1.5 py-0 shrink-0 ${JOB_STATUS_META[event.status].pill}`}
+        >
+          {JOB_STATUS_META[event.status].label}
+        </Badge>
+      )}
+    </button>
+  );
+
+  return (
+    <Dialog open={!!day} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        {day && (
+          <>
+            <DialogHeader>
+              <DialogTitle>{format(day, "EEEE, MMMM d")}</DialogTitle>
+              <DialogDescription>
+                {events.length === 0
+                  ? "Nothing scheduled or logged this day."
+                  : `${jobs.length} scheduled job${jobs.length === 1 ? "" : "s"} · ${rest.length} event${rest.length === 1 ? "" : "s"}`}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              {jobs.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1.5">
+                    Scheduled jobs
+                  </p>
+                  <div className="space-y-1.5">{jobs.map(renderRow)}</div>
+                </div>
+              )}
+              {rest.length > 0 && (
+                <div>
+                  <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1.5">
+                    Activity &amp; pipeline
+                  </p>
+                  <div className="space-y-1.5">{rest.map(renderRow)}</div>
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Day Cell Component — hover expands (desktop), tap opens the day sheet
 // ---------------------------------------------------------------------------
 
 const MAX_VISIBLE_EVENTS = 3;
@@ -281,78 +457,109 @@ function DayCell({
   isCurrentMonth,
   isTodayDate,
   onEventClick,
+  onDayClick,
 }: {
   day: Date;
   dayEvents: CalendarEvent[];
   isCurrentMonth: boolean;
   isTodayDate: boolean;
   onEventClick?: (event: CalendarEvent) => void;
+  onDayClick?: (day: Date) => void;
 }) {
   const [hovered, setHovered] = React.useState(false);
-  const visibleEvents = dayEvents.slice(0, MAX_VISIBLE_EVENTS);
-  const remainingCount = dayEvents.length - MAX_VISIBLE_EVENTS;
+  const sorted = React.useMemo(() => [...dayEvents].sort(sortByTime), [dayEvents]);
+  const visibleEvents = sorted.slice(0, MAX_VISIBLE_EVENTS);
+  const remainingCount = sorted.length - MAX_VISIBLE_EVENTS;
 
   return (
     <div
-      className={`relative p-1.5 border-b border-r border-border/60 flex flex-col transition-all duration-200 ${
+      className={`relative p-1 sm:p-1.5 border-b border-r border-border/60 flex flex-col transition-all duration-200 cursor-pointer active:bg-muted/40 ${
         !isCurrentMonth ? "bg-muted/20 text-muted-foreground/50" : ""
       } ${isTodayDate ? "bg-primary/5 ring-2 ring-primary/20" : ""} ${
         hovered
-          ? "z-20 shadow-lg shadow-black/20 bg-card row-span-2 min-h-[200px]"
-          : "min-h-[100px] max-h-[100px] overflow-hidden"
+          ? "sm:z-20 sm:shadow-lg sm:shadow-black/20 sm:bg-card sm:row-span-2 sm:min-h-[200px] min-h-[64px]"
+          : "min-h-[64px] max-h-[64px] sm:min-h-[100px] sm:max-h-[100px] overflow-hidden"
       }`}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      onClick={() => onDayClick?.(day)}
     >
       {/* Day number */}
-      <div className="text-xs font-medium mb-0.5 shrink-0 flex items-center justify-between">
-        <span>{format(day, "d")}</span>
-        {dayEvents.length > 0 && !hovered && (
-          <span className="flex items-center gap-0.5">
-            {dayEvents.slice(0, 3).map((ev, i) => (
+      <div className="text-xs font-medium mb-0.5 shrink-0 flex items-center justify-between tabular-nums">
+        <span
+          className={
+            isTodayDate
+              ? "h-5 w-5 -ml-0.5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[11px] font-semibold"
+              : ""
+          }
+        >
+          {format(day, "d")}
+        </span>
+        {sorted.length > 0 && !hovered && (
+          <span className="hidden sm:flex items-center gap-0.5">
+            {sorted.slice(0, 3).map((ev, i) => (
               <span
                 key={i}
-                className={`w-1.5 h-1.5 rounded-full ${ev.color}`}
+                className={`w-1.5 h-1.5 rounded-full ${
+                  ev.status ? JOB_STATUS_META[ev.status].dot : ev.color
+                }`}
               />
             ))}
-            {dayEvents.length > 3 && (
+            {sorted.length > 3 && (
               <span className="text-[9px] text-muted-foreground ml-0.5">
-                +{dayEvents.length - 3}
+                +{sorted.length - 3}
               </span>
             )}
           </span>
         )}
       </div>
 
-      {/* Event list */}
+      {/* Mobile: dot summary only — the tap target is the whole cell */}
+      <div className="sm:hidden flex flex-wrap content-start gap-[3px] flex-1 min-h-0 overflow-hidden">
+        {sorted.slice(0, 12).map((ev, i) => (
+          <span
+            key={i}
+            className={`w-1.5 h-1.5 rounded-full ${
+              ev.status ? JOB_STATUS_META[ev.status].dot : ev.color
+            }`}
+          />
+        ))}
+        {sorted.length > 12 && (
+          <span className="text-[8px] leading-none text-muted-foreground">
+            +{sorted.length - 12}
+          </span>
+        )}
+      </div>
+
+      {/* Desktop: event chips (all when hovered, first 3 otherwise) */}
       <div
-        className={`flex-1 min-h-0 ${
+        className={`hidden sm:block flex-1 min-h-0 ${
           hovered ? "overflow-y-auto space-y-0.5" : "overflow-hidden space-y-0.5"
         }`}
       >
-        {(hovered ? dayEvents : visibleEvents).map((event) => (
+        {(hovered ? sorted : visibleEvents).map((event) => (
           <div
             key={event.id}
-            className={`text-[10px] px-1 py-0.5 rounded truncate cursor-pointer hover:brightness-110 transition-all ${event.color}`}
+            className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate cursor-pointer hover:brightness-110 transition-all ${event.color}`}
             onClick={(e) => {
               e.stopPropagation();
               onEventClick?.(event);
             }}
             title={event.title}
           >
+            {hovered && (
+              <span className="opacity-70 tabular-nums mr-1">
+                {format(toSafeDate(event.date), "h:mm a")}
+              </span>
+            )}
             {event.title}
           </div>
         ))}
-        {hovered && remainingCount > 0 && (
-          <div className="text-[9px] text-muted-foreground px-1 py-0.5">
-            {remainingCount} more event{remainingCount !== 1 ? "s" : ""}
-          </div>
-        )}
       </div>
 
       {/* "+N more" indicator when not hovered and there are hidden events */}
       {!hovered && remainingCount > 0 && (
-        <div className="text-[9px] text-muted-foreground px-1 mt-auto shrink-0">
+        <div className="hidden sm:block text-[9px] text-muted-foreground px-1 mt-auto shrink-0">
           +{remainingCount} more
         </div>
       )}
@@ -369,12 +576,43 @@ interface CalendarViewProps {
   onEventClick?: (event: CalendarEvent) => void;
 }
 
+/** Status legend shown under the calendar header. */
+function StatusLegend() {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-4 py-2 border-b border-border/60 bg-muted/20 text-[10px] text-muted-foreground">
+      <span className="font-semibold uppercase tracking-wide text-[9px]">
+        Job health
+      </span>
+      {(Object.keys(JOB_STATUS_META) as JobStatus[]).map((s) => (
+        <span key={s} className="flex items-center gap-1">
+          <span className={`w-1.5 h-1.5 rounded-full ${JOB_STATUS_META[s].dot}`} />
+          {JOB_STATUS_META[s].label}
+        </span>
+      ))}
+      <span className="hidden sm:inline text-muted-foreground/50">·</span>
+      <span className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+        Pipeline
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+        Drivers
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+        Agent activity
+      </span>
+    </div>
+  );
+}
+
 export function CalendarView({
   events,
   onEventClick,
 }: CalendarViewProps) {
   const [currentMonth, setCurrentMonth] = React.useState(new Date());
   const [view, setView] = React.useState<"month" | "week">("month");
+  const [selectedDay, setSelectedDay] = React.useState<Date | null>(null);
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -504,11 +742,12 @@ export function CalendarView({
         </div>
       </CardHeader>
       <CardContent className="p-0">
+        <StatusLegend />
         <div className="grid grid-cols-7 border-t border-l border-border/60">
           {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
             <div
               key={day}
-              className="p-2 text-center text-xs font-medium text-muted-foreground border-b border-r border-border/60 bg-muted/30"
+              className="p-1.5 sm:p-2 text-center text-[10px] sm:text-xs font-medium text-muted-foreground border-b border-r border-border/60 bg-muted/30"
             >
               {day}
             </div>
@@ -526,11 +765,21 @@ export function CalendarView({
                 isCurrentMonth={isCurrentMonth}
                 isTodayDate={isTodayDate}
                 onEventClick={onEventClick}
+                onDayClick={setSelectedDay}
               />
             );
           })}
         </div>
       </CardContent>
+
+      <DayDetailDialog
+        day={selectedDay}
+        events={selectedDay ? getEventsForDay(selectedDay) : []}
+        onOpenChange={(open) => {
+          if (!open) setSelectedDay(null);
+        }}
+        onEventClick={onEventClick}
+      />
     </Card>
   );
 }
@@ -816,17 +1065,17 @@ export function CalendarKanbanPage({
   };
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 sm:space-y-6 p-3 sm:p-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
             <span className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <span className="text-blue-500 text-xl">📅</span>
             </span>
             Calendar & Kanban
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Cron schedule • Agent activity • Pipeline visualization
+          <p className="text-xs sm:text-sm text-muted-foreground mt-1">
+            Live work schedule from the cron registry • Agent activity • Pipeline
           </p>
         </div>
       </div>

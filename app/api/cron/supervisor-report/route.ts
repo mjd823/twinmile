@@ -21,6 +21,14 @@ import { CRON_JOBS, lastActivityFor } from "@/lib/cron-jobs";
  * small "daily_ops" heartbeat that replaces the old 7AM Daily AI Operations
  * job (this cron fires 12:00 UTC = 7AM CDT, same slot).
  *
+ * NOTE: the old manual "supervisor auto-fix" script (supervisor_run.cjs,
+ * commit c860187) was REMOVED — it wrote a mostly-hardcoded snapshot of this
+ * same "supervisor_monitoring" action (fake cron statuses frozen at June 2026)
+ * plus heuristic prospect scoring, and would clobber this route's live report
+ * if re-run. Detect-and-fix for broken deploys/sites/crons is now handled by
+ * the Mission Control hub watchdog (Projects/hub: lib/watchdog.ts), which
+ * queues real Claude Code fix tasks; this route stays report-only.
+ *
  * Schedule (vercel.json): "0 12 * * *" UTC.
  */
 
