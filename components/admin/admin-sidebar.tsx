@@ -28,10 +28,12 @@ import {
   Send,
   Megaphone,
   Phone,
+  Ear,
 } from "lucide-react";
 
 const navigation = [
   { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
+  { name: "Listener", href: "/admin/listener", icon: Ear },
   { name: "Leads", href: "/admin/inbox", icon: Inbox },
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
   { name: "Outreach", href: "/admin/outreach", icon: Send },

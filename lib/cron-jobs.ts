@@ -76,6 +76,15 @@ export const CRON_JOBS: CronJobDef[] = [
     cadence: "daily",
   },
   {
+    id: "social-listener",
+    name: "Sofia — Social Listener (Reddit, read-only)",
+    agentName: "Sofia Rodriguez",
+    actions: ["social_listening"],
+    schedule: "15 */6 * * *",
+    expectedEveryHours: 13,
+    cadence: "sub-daily",
+  },
+  {
     id: "supervisor-report",
     name: "AI Supervisor — Daily Report",
     agentName: "AI Supervisor",
