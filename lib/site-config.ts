@@ -10,7 +10,7 @@ export const SITE_CONFIG = {
   // TODO(MJ): supply the real USDOT number. Left empty on purpose — the
   // footer/drive-with-us trust block hides it until a real value is set.
   // Do NOT put a placeholder/invented number here.
-  dotNumber: process.env.NEXT_PUBLIC_DOT_NUMBER || "",
+  dotNumber: process.env.NEXT_PUBLIC_DOT_NUMBER || "4519079", // USDOT — verified ACTIVE in FMCSA SAFER 2026-07-08
   city: process.env.NEXT_PUBLIC_COMPANY_CITY || "Houston",
   state: process.env.NEXT_PUBLIC_COMPANY_STATE || "TX",
 
