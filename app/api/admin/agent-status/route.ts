@@ -89,6 +89,17 @@ export async function GET(request: NextRequest) {
       db.collection("trucks").countDocuments(),
     ]);
 
+    // Failure-reason breakdown so mass failures are diagnosable remotely
+    const failureReasons = await db
+      .collection("outreach_tasks")
+      .aggregate<{ _id: string | null; count: number }>([
+        { $match: { status: "failed" } },
+        { $group: { _id: { $ifNull: ["$error", "(no error recorded)"] }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 5 },
+      ])
+      .toArray();
+
     return NextResponse.json({
       ok: true,
       generatedAt: statusReport.generatedAt,
@@ -105,6 +116,7 @@ export async function GET(request: NextRequest) {
           sentLast24h: outreachSentToday,
           pending: outreachPending,
           failed: outreachFailed,
+          failureReasons: failureReasons.map((r) => ({ reason: r._id, count: r.count })),
         },
         onboarding: {
           sessionsPending,
