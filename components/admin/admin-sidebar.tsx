@@ -25,11 +25,13 @@ import {
   TrendingUp,
   Clock,
   Shield,
+  Send,
 } from "lucide-react";
 
 const navigation = [
   { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
+  { name: "Outreach", href: "/admin/outreach", icon: Send },
   { name: "Automation Center", href: "/admin/automation", icon: Activity },
   { name: "AI Agents", href: "/admin/agents", icon: Users },
   { name: "Timesheet", href: "/admin/timesheet", icon: Clock },

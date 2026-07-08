@@ -57,6 +57,7 @@ Status/timesheet: `GET /api/admin/agent-status` with `x-cron-secret: <CRON_SECRE
 ## Key Surfaces
 
 - Admin: `app/admin`
+- Outreach visibility + replies: `app/admin/outreach` (funnel, sent-email bodies, inbound replies + one-click draft send); inbound webhook `app/api/webhooks/resend-inbound` (env: `OUTREACH_REPLY_TO`, `RESEND_WEBHOOK_SECRET`, `OUTREACH_AUTOREPLY`)
 - Lead capture: `app/get-a-quote`, `app/drive-with-us`, `app/api/quote`, `app/api/driver-application`
 - Fleet/loads/maintenance: `app/admin/fleet`, `app/admin/loads`, `app/admin/maintenance`
 - Business AI: `lib/business-organization.ts`, `lib/ai-agents.ts`, `lib/fmcsa-prospecting-core.ts`

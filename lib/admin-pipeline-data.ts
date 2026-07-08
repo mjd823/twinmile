@@ -27,6 +27,8 @@ const ACTION_LABELS: Record<string, string> = {
   daily_ops_check: "Operations Check",
   hr_onboarding_review: "HR Onboarding Review",
   onboarding_link_clicked: "Onboarding Link Clicked",
+  prospect_reply_received: "Prospect Reply Received",
+  prospect_reply_sent: "Prospect Reply Answered",
   daily_finance_review: "Finance Review",
   customer_success_check: "Customer Success Check",
   customer_support: "Customer Support",

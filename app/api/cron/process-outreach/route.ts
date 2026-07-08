@@ -3,6 +3,11 @@ import { ObjectId, type Document } from "mongodb";
 import { Resend } from "resend";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
+import {
+  renderOutreachEmail,
+  type Lead,
+  type Personalization,
+} from "@/lib/outreach-templates";
 
 /**
  * GET /api/cron/process-outreach
@@ -36,57 +41,9 @@ const STALE_SENDING_MS = 15 * 60 * 1000;
 
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
-// Leads come from heterogeneous collections (leads_quotes, leads_drivers,
-// outbound_prospects) with different shapes -- same loose typing as the
-// legacy script.
-type Lead = any;
-type Personalization = any;
-
-// Same templates as scripts/process-outreach-cron.mjs
-const EMAIL_TEMPLATES: Record<
-  string,
-  {
-    subject: (lead: Lead) => string;
-    html: (lead: Lead, p: Personalization) => string;
-    text: (lead: Lead, p: Personalization) => string;
-  }
-> = {
-  quote_initial: {
-    subject: (lead) => `Your ${lead.serviceType || "freight"} quote request -- Twin Mile`,
-    html: (lead) =>
-      `<p>Hi ${lead.name},</p><p>Thank you for requesting a quote for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.</p>`,
-    text: (lead) =>
-      `Hi ${lead.name},\n\nThank you for requesting a quote for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.`,
-  },
-  quote_followup: {
-    subject: (lead) => `Following up: Your ${lead.serviceType || "freight"} quote`,
-    html: (lead) =>
-      `<p>Hi ${lead.name},</p><p>Following up on your quote request for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.</p>`,
-    text: (lead) =>
-      `Hi ${lead.name},\n\nFollowing up on your quote request for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.`,
-  },
-  driver_welcome: {
-    subject: (lead) => `Welcome to Twin Mile -- Your ${lead.truckType || "driving"} application`,
-    html: (lead) =>
-      `<p>Hi ${lead.name},</p><p>Thank you for applying to drive with Twin Mile! We've received your application for ${lead.truckType || "driving"}.</p>`,
-    text: (lead) =>
-      `Hi ${lead.name},\n\nThank you for applying to drive with Twin Mile! We've received your application for ${lead.truckType || "driving"}.`,
-  },
-  driver_followup: {
-    subject: () => `Next steps for your Twin Mile application`,
-    html: (lead) =>
-      `<p>Hi ${lead.name},</p><p>Following up on your application to drive with Twin Mile (${lead.truckType || "driving"}).</p>`,
-    text: (lead) =>
-      `Hi ${lead.name},\n\nFollowing up on your application to drive with Twin Mile (${lead.truckType || "driving"}).`,
-  },
-  prospect_outreach: {
-    subject: (lead) => `${lead.name || "Your business"} — Drive with Twin Mile`,
-    html: (lead, p) =>
-      `<p>Hi ${p.name || lead.name},</p><p>We found your carrier on FMCSA and wanted to reach out about partnering with Twin Mile. We're looking for owner-operators like yourself to join our fleet.</p><p><strong>Why Twin Mile?</strong></p><ul><li>Competitive pay per mile</li><li>Flexible scheduling</li><li>24/7 driver support</li></ul><p>Ready to learn more? <a href="https://twinmile.com/drive-with-us">Click here to get started</a> or reply to this email.</p><p>Best regards,<br/>Twin Mile Recruiting Team</p>`,
-    text: (lead, p) =>
-      `Hi ${p.name || lead.name},\n\nWe found your carrier on FMCSA and wanted to reach out about partnering with Twin Mile. We're looking for owner-operators like yourself to join our fleet.\n\nWhy Twin Mile?\n- Competitive pay per mile\n- Flexible scheduling\n- 24/7 driver support\n\nReady to learn more? Visit https://twinmile.com/drive-with-us or reply to this email.\n\nBest regards,\nTwin Mile Recruiting Team`,
-  },
-};
+// Templates live in lib/outreach-templates.ts (shared with the admin outreach
+// dashboard, which re-renders legacy tasks sent before renderedSubject/
+// renderedBody were persisted).
 
 function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
@@ -94,12 +51,6 @@ function sleep(ms: number) {
 
 function calculateBackoff(attempt: number) {
   return BASE_BACKOFF_MS * Math.pow(2, attempt) + Math.random() * 1000;
-}
-
-function getTemplate(name: string, lead: Lead, p: Personalization) {
-  const t = EMAIL_TEMPLATES[name];
-  if (!t) throw new Error(`Unknown template: ${name}`);
-  return { subject: t.subject(lead), html: t.html(lead, p), text: t.text(lead, p) };
 }
 
 function leadCollectionFor(task: any): string {
@@ -250,7 +201,13 @@ export async function GET(request: NextRequest) {
     }
     const resend = new Resend(RESEND_API_KEY);
     const FROM = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
-    const REPLY_TO = process.env.RESEND_NOTIFY_TO || "admin@twinmile.com";
+    // Explicit reply-to for outreach. Point OUTREACH_REPLY_TO at an address on
+    // a Resend-receiving domain (e.g. reply@contact.twinmile.com) so replies
+    // flow into /api/webhooks/resend-inbound and show up on /admin/outreach.
+    const REPLY_TO =
+      process.env.OUTREACH_REPLY_TO ||
+      process.env.RESEND_NOTIFY_TO ||
+      "admin@twinmile.com";
 
     for (const task of tasks) {
       // ATOMIC CLAIM: transition this exact task from its observed state to
@@ -315,8 +272,11 @@ export async function GET(request: NextRequest) {
         };
 
         let sendResult: { success: boolean; id?: string; mock?: boolean; error?: string };
+        // Exact content as sent -- persisted on the task so the admin
+        // outreach dashboard can show precisely what each recipient received.
+        let renderedFields: Record<string, unknown> = {};
         if (task.channel === "email") {
-          const t = getTemplate(task.template, { ...lead, name: leadName }, p);
+          const t = renderOutreachEmail(task.template, { ...lead, name: leadName }, p);
           const { data, error } = await resend.emails.send({
             from: FROM,
             to: leadEmail,
@@ -327,6 +287,15 @@ export async function GET(request: NextRequest) {
           });
           if (error) throw new Error(error.message || "Resend send failed");
           sendResult = { success: true, id: data?.id };
+          renderedFields = {
+            renderedSubject: t.subject,
+            renderedBody: t.text,
+            renderedHtml: t.html,
+            sentTo: leadEmail,
+            sentFrom: FROM,
+            replyTo: REPLY_TO,
+            resendId: data?.id || null,
+          };
         } else if (task.channel === "sms") {
           // SMS is still a placeholder (no provider wired up) -- same as legacy.
           if (!leadPhone) throw new Error("No phone number for SMS task");
@@ -339,7 +308,13 @@ export async function GET(request: NextRequest) {
         await db.collection("outreach_tasks").updateOne(
           { _id: task._id },
           {
-            $set: { status: "sent", sentAt: new Date(), updatedAt: new Date(), error: null },
+            $set: {
+              status: "sent",
+              sentAt: new Date(),
+              updatedAt: new Date(),
+              error: null,
+              ...renderedFields,
+            },
             $inc: { attempts: 1 },
           }
         );
