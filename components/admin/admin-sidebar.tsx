@@ -26,12 +26,14 @@ import {
   Clock,
   Shield,
   Send,
+  Megaphone,
 } from "lucide-react";
 
 const navigation = [
   { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
   { name: "Outreach", href: "/admin/outreach", icon: Send },
+  { name: "Social Posts", href: "/admin/social", icon: Megaphone },
   { name: "Automation Center", href: "/admin/automation", icon: Activity },
   { name: "AI Agents", href: "/admin/agents", icon: Users },
   { name: "Timesheet", href: "/admin/timesheet", icon: Clock },
