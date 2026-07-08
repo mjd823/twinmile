@@ -139,34 +139,62 @@ export async function GET(request: NextRequest) {
       .countDocuments({ status: "sent", sentAt: { $gte: dayAgo } });
     const capRemaining = Math.max(0, DAILY_CAP - sentLast24h);
     const runLimit = Math.min(MAX_TASKS_PER_RUN, capRemaining);
+
+    // Due tasks: pending/retrying and scheduled in the past, plus stale
+    // "sending" tasks abandoned by a crashed run.
+    const dueTaskFilter = {
+      $or: [
+        {
+          status: { $in: ["pending", "retrying"] },
+          scheduledAt: { $lte: now },
+          attempts: { $lt: MAX_ATTEMPTS },
+        },
+        {
+          status: "sending",
+          claimedAt: { $lte: staleCutoff },
+          attempts: { $lt: MAX_ATTEMPTS },
+        },
+      ],
+    };
+
     if (runLimit === 0) {
+      // Cap-full early exit still counts as a run: log the heartbeat so the
+      // timesheet reflects that this invocation executed rather than stalled.
+      const dueCount = await db.collection("outreach_tasks").countDocuments(dueTaskFilter);
+      const note = `Daily cap reached (${sentLast24h}/${DAILY_CAP} sent in last 24h) — resuming when the window rolls.`;
+      await db.collection("agent_activity").insertOne({
+        agent: "Outreach Processor",
+        action: "outreach_cron_summary",
+        activity: `Outreach run: 0 sent, 0 failed, 0 skipped, ${dueCount} deferred of ${dueCount} due (daily cap reached)`,
+        type: "outreach",
+        details: {
+          dryRun: !live,
+          dueTasks: dueCount,
+          sent: 0,
+          failed: 0,
+          skipped: 0,
+          deferred: dueCount,
+          reason: "daily_cap_reached",
+          capStatus: { sentLast24h, dailyCap: DAILY_CAP },
+          source: "vercel-cron",
+        },
+        success: true,
+        createdAt: now,
+        timestamp: now,
+      });
+
       return NextResponse.json({
         ok: true,
         report: {
-          dueTasks: 0, sent: 0, failed: 0, skipped: 0, deferred: 0,
-          note: `Daily cap reached (${sentLast24h}/${DAILY_CAP} sent in last 24h) — resuming when the window rolls.`,
+          dueTasks: dueCount, sent: 0, failed: 0, skipped: 0, deferred: dueCount,
+          note,
         },
       });
     }
 
-    // Due tasks: pending/retrying and scheduled in the past, plus stale
-    // "sending" tasks abandoned by a crashed run.
     const tasks = await db
       .collection("outreach_tasks")
-      .find({
-        $or: [
-          {
-            status: { $in: ["pending", "retrying"] },
-            scheduledAt: { $lte: now },
-            attempts: { $lt: MAX_ATTEMPTS },
-          },
-          {
-            status: "sending",
-            claimedAt: { $lte: staleCutoff },
-            attempts: { $lt: MAX_ATTEMPTS },
-          },
-        ],
-      })
+      .find(dueTaskFilter)
       .sort({ scheduledAt: 1 })
       .limit(runLimit)
       .toArray();
