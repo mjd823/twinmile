@@ -27,6 +27,7 @@ import {
   Shield,
   Send,
   Megaphone,
+  Phone,
 } from "lucide-react";
 
 const navigation = [
@@ -34,6 +35,7 @@ const navigation = [
   { name: "Leads", href: "/admin/inbox", icon: Inbox },
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
   { name: "Outreach", href: "/admin/outreach", icon: Send },
+  { name: "Call Sheet", href: "/admin/call-sheet", icon: Phone },
   { name: "Social Posts", href: "/admin/social", icon: Megaphone },
   { name: "Automation Center", href: "/admin/automation", icon: Activity },
   { name: "AI Agents", href: "/admin/agents", icon: Users },

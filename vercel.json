@@ -23,6 +23,14 @@
     {
       "path": "/api/cron/social-pack",
       "schedule": "45 13 * * *"
+    },
+    {
+      "path": "/api/cron/prospect-priorities",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/call-sheet",
+      "schedule": "30 13 * * *"
     }
   ]
 }

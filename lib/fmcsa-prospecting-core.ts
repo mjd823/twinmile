@@ -157,7 +157,7 @@ async function queryCarriersByState(
  * contactability, years in operation, DBA branding. Unreachable or
  * likely-inactive carriers are capped below the qualification threshold.
  */
-function scoreCarrier(carrier: CensusCarrier): {
+export function scoreCarrier(carrier: CensusCarrier): {
   score: number;
   signals: string[];
   analysis: string[];
@@ -287,13 +287,16 @@ function scoreCarrier(carrier: CensusCarrier): {
   return { score, signals, analysis };
 }
 
-function getLanesForState(state: string | undefined): string[] {
+export function getLanesForState(state: string | undefined): string[] {
   const lanes: Record<string, string[]> = {
     TX: ["TX-LA", "TX-CA", "TX-GA", "TX-TN", "Regional TX"],
     LA: ["TX-LA", "LA-TX", "Gulf Coast"],
     CA: ["TX-CA", "CA-TX", "West Coast"],
     GA: ["TX-GA", "GA-TN", "Southeast"],
     TN: ["TX-TN", "TN-GA", "Mid-South"],
+    OK: ["TX-OK", "OK-TX", "Regional TX"],
+    AR: ["TX-AR", "AR-TX", "Mid-South"],
+    NM: ["TX-NM", "NM-TX", "Southwest"],
   };
   return (state && lanes[state]) || [];
 }
@@ -362,6 +365,8 @@ export async function runFmcsaProspecting(
     lanes: getLanesForState(c.phy_state),
     interestSignals: c.interestSignals,
     source: "fmcsa_census_api",
+    sourceTag: "fmcsa-census",
+    priorityScore: c.aiScore,
     sourceUrl: `https://safer.fmcsa.dot.gov/query.asp?searchtype=ANY&query_type=queryCarrierSnapshot&query_param=USDOT&query_string=${c.dot_number}`,
     aiScore: c.aiScore,
     aiAnalysis:

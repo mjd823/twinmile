@@ -187,7 +187,9 @@ export default async function LeadEnginePage() {
       db
         .collection("outbound_prospects")
         .find({})
-        .sort({ createdAt: -1 })
+        // priorityScore first (new-authority/insurance-lapse boosts), then
+        // recency. Docs without priorityScore sort after boosted ones.
+        .sort({ priorityScore: -1, createdAt: -1 })
         .limit(200)
         .toArray(),
       computePipelineStats(db),
@@ -210,8 +212,10 @@ export default async function LeadEnginePage() {
         truckType: p.equipment || "",
         yearsExperience: "",
         hasOwnAuthority: p.authorityStatus === "authorized",
-        score: p.aiScore || 0,
+        score: p.priorityScore || p.aiScore || 0,
         aiScore: p.aiScore || 0,
+        priorityScore: p.priorityScore || 0,
+        sourceTag: p.sourceTag || "fmcsa-census",
         status: p.status === "onboarding_invited" ? "onboarding" : p.status,
         quality: (p.aiScore || 0) >= 85 ? "premium" : (p.aiScore || 0) >= 70 ? "high" : "medium",
         estimatedValue: 0,

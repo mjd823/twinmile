@@ -100,10 +100,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Step 1: Qualified prospects -- same criteria as the legacy script.
+    // Step 1: Qualified prospects -- same criteria as the legacy script,
+    // ordered by priorityScore first (new-authority / insurance-lapse boosts
+    // from /api/cron/prospect-priorities) so the hottest channels get
+    // invited before the plain census pool. Docs without a priorityScore
+    // sort after boosted ones in a descending sort.
     const prospects = await db
       .collection("outbound_prospects")
       .find({ status: "reviewed", aiScore: { $gte: 75 } })
+      .sort({ priorityScore: -1, aiScore: -1 })
       .limit(MAX_PER_RUN)
       .toArray();
 

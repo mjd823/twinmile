@@ -31,10 +31,19 @@ interface PackItem {
   ctaUrl: string;
 }
 
+interface GroupPost {
+  angleId: string;
+  label: string;
+  text: string;
+  platforms: string[];
+  rules: string;
+}
+
 interface Pack {
   _id?: string;
   date: string;
   items: PackItem[];
+  groupPost?: GroupPost;
   createdAt?: string;
 }
 
@@ -128,8 +137,8 @@ export function SocialPacksClient() {
             Recruiting Post Pack
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            2 ready-to-post recruiting images + captions daily. Generated every morning at 13:45
-            UTC.
+            2 ready-to-post recruiting images + captions and 1 plain-text group post draft
+            daily. Generated every morning at 13:45 UTC.
           </p>
         </div>
         <Button onClick={handleGenerate} disabled={generating}>
@@ -213,6 +222,45 @@ export function SocialPacksClient() {
               );
             })}
           </div>
+
+          {latestPack.groupPost && (
+            <Card className="border-primary/30">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+                  Group post draft — {latestPack.groupPost.label}
+                  <Badge variant="secondary">Human posts it</Badge>
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">
+                  For: {latestPack.groupPost.platforms.join(" · ")}. No automation — Facebook
+                  API removed (ToS); copy the text and post from MJ&apos;s real profile.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <p className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm leading-relaxed">
+                  {latestPack.groupPost.text}
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      handleCopy(`${latestPack.date}-group`, latestPack.groupPost!.text)
+                    }
+                  >
+                    {copiedKey === `${latestPack.date}-group` ? (
+                      <Check className="mr-1 h-4 w-4 text-green-500" />
+                    ) : (
+                      <Copy className="mr-1 h-4 w-4" />
+                    )}
+                    {copiedKey === `${latestPack.date}-group` ? "Copied" : "Copy group post"}
+                  </Button>
+                  <span className="text-xs text-muted-foreground">
+                    {latestPack.groupPost.rules}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </section>
       )}
 

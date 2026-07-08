@@ -113,6 +113,17 @@ export async function GET(request: NextRequest) {
         : null,
     };
 
+    // Source-distribution: prospects by sourceTag so the timesheet/hub shows
+    // Sofia's channels (census / new-authority / insurance-lapse) working.
+    // Legacy docs without a sourceTag are the original census channel.
+    const bySourceTag = await db
+      .collection("outbound_prospects")
+      .aggregate<{ _id: string; count: number }>([
+        { $group: { _id: { $ifNull: ["$sourceTag", "fmcsa-census"] }, count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+      ])
+      .toArray();
+
     // Failure-reason breakdown so mass failures are diagnosable remotely
     const failureReasons = await db
       .collection("outreach_tasks")
@@ -135,6 +146,7 @@ export async function GET(request: NextRequest) {
           total: prospectsTotal,
           qualified: prospectsQualified,
           invited: prospectsInvited,
+          bySource: bySourceTag.map((r) => ({ sourceTag: r._id, count: r.count })),
         },
         outreach: {
           sentLast24h: outreachSentToday,

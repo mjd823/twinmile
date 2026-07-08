@@ -5,6 +5,7 @@ import {
   todayDateString,
   type AngleId,
 } from "@/lib/social/post-pack";
+import { buildGroupPostForDate, type GroupPostDraft } from "@/lib/social/group-post";
 
 /**
  * Daily recruiting post pack builder — architecture ported from
@@ -33,6 +34,12 @@ export interface SocialPackItem {
 export interface SocialPackDoc {
   date: string;
   items: SocialPackItem[];
+  /**
+   * Daily plain-text GROUP POST draft (FB groups / Reddit — a human posts
+   * it; no automation against either platform). Optional: packs created
+   * before 2026-07 don't have one.
+   */
+  groupPost?: GroupPostDraft;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -64,6 +71,20 @@ export async function generateDailyPack(options?: { force?: boolean }): Promise<
 
   const existing = await collection.findOne({ date });
   if (existing && !options?.force) {
+    // Backfill the group-post draft onto packs created before it existed.
+    if (!existing.groupPost) {
+      const groupPost = buildGroupPostForDate(date);
+      await collection.updateOne(
+        { date },
+        { $set: { groupPost, updatedAt: new Date() } }
+      );
+      return {
+        created: false,
+        date,
+        reason: "Pack already existed — added today's group post draft",
+        pack: await collection.findOne({ date }),
+      };
+    }
     return {
       created: false,
       date,
@@ -83,11 +104,13 @@ export async function generateDailyPack(options?: { force?: boolean }): Promise<
     ctaUrl: `${SITE_CONFIG.appUrl}/drive-with-us`,
   }));
 
+  const groupPost = buildGroupPostForDate(date);
+
   const now = new Date();
   await collection.updateOne(
     { date },
     {
-      $set: { items, updatedAt: now },
+      $set: { items, groupPost, updatedAt: now },
       $setOnInsert: { date, createdAt: now },
     },
     { upsert: true }
