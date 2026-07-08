@@ -89,6 +89,30 @@ export async function GET(request: NextRequest) {
       db.collection("trucks").countDocuments(),
     ]);
 
+    // Diagnostic samples (shape only, no PII beyond ids/types) for remote debugging
+    const [failedSample] = await db
+      .collection("outreach_tasks")
+      .find({ status: "failed", error: /Lead not found/ })
+      .sort({ createdAt: -1 })
+      .limit(1)
+      .project({ leadId: 1, leadType: 1, leadEmail: 1, template: 1, createdAt: 1, attempts: 1, error: 1 })
+      .toArray();
+    const [prospectSample] = await db
+      .collection("outbound_prospects")
+      .find({ status: "onboarding_invited" })
+      .sort({ _id: -1 })
+      .limit(1)
+      .project({ _id: 1, status: 1, aiScore: 1 })
+      .toArray();
+    const diagnostics = {
+      failedTaskSample: failedSample
+        ? { ...failedSample, leadIdType: typeof failedSample.leadId, leadIdCtor: failedSample.leadId?.constructor?.name }
+        : null,
+      prospectSample: prospectSample
+        ? { idType: typeof prospectSample._id, idCtor: prospectSample._id?.constructor?.name, id: String(prospectSample._id), status: prospectSample.status }
+        : null,
+    };
+
     // Failure-reason breakdown so mass failures are diagnosable remotely
     const failureReasons = await db
       .collection("outreach_tasks")
@@ -124,6 +148,7 @@ export async function GET(request: NextRequest) {
         },
         fleet: { trucks },
       },
+      diagnostics,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
