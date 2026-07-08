@@ -229,7 +229,51 @@ export async function GET(request: NextRequest) {
       process.env.RESEND_NOTIFY_TO ||
       "admin@twinmile.com";
 
+    // Cold outreach only goes out during business hours (America/Chicago,
+    // Mon-Fri 8am-6pm) — the legacy laptop system respected this and the port
+    // initially lost it. Transactional templates (quote/driver confirmations)
+    // send any time.
+    const COLD_TEMPLATES = new Set(["prospect_outreach", "onboarding_followup"]);
+    const chiParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Chicago",
+      hour12: false,
+      hour: "numeric",
+      weekday: "short",
+    }).formatToParts(now);
+    const chiHour = parseInt(chiParts.find((p) => p.type === "hour")?.value || "0", 10);
+    const chiDay = chiParts.find((p) => p.type === "weekday")?.value || "";
+    const inColdWindow = !["Sat", "Sun"].includes(chiDay) && chiHour >= 8 && chiHour < 18;
+
     for (const task of tasks) {
+      if (COLD_TEMPLATES.has(task.template) && !inColdWindow) {
+        // Outside business hours — leave the task pending for a later run.
+        deferred++;
+        continue;
+      }
+
+      // Per-prospect duplicate guard: never send the same template to the
+      // same lead twice (requeues + legacy/new task overlap make this real).
+      const dupe = await db.collection("outreach_tasks").findOne({
+        _id: { $ne: task._id },
+        leadId: task.leadId,
+        template: task.template,
+        status: "sent",
+      });
+      if (dupe) {
+        await db.collection("outreach_tasks").updateOne(
+          { _id: task._id },
+          {
+            $set: {
+              status: "failed",
+              error: `Duplicate: ${task.template} already sent to this lead (task ${dupe._id})`,
+              updatedAt: new Date(),
+            },
+          }
+        );
+        skipped++;
+        continue;
+      }
+
       // ATOMIC CLAIM: transition this exact task from its observed state to
       // "sending". If the legacy laptop cron (or a parallel invocation)
       // already grabbed it, the filter no longer matches and we get null --
