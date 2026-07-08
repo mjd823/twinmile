@@ -5,9 +5,9 @@ import { ensureIndexes } from "@/lib/security/indexes";
 const uri = process.env.MONGODB_URI;
 const options: MongoClientOptions = {
   appName: "twinmile-web",
-  connectTimeoutMS: 60000,
+  connectTimeoutMS: 30000,
   socketTimeoutMS: 60000,
-  serverSelectionTimeoutMS: 60000,
+  serverSelectionTimeoutMS: 30000,
   maxPoolSize: 5,
   minPoolSize: 1,
   maxIdleTimeMS: 60000,
@@ -17,58 +17,69 @@ const options: MongoClientOptions = {
   compressors: ['zlib'],
 };
 
-let client: MongoClient;
-let clientPromise: Promise<MongoClient> | null = null;
+/**
+ * Self-healing connection cache.
+ *
+ * The previous implementation cached `client.connect()` at module scope; if
+ * both the initial attempt and its single retry failed (e.g. a transient
+ * MongoNetworkError on a cold serverless instance), the module held a
+ * PERMANENTLY REJECTED promise. Every later request in that lambda —
+ * including /admin/login — then failed until the instance was recycled,
+ * which is exactly the "entire admin kept erroring" incident of 2026-07-08
+ * (error digest 1977713650).
+ *
+ * Now the cache is cleared whenever a connection attempt fails, so the next
+ * request triggers a fresh connect instead of replaying the old rejection.
+ */
+interface MongoCache {
+  promise: Promise<MongoClient> | null;
+}
 
-if (uri) {
-  if (process.env.NODE_ENV === 'development') {
-    // In development mode, use a global variable so that the value
-    // is preserved across module reloads caused by HMR (Hot Module Replacement).
-    const globalWithMongo = global as typeof globalThis & {
-      _mongoClientPromise?: Promise<MongoClient>;
-    };
+const globalWithMongo = global as typeof globalThis & {
+  _twinmileMongoCache?: MongoCache;
+};
 
-    if (!globalWithMongo._mongoClientPromise) {
-      client = new MongoClient(uri, options);
-      globalWithMongo._mongoClientPromise = client.connect()
-        .catch(err => {
-          console.error('MongoDB connection failed, retrying...', err.message);
-          // Wait 2 seconds and retry once
-          return new Promise((resolve, reject) => {
-            setTimeout(() => {
-              client.connect()
-                .then(resolve)
-                .catch(reject);
-            }, 2000);
-          });
-        });
-    }
-    clientPromise = globalWithMongo._mongoClientPromise;
-  } else {
-    // In production mode, it's best to not use a global variable.
-    client = new MongoClient(uri, options);
-    clientPromise = client.connect()
-      .catch(err => {
-        console.error('MongoDB connection failed, retrying...', err.message);
-        // Wait 2 seconds and retry once
-        return new Promise((resolve, reject) => {
-          setTimeout(() => {
-            client.connect()
-              .then(resolve)
-              .catch(reject);
-          }, 2000);
-        });
+// In development, keep the cache on `global` so HMR module reloads reuse the
+// same connection. In production each lambda gets its own module scope.
+const cache: MongoCache =
+  process.env.NODE_ENV === 'development'
+    ? (globalWithMongo._twinmileMongoCache ??= { promise: null })
+    : { promise: null };
+
+function connect(): Promise<MongoClient> {
+  if (!cache.promise) {
+    const client = new MongoClient(uri!, options);
+    cache.promise = client
+      .connect()
+      .then((connected) => {
+        // Fire-and-forget: indexes are best-effort and must never block or
+        // poison the connection promise.
+        ensureIndexes(connected.db()).catch(() => {});
+        return connected;
+      })
+      .catch((err) => {
+        console.error('MongoDB connection failed (will retry on next request):', err?.message ?? err);
+        // Do NOT cache the rejection — the next caller gets a fresh attempt.
+        cache.promise = null;
+        client.close().catch(() => {});
+        throw err;
       });
   }
+  return cache.promise;
 }
 
-if (clientPromise) {
-  clientPromise
-    .then((c) => ensureIndexes(c.db()))
-    .catch(() => {
-      // ignore
-    });
-}
+/**
+ * Promise-compatible facade so existing `await clientPromise` call sites keep
+ * working unchanged, while every await goes through the self-healing cache.
+ */
+const clientPromise: Promise<MongoClient> | null = uri
+  ? ({
+      then: (onfulfilled?: any, onrejected?: any) => connect().then(onfulfilled, onrejected),
+      catch: (onrejected?: any) => connect().catch(onrejected),
+      finally: (onfinally?: any) => connect().finally(onfinally),
+      [Symbol.toStringTag]: 'Promise',
+    } as Promise<MongoClient>)
+  : null;
 
 // Export a module-scoped MongoClient promise. By doing this in a
 // separate module, the client can be shared across functions.

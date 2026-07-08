@@ -27,13 +27,15 @@ import {
   AlertTriangle,
   ChevronRight,
 } from "lucide-react";
-import type { OutreachDashboardData, SentEmailRow, ReplyRow } from "@/lib/outreach-data";
+import type { OutreachDashboardData, SentEmailRow, ReplyRow, FunnelEntry, FunnelStageKey } from "@/lib/outreach-data";
 
 function fmt(dateIso: string): string {
   if (!dateIso) return "—";
   const d = new Date(dateIso);
   if (Number.isNaN(d.getTime())) return "—";
+  // Always America/Chicago — the business clock the owner works in.
   return d.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -65,73 +67,177 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 const FUNNEL_STAGES: {
-  key: keyof OutreachDashboardData["funnel"];
+  key: FunnelStageKey;
   label: string;
   icon: React.ElementType;
+  timeLabel: string;
 }[] = [
-  { key: "new", label: "New", icon: Sparkles },
-  { key: "reviewed", label: "Reviewed", icon: CheckCircle2 },
-  { key: "invited", label: "Invited", icon: Mail },
-  { key: "clicked", label: "Clicked", icon: MousePointerClick },
-  { key: "replied", label: "Replied", icon: Reply },
-  { key: "onboarded", label: "Onboarded", icon: UserCheck },
+  { key: "new", label: "New", icon: Sparkles, timeLabel: "Found" },
+  { key: "reviewed", label: "Reviewed", icon: CheckCircle2, timeLabel: "Found" },
+  { key: "invited", label: "Invited", icon: Mail, timeLabel: "Invited" },
+  { key: "clicked", label: "Clicked", icon: MousePointerClick, timeLabel: "Clicked" },
+  { key: "replied", label: "Replied", icon: Reply, timeLabel: "Replied" },
+  { key: "onboarded", label: "Onboarded", icon: UserCheck, timeLabel: "Completed" },
 ];
 
-function FunnelHeader({ funnel }: { funnel: OutreachDashboardData["funnel"] }) {
+function FunnelHeader({
+  funnel,
+  stageDetails,
+  inboundConfigured,
+}: {
+  funnel: OutreachDashboardData["funnel"];
+  stageDetails: OutreachDashboardData["stageDetails"] | undefined;
+  inboundConfigured: boolean;
+}) {
+  const [openStage, setOpenStage] = React.useState<FunnelStageKey | null>(null);
+  const stageDef = FUNNEL_STAGES.find((s) => s.key === openStage) || null;
+  const rows: FunnelEntry[] = (openStage && stageDetails?.[openStage]) || [];
+
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-      {FUNNEL_STAGES.map((stage, i) => {
-        const Icon = stage.icon;
-        return (
-          <Card key={stage.key} className="relative overflow-hidden">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                <Icon className="h-3.5 w-3.5" />
-                {stage.label}
-              </div>
-              <div className="mt-1 text-3xl font-bold tabular-nums">
-                {funnel[stage.key]}
-              </div>
-              {i < FUNNEL_STAGES.length - 1 && (
-                <ChevronRight className="absolute right-1 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-muted-foreground/40 lg:block" />
+    <>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+        {FUNNEL_STAGES.map((stage, i) => {
+          const Icon = stage.icon;
+          return (
+            <button
+              key={stage.key}
+              type="button"
+              onClick={() => setOpenStage(stage.key)}
+              className="text-left"
+              title={`See who is at the ${stage.label} stage`}
+            >
+              <Card className="relative h-full overflow-hidden transition-colors hover:border-primary/40">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Icon className="h-3.5 w-3.5" />
+                    {stage.label}
+                  </div>
+                  <div className="mt-1 text-3xl font-bold tabular-nums">
+                    {funnel[stage.key]}
+                  </div>
+                  {stage.key === "replied" && !inboundConfigured && (
+                    <div className="mt-1 text-[10px] leading-tight text-amber-500">
+                      counts start once the Resend inbound webhook is live
+                    </div>
+                  )}
+                  {i < FUNNEL_STAGES.length - 1 && (
+                    <ChevronRight className="absolute right-1 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-muted-foreground/40 lg:block" />
+                  )}
+                </CardContent>
+              </Card>
+            </button>
+          );
+        })}
+      </div>
+      <p className="text-[11px] text-muted-foreground -mt-3">
+        Click any stage to see exactly who is there. All times Central (CT).
+      </p>
+
+      {/* Stage drill-down */}
+      <Dialog open={Boolean(openStage)} onOpenChange={(open) => !open && setOpenStage(null)}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          {stageDef && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <stageDef.icon className="h-4 w-4" />
+                  {stageDef.label} — {funnel[stageDef.key]} prospect{funnel[stageDef.key] === 1 ? "" : "s"}
+                </DialogTitle>
+                <DialogDescription>
+                  {stageDef.key === "clicked"
+                    ? "Prospects who clicked their onboarding link — these are your warmest leads."
+                    : stageDef.key === "replied"
+                      ? "Inbound replies captured by the Resend webhook."
+                      : `Everyone currently at the ${stageDef.label.toLowerCase()} stage.`}
+                  {rows.length >= 200 && " Showing the 200 most recent."}
+                </DialogDescription>
+              </DialogHeader>
+              {rows.length === 0 ? (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  {stageDef.key === "replied" && !inboundConfigured
+                    ? "No replies captured yet — reply capture activates once the Resend inbound webhook is configured."
+                    : "Nobody here yet."}
+                </p>
+              ) : (
+                <div className="divide-y divide-border/40 rounded-md border border-border/60">
+                  {rows.map((r, i) => (
+                    <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{r.name}</div>
+                        {r.detail && (
+                          <div className="truncate text-xs text-muted-foreground">{r.detail}</div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right text-[11px] text-muted-foreground">
+                        <div>{stageDef.timeLabel}</div>
+                        <div className="font-medium text-foreground">{fmt(r.at)}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
-            </CardContent>
-          </Card>
-        );
-      })}
-    </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
-function TimelineStep({
-  label,
-  at,
-  icon: Icon,
-}: {
+interface TimelineEvent {
   label: string;
   at: string;
   icon: React.ElementType;
-}) {
-  const done = Boolean(at);
+}
+
+/**
+ * The prospect timeline, strictly chronological with plain-English labels.
+ * "Invited (link created)" is when the onboarding session/token was minted —
+ * which can be DAYS before "Invite email delivered" (when Resend actually
+ * sent it). Rendering them in true time order keeps the sequence readable
+ * instead of "email sent July 8, invited June 28".
+ */
+function ProspectTimeline({ email }: { email: SentEmailRow }) {
+  const events: TimelineEvent[] = [
+    { label: "Invited (onboarding link created)", at: email.timeline.invitedAt, icon: UserCheck },
+    { label: "Invite email delivered", at: email.sentAt, icon: Mail },
+    { label: "Opened their onboarding link", at: email.timeline.clickedAt, icon: MousePointerClick },
+    { label: "Replied to us", at: email.timeline.repliedAt, icon: Reply },
+  ];
+  const happened = events
+    .filter((e) => Boolean(e.at))
+    .sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const pending = events.filter((e) => !e.at);
+
   return (
-    <div className="flex items-center gap-2">
-      <div
-        className={cn(
-          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
-          done
-            ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
-            : "border-border bg-muted text-muted-foreground/50"
-        )}
-      >
-        <Icon className="h-3.5 w-3.5" />
-      </div>
-      <div className="min-w-0">
-        <div className={cn("text-xs font-medium", !done && "text-muted-foreground/60")}>
-          {label}
-        </div>
-        <div className="text-[11px] text-muted-foreground">{fmt(at)}</div>
-      </div>
-    </div>
+    <ol className="space-y-2">
+      {[...happened, ...pending].map((e, i) => {
+        const done = Boolean(e.at);
+        const Icon = e.icon;
+        return (
+          <li key={i} className="flex items-center gap-2">
+            <div
+              className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full border",
+                done
+                  ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-500"
+                  : "border-border bg-muted text-muted-foreground/50"
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className={cn("text-xs font-medium", !done && "text-muted-foreground/60")}>
+                {e.label}
+              </div>
+              <div className="text-[11px] text-muted-foreground">
+                {done ? `${fmt(e.at)} CT` : "not yet"}
+              </div>
+            </div>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
@@ -181,27 +287,41 @@ function EmailDetailDialog({
 
             <div className="rounded-md border border-border/60 bg-muted/30 p-4">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Email body
+                Email as the recipient sees it
               </div>
-              {email.body ? (
+              {email.bodyHtml ? (
+                <div className="overflow-hidden rounded-md border border-border/60 bg-white">
+                  <iframe
+                    srcDoc={email.bodyHtml}
+                    title="Email preview"
+                    sandbox=""
+                    className="h-[360px] w-full border-0"
+                  />
+                </div>
+              ) : email.body ? (
                 <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
                   {email.body}
                 </pre>
               ) : (
                 <p className="text-sm text-muted-foreground">Body not available for this task.</p>
               )}
+              {email.bodyHtml && email.body && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                    Show plain-text version
+                  </summary>
+                  <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-muted-foreground">
+                    {email.body}
+                  </pre>
+                </details>
+              )}
             </div>
 
             <div className="rounded-md border border-border/60 p-4">
               <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Prospect timeline
+                Prospect timeline (in order)
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <TimelineStep label="Email sent" at={email.sentAt} icon={Mail} />
-                <TimelineStep label="Onboarding invited" at={email.timeline.invitedAt} icon={UserCheck} />
-                <TimelineStep label="Link clicked" at={email.timeline.clickedAt} icon={MousePointerClick} />
-                <TimelineStep label="Replied" at={email.timeline.repliedAt} icon={Reply} />
-              </div>
+              <ProspectTimeline email={email} />
               {(email.timeline.prospectStatus || email.timeline.onboardingStatus) && (
                 <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                   {email.timeline.prospectStatus && (
@@ -492,7 +612,11 @@ export function OutreachDashboard({ initialData }: { initialData: OutreachDashbo
         </p>
       </div>
 
-      <FunnelHeader funnel={initialData.funnel} />
+      <FunnelHeader
+        funnel={initialData.funnel}
+        stageDetails={initialData.stageDetails}
+        inboundConfigured={initialData.inboundConfigured}
+      />
 
       <Tabs defaultValue="sent">
         <TabsList aria-label="Outreach views">

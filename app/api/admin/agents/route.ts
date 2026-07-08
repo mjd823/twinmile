@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { getAuthUser } from "@/lib/auth/session";
+import { computeJobStatuses, type JobStatusRow } from "@/lib/agent-status";
+import { chicagoWeekday } from "@/lib/cron-jobs";
 import {
   AGENT_WORKFLOWS,
   AGENT_ACTIONS,
@@ -95,15 +97,33 @@ function buildMetrics(agentId: string, activity: any[], tasksToday: number) {
   };
 }
 
-// Determine status from activity recency + tasks today
-function deriveStatus(tasksToday: number, lastActivityTime: string | null): "active" | "idle" | "busy" {
-  if (tasksToday === 0) return "idle";
-  if (!lastActivityTime) return "idle";
-  const last = new Date(lastActivityTime);
-  const minutesAgo = (Date.now() - last.getTime()) / (1000 * 60);
-  if (minutesAgo < 10) return "busy";   // actively working (activity in last 10 min)
-  if (minutesAgo < 120) return "active"; // worked recently (within 2 hours)
-  return "idle";
+export type AgentScheduleStatus = "busy" | "on_schedule" | "late" | "error" | "off_duty";
+
+/**
+ * Honest status now that agents run as Vercel crons (lib/cron-jobs.ts):
+ *  - busy         → logged activity in the last 10 minutes
+ *  - on_schedule  → every cron due today ran inside its freshness window
+ *  - late         → a due cron hasn't run inside its window (or never ran)
+ *  - error        → the last run of one of its crons failed
+ *  - off_duty     → nothing scheduled today (e.g. weekly agents outside Monday)
+ * "Idle" is gone — a scheduled agent that already did today's run is on
+ * schedule, not slacking.
+ */
+function deriveStatus(
+  jobs: JobStatusRow[],
+  lastActivityTime: string | null,
+  isMondayCT: boolean
+): AgentScheduleStatus {
+  if (lastActivityTime) {
+    const minutesAgo = (Date.now() - new Date(lastActivityTime).getTime()) / (1000 * 60);
+    if (minutesAgo < 10) return "busy";
+  }
+  if (jobs.length === 0) return "off_duty";
+  if (jobs.some((j) => j.status === "error")) return "error";
+  const dueToday = jobs.filter((j) => j.cadence !== "weekly" || isMondayCT);
+  if (dueToday.length === 0) return "off_duty";
+  if (dueToday.some((j) => j.status === "late" || j.status === "never_ran")) return "late";
+  return "on_schedule";
 }
 
 // ── API handler ──────────────────────────────────────────────────────────────
@@ -132,12 +152,23 @@ export async function GET() {
     // Fetch real activity for each agent from agent_activity collection.
     // The collection stores the agent name either as a top-level string or
     // nested under agent.name — query both shapes.
-    const allActivityRaw = await db
-      .collection("agent_activity")
-      .find({})
-      .sort({ timestamp: -1, createdAt: -1 })
-      .limit(500)
-      .toArray();
+    const [allActivityRaw, totalActivityRecords, statusReport] = await Promise.all([
+      db
+        .collection("agent_activity")
+        .find({})
+        .sort({ timestamp: -1, createdAt: -1 })
+        .limit(500)
+        .toArray(),
+      // Real total — previously this reported the query's 500-row cap.
+      db.collection("agent_activity").countDocuments(),
+      computeJobStatuses(db),
+    ]);
+
+    const isMondayCT = chicagoWeekday() === "Monday";
+    const jobsByAgent: Record<string, JobStatusRow[]> = {};
+    for (const j of statusReport.jobs) {
+      (jobsByAgent[j.agent] ??= []).push(j);
+    }
 
     // Group activity by agent name
     const activityByName: Record<string, any[]> = {};
@@ -160,7 +191,8 @@ export async function GET() {
 
       const lastActivityTime =
         activity[0]?.timestamp || activity[0]?.createdAt || null;
-      const status = deriveStatus(tasksToday, lastActivityTime);
+      const agentJobs = jobsByAgent[def.name] || [];
+      const status = deriveStatus(agentJobs, lastActivityTime, isMondayCT);
 
       const action = AGENT_ACTIONS[def.id];
       const workflow: WorkflowStep[] = AGENT_WORKFLOWS[def.id] || [];
@@ -246,6 +278,16 @@ export async function GET() {
         };
       });
 
+      // Live schedule rows for this agent (from the real Vercel cron registry)
+      const scheduledJobs = agentJobs.map((j) => ({
+        id: j.id,
+        name: j.name,
+        cadence: j.cadence,
+        status: j.status,
+        lastRun: j.lastRun,
+        hoursSinceLastRun: j.hoursSinceLastRun,
+      }));
+
       return {
         id: def.id,
         name: def.name,
@@ -258,9 +300,13 @@ export async function GET() {
         currentTask,
         tasksToday,
         lastActivityTime,
-        nextScheduled: action?.label
-          ? `Next: ${action.label} at ${action.time || "scheduled time"}`
-          : "No scheduled task",
+        scheduledJobs,
+        nextScheduled:
+          agentJobs.length > 0
+            ? `${agentJobs.length} scheduled job${agentJobs.length === 1 ? "" : "s"} (${agentJobs.map((j) => j.cadence).join(", ")})`
+            : action?.label
+              ? `Next: ${action.label} at ${action.time || "scheduled time"}`
+              : "No scheduled task",
         action: action
           ? {
               action: action.action,
@@ -284,9 +330,10 @@ export async function GET() {
     });
 
     const totalTasksToday = agents.reduce((sum, a) => sum + a.tasksToday, 0);
-    const activeCount = agents.filter((a) => a.status === "active" || a.status === "busy").length;
-    const idleCount = agents.filter((a) => a.status === "idle").length;
     const busyCount = agents.filter((a) => a.status === "busy").length;
+    const onScheduleCount = agents.filter((a) => a.status === "on_schedule").length;
+    const attentionCount = agents.filter((a) => a.status === "late" || a.status === "error").length;
+    const offDutyCount = agents.filter((a) => a.status === "off_duty").length;
 
     return NextResponse.json({
       success: true,
@@ -295,10 +342,11 @@ export async function GET() {
         summary: {
           totalAgents: agents.length,
           totalTasksToday,
-          activeCount,
-          idleCount,
           busyCount,
-          totalActivityRecords: allActivityRaw.length,
+          onScheduleCount,
+          attentionCount,
+          offDutyCount,
+          totalActivityRecords,
         },
       },
     });

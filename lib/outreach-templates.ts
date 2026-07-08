@@ -15,6 +15,76 @@
 export type Lead = any;
 export type Personalization = any;
 
+/**
+ * Rotating openers for prospect_outreach — warmer and less form-letter than
+ * the old "We found your carrier on FMCSA and wanted to reach out" opener,
+ * which every prospect received verbatim. The pick is DETERMINISTIC per lead
+ * (hash of email/name) so a legacy task re-rendered on the admin dashboard
+ * shows the same copy that was actually sent. Provenance stays honest — each
+ * variant discloses "found you through the FMCSA registry" lower in the body.
+ */
+interface OpenerVariant {
+  subject: (lead: Lead) => string;
+  html: (lead: Lead, p: Personalization) => string;
+  text: (lead: Lead, p: Personalization) => string;
+}
+
+const WHY_HTML =
+  `<p><strong>What our owner-operators get:</strong></p><ul><li>Competitive pay per mile — you know your number before you roll</li><li>You pick your lanes and your schedule</li><li>24/7 dispatch and driver support that actually answers</li></ul>`;
+const WHY_TEXT =
+  `What our owner-operators get:\n- Competitive pay per mile — you know your number before you roll\n- You pick your lanes and your schedule\n- 24/7 dispatch and driver support that actually answers`;
+const PROVENANCE_HTML =
+  `<p style="font-size:13px;color:#6b7280;">Quick note on how we got your info: we found your authority through the public FMCSA registry — we only reach out to active, registered carriers.</p>`;
+const PROVENANCE_TEXT =
+  `(Quick note on how we got your info: we found your authority through the public FMCSA registry — we only reach out to active, registered carriers.)`;
+const CTA_HTML =
+  `<p>If you're open to it, take a look: <a href="https://twinmile.com/drive-with-us">twinmile.com/drive-with-us</a> — or just reply to this email and I'll answer whatever you want to know about rates and lanes.</p>`;
+const CTA_TEXT =
+  `If you're open to it, take a look: https://twinmile.com/drive-with-us — or just reply to this email and I'll answer whatever you want to know about rates and lanes.`;
+const SIGNOFF_HTML = `<p>Best regards,<br/>Marcus Chen<br/>Twin Mile Recruiting Team</p>`;
+const SIGNOFF_TEXT = `Best regards,\nMarcus Chen\nTwin Mile Recruiting Team`;
+
+const PROSPECT_OPENERS: OpenerVariant[] = [
+  {
+    subject: (lead) => `${lead.name || "Your carrier"} — keeping your truck loaded`,
+    html: (lead, p) =>
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>Running your own authority means the miles only pay when the truck is loaded. That's exactly the problem we solve at Twin Mile — steady freight for owner-operators, without giving up the independence you built.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+    text: (lead, p) =>
+      `Hi ${p?.name || lead.name || "there"},\n\nRunning your own authority means the miles only pay when the truck is loaded. That's exactly the problem we solve at Twin Mile — steady freight for owner-operators, without giving up the independence you built.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+  },
+  {
+    subject: (lead) => `Steady freight for ${lead.name || "your operation"}?`,
+    html: (lead, p) =>
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>You've done the hard part — your own truck, your own authority. We'd like to handle the part that eats your evenings: keeping the calendar full. Twin Mile partners with owner-operators who want consistent loads without the load-board grind.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+    text: (lead, p) =>
+      `Hi ${p?.name || lead.name || "there"},\n\nYou've done the hard part — your own truck, your own authority. We'd like to handle the part that eats your evenings: keeping the calendar full. Twin Mile partners with owner-operators who want consistent loads without the load-board grind.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+  },
+  {
+    subject: () => `A better week of miles — Twin Mile`,
+    html: (lead, p) =>
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>Most owner-operators we talk to aren't looking for a lecture about "opportunity" — they want honest rates, lanes that make sense, and dispatch that picks up the phone. That's what we run at Twin Mile, and we're adding a few more owner-operators right now.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+    text: (lead, p) =>
+      `Hi ${p?.name || lead.name || "there"},\n\nMost owner-operators we talk to aren't looking for a lecture about "opportunity" — they want honest rates, lanes that make sense, and dispatch that picks up the phone. That's what we run at Twin Mile, and we're adding a few more owner-operators right now.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+  },
+  {
+    subject: (lead) => `${lead.name || "Your authority"} + Twin Mile — worth a look?`,
+    html: (lead, p) =>
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>I'll keep this short out of respect for your drive time. Twin Mile is a Texas-based carrier partnering with owner-operators on power-only and dry van freight — steady miles, transparent pay, no games.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+    text: (lead, p) =>
+      `Hi ${p?.name || lead.name || "there"},\n\nI'll keep this short out of respect for your drive time. Twin Mile is a Texas-based carrier partnering with owner-operators on power-only and dry van freight — steady miles, transparent pay, no games.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+  },
+];
+
+/** Stable per-lead variant pick — same lead always renders the same email. */
+function pickOpener(lead: Lead): OpenerVariant {
+  const key = String(lead?.email || lead?.contact?.email || lead?.name || "");
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) {
+    hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  }
+  return PROSPECT_OPENERS[hash % PROSPECT_OPENERS.length];
+}
+
 export const EMAIL_TEMPLATES: Record<
   string,
   {
@@ -52,11 +122,9 @@ export const EMAIL_TEMPLATES: Record<
       `Hi ${lead.name},\n\nFollowing up on your application to drive with Twin Mile (${lead.truckType || "driving"}).`,
   },
   prospect_outreach: {
-    subject: (lead) => `${lead.name || "Your business"} — Drive with Twin Mile`,
-    html: (lead, p) =>
-      `<p>Hi ${p.name || lead.name},</p><p>We found your carrier on FMCSA and wanted to reach out about partnering with Twin Mile. We're looking for owner-operators like yourself to join our fleet.</p><p><strong>Why Twin Mile?</strong></p><ul><li>Competitive pay per mile</li><li>Flexible scheduling</li><li>24/7 driver support</li></ul><p>Ready to learn more? <a href="https://twinmile.com/drive-with-us">Click here to get started</a> or reply to this email.</p><p>Best regards,<br/>Twin Mile Recruiting Team</p>`,
-    text: (lead, p) =>
-      `Hi ${p.name || lead.name},\n\nWe found your carrier on FMCSA and wanted to reach out about partnering with Twin Mile. We're looking for owner-operators like yourself to join our fleet.\n\nWhy Twin Mile?\n- Competitive pay per mile\n- Flexible scheduling\n- 24/7 driver support\n\nReady to learn more? Visit https://twinmile.com/drive-with-us or reply to this email.\n\nBest regards,\nTwin Mile Recruiting Team`,
+    subject: (lead) => pickOpener(lead).subject(lead),
+    html: (lead, p) => pickOpener(lead).html(lead, p),
+    text: (lead, p) => pickOpener(lead).text(lead, p),
   },
   // Legacy laptop-era template name (June 2026 tasks) — a friendly follow-up
   // for prospects who were invited but haven't started onboarding.

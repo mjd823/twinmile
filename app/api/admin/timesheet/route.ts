@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { getAuthUser } from "@/lib/auth/session";
+import { CRON_JOBS, chicagoWeekday } from "@/lib/cron-jobs";
 
 // ── Human-friendly action labels ───────────────────────────────────────────────
 const ACTION_LABELS: Record<string, string> = {
@@ -192,16 +193,20 @@ const SHIFTS: ShiftDef[] = [
 
 const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const EXPECTED_ACTIONS_BY_AGENT: Record<string, string[]> = {
-  "Sofia Rodriguez": ["fmcsa_prospecting", "web_prospecting", "browser_prospecting"],
-  "Marcus Chen": ["daily_sales_review"],
-  "David Kumar": ["daily_ops_check"],
-  "Jennifer Foster": ["hr_onboarding_review"],
-  "Robert Chang": ["daily_finance_review"],
-  "Emily Watson": ["customer_success_check"],
-  "Isabella Martinez": ["marketing_analysis", "proactive_seo_analysis"],
-  "Alexandra Sterling": ["ceo_strategic_review", "proactive_strategic_research"],
-};
+/**
+ * A "task" on this timesheet = one scheduled cron run the agent owes for the
+ * day, taken straight from the real Vercel cron registry (lib/cron-jobs.ts).
+ * Daily jobs are due every day; weekly jobs only on Mondays (America/Chicago).
+ * Productivity = scheduled runs completed ÷ scheduled runs due — the same
+ * numbers the row displays, so "2 of 3 = 33%" style mismatches can't happen.
+ */
+function scheduledJobsFor(agentName: string, isMondayCT: boolean) {
+  return CRON_JOBS.filter(
+    (j) =>
+      j.agentName === agentName &&
+      (j.cadence !== "weekly" || isMondayCT)
+  );
+}
 
 function activityTime(a: any): Date {
   return new Date(a.createdAt || a.timestamp || 0);
@@ -353,16 +358,22 @@ export async function GET(req: Request) {
       const total = activity.length;
       const successRate = total > 0 ? Math.round((successful / total) * 1000) / 10 : 0;
 
-      // Productivity: distinct action types completed today vs unique types ever seen.
-      // This reflects coverage, not raw volume. All 8 agents' prospecting = 100%.
+      // Productivity: scheduled cron runs completed today ÷ scheduled runs due
+      // today (from the real cron registry). One daily review = 1 due / 1 done
+      // = 100% — it does NOT pretend to be an all-day workload.
+      const isMondayCT = chicagoWeekday(now) === "Monday";
       const distinctToday = new Set(todayActivity.map((a) => a.action).filter(Boolean));
-      const expectedActions = EXPECTED_ACTIONS_BY_AGENT[shift.name] || [];
-      const expected = expectedActions.length || shift.expectedTasksPerDay;
-      const completedExpected = expectedActions.length
-        ? expectedActions.filter((action) => distinctToday.has(action)).length
-        : distinctToday.size;
+      const dueJobs = scheduledJobsFor(shift.name, isMondayCT);
+      const scheduledExpected = dueJobs.length;
+      const scheduledDone = dueJobs.filter((job) =>
+        job.actions.some((action) => distinctToday.has(action))
+      ).length;
       const productivityScore =
-        expected > 0 ? Math.min(Math.round((completedExpected / expected) * 100), 100) : 0;
+        scheduledExpected > 0
+          ? Math.min(Math.round((scheduledDone / scheduledExpected) * 100), 100)
+          : tasksToday > 0
+            ? 100
+            : 0;
 
       const { onClock, status } = isOnShift(shift, now);
 
@@ -481,7 +492,9 @@ export async function GET(req: Request) {
         hoursThisWeek,
         tasksToday,
         tasksThisWeek,
-        expectedTasksPerDay: expected,
+        scheduledDone,
+        scheduledExpected,
+        expectedTasksPerDay: scheduledExpected,
         productivityScore,
         successRate,
         lastActivityTime,

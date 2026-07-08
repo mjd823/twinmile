@@ -70,6 +70,8 @@ interface Employee {
   hoursThisWeek: number;
   tasksToday: number;
   tasksThisWeek: number;
+  scheduledDone: number;
+  scheduledExpected: number;
   expectedTasksPerDay: number;
   productivityScore: number;
   successRate: number;
@@ -156,7 +158,9 @@ function formatRelative(ts: string | null): string {
 function formatTime(ts: string | null): string {
   if (!ts) return "—";
   const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleTimeString("en-US", {
+    timeZone: "America/Chicago",
     hour: "numeric",
     minute: "2-digit",
   });
@@ -467,7 +471,7 @@ export function AgentTimesheet() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [weekOffset]);
 
   React.useEffect(() => {
     fetchData();
@@ -508,7 +512,7 @@ export function AgentTimesheet() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            Last updated: {lastRefresh.toLocaleTimeString("en-US")}
+            Last updated: {lastRefresh.toLocaleTimeString("en-US", { timeZone: "America/Chicago" })} CT
           </span>
           <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -651,7 +655,7 @@ export function AgentTimesheet() {
                     <th className="py-2 px-2 text-[11px] uppercase font-medium text-muted-foreground whitespace-nowrap">Shift</th>
                     <th className="py-2 px-2 text-[11px] uppercase font-medium text-muted-foreground whitespace-nowrap text-center">Hrs Today</th>
                     <th className="py-2 px-2 text-[11px] uppercase font-medium text-muted-foreground whitespace-nowrap text-center">Hrs/Wk</th>
-                    <th className="py-2 px-2 text-[11px] uppercase font-medium text-muted-foreground whitespace-nowrap text-center">Tasks</th>
+                    <th className="py-2 px-2 text-[11px] uppercase font-medium text-muted-foreground whitespace-nowrap text-center">Scheduled Runs</th>
                     <th className="py-2 px-2 text-[11px] uppercase font-medium text-muted-foreground whitespace-nowrap">Last Activity</th>
                     <th className="py-2 px-2 text-[11px] uppercase font-medium text-muted-foreground whitespace-nowrap">Productivity</th>
                     <th className="py-2 px-2 w-8"></th>
@@ -705,10 +709,21 @@ export function AgentTimesheet() {
                           <td className="py-2.5 px-2 text-center font-medium">
                             {emp.hoursThisWeek > 0 ? `${emp.hoursThisWeek}h` : "—"}
                           </td>
-                          {/* Tasks */}
+                          {/* Scheduled runs: done ÷ due — the SAME ratio the productivity % uses */}
                           <td className="py-2.5 px-2 text-center">
-                            <span className="text-lg font-bold">{emp.tasksToday}</span>
-                            <span className="text-[10px] text-muted-foreground ml-1">/ {emp.expectedTasksPerDay}</span>
+                            {emp.scheduledExpected > 0 ? (
+                              <div className="flex flex-col items-center">
+                                <span className="whitespace-nowrap">
+                                  <span className="text-lg font-bold tabular-nums">{emp.scheduledDone}</span>
+                                  <span className="text-[10px] text-muted-foreground ml-1">of {emp.scheduledExpected} scheduled</span>
+                                </span>
+                                {emp.tasksToday > 0 && (
+                                  <span className="text-[10px] text-muted-foreground">{emp.tasksToday} activities logged</span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-muted-foreground">none due today</span>
+                            )}
                           </td>
                           {/* Last activity */}
                           <td className="py-2.5 px-2 whitespace-nowrap text-xs text-muted-foreground">
@@ -749,7 +764,9 @@ export function AgentTimesheet() {
 
       {/* Footer note */}
       <p className="text-[11px] text-muted-foreground text-center">
-        Timesheet data auto-refreshes every 30 seconds. Productivity scores are calculated as tasks completed ÷ expected tasks for the shift.
+        A &ldquo;task&rdquo; is one scheduled run from the cron registry (daily reviews are 1/day; weekly agents run Mondays).
+        Productivity = scheduled runs completed ÷ scheduled runs due today — the same numbers shown in the Tasks column.
+        All times are Central (America/Chicago). Auto-refreshes every 30 seconds.
       </p>
     </div>
   );

@@ -240,7 +240,9 @@ const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
       const status: JobStatus = live?.status ?? "never_ran";
       events.push({
         id: `cron-${occ.job.id}-${occ.date.toISOString().slice(0, 10)}`,
-        title: `${occ.job.agentName} — ${occ.job.name}`,
+        // job.name already identifies the agent ("Sofia — FMCSA Prospecting");
+        // don't prefix the agent name again.
+        title: occ.job.name,
         date: occ.date,
         type: "cron",
         agent: occ.job.agentName,
@@ -313,6 +315,11 @@ const serialize = (events: CalendarEvent[]) =>
     date: e.date instanceof Date ? e.date.toISOString() : new Date(e.date).toISOString(),
   }));
 
+// Server → client props must be plain objects. Raw Mongo docs carry ObjectId
+// (and other BSON) instances that are NOT plain — round-trip through JSON so
+// ObjectIds become hex strings and Dates become ISO strings.
+const toPlain = <T,>(value: T): T => JSON.parse(JSON.stringify(value ?? null));
+
 export default async function CalendarPage() {
   const [events, pipeline] = await Promise.all([
     getCalendarEvents(),
@@ -321,11 +328,11 @@ export default async function CalendarPage() {
 
   return (
     <CalendarKanbanPage
-      events={serialize(events)}
+      events={toPlain(serialize(events))}
       pipeline={{
-        quoteLeads: pipeline.quoteLeads as Record<string, unknown>[],
-        driverLeads: pipeline.driverLeads as Record<string, unknown>[],
-        leaseAgreements: pipeline.leaseAgreements as Record<string, unknown>[],
+        quoteLeads: toPlain(pipeline.quoteLeads) as Record<string, unknown>[],
+        driverLeads: toPlain(pipeline.driverLeads) as Record<string, unknown>[],
+        leaseAgreements: toPlain(pipeline.leaseAgreements) as Record<string, unknown>[],
       }}
     />
   );

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { ImageResponse } from "next/og";
 
 import { SITE_CONFIG } from "@/lib/site-config";
@@ -28,6 +31,26 @@ interface OgFont {
 }
 
 let fontsPromise: Promise<OgFont[]> | null = null;
+
+/**
+ * Real Twin Mile logo (public/brand/twinmile-logo.png, 1408x287 transparent
+ * PNG) embedded as a data URI — satori can't fetch relative URLs, and a data
+ * URI keeps rendering a pure function of the post fields. Loaded once per
+ * process; falls back to the text wordmark if the file is missing.
+ */
+let logoDataUri: string | null | undefined;
+
+function getLogoDataUri(): string | null {
+  if (logoDataUri !== undefined) return logoDataUri;
+  try {
+    const buf = readFileSync(join(process.cwd(), "public", "brand", "twinmile-logo.png"));
+    logoDataUri = `data:image/png;base64,${buf.toString("base64")}`;
+  } catch (err) {
+    console.warn("[social-pack] Brand logo unavailable, using text wordmark:", (err as Error)?.message);
+    logoDataUri = null;
+  }
+  return logoDataUri;
+}
 
 /**
  * Best-effort bold display font (Google Fonts serves TTF to UA-less fetches).
@@ -74,6 +97,7 @@ export async function renderRecruitingPostPng(post: RecruitingPost): Promise<Buf
   const fonts = await loadFonts();
   const bold = { fontFamily: "Inter", fontWeight: 700 as const };
   const headlineLines = post.headline.split("\n");
+  const logo = getLogoDataUri();
 
   const response = new ImageResponse(
     (
@@ -96,17 +120,23 @@ export async function renderRecruitingPostPng(post: RecruitingPost): Promise<Buf
             alignItems: "center",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-            <div
-              style={{
-                width: 16,
-                height: 44,
-                backgroundColor: AMBER,
-                display: "flex",
-              }}
-            />
-            <span style={{ ...bold, fontSize: 40, letterSpacing: 6 }}>TWIN MILE</span>
-          </div>
+          {logo ? (
+            // Real Twin Mile Logistics logo (gray/blue reads cleanly on the dark bg)
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logo} alt="Twin Mile Logistics" width={314} height={64} />
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+              <div
+                style={{
+                  width: 16,
+                  height: 44,
+                  backgroundColor: AMBER,
+                  display: "flex",
+                }}
+              />
+              <span style={{ ...bold, fontSize: 40, letterSpacing: 6 }}>TWIN MILE</span>
+            </div>
+          )}
           <span style={{ color: "rgba(255,255,255,0.65)", fontSize: 28 }}>twinmile.com</span>
         </div>
 

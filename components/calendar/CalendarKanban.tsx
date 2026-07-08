@@ -446,10 +446,17 @@ function DayDetailDialog({
 }
 
 // ---------------------------------------------------------------------------
-// Day Cell Component — hover expands (desktop), tap opens the day sheet
+// Day Cell — fixed height (no hover-resize jank), readable chips on desktop,
+// a count pill on mobile. Tap/click anywhere opens the day sheet.
 // ---------------------------------------------------------------------------
 
 const MAX_VISIBLE_EVENTS = 3;
+
+/** Short, readable chip title: drop the agent-name prefix ("Sofia — X" → "X"). */
+function chipTitle(event: CalendarEvent): string {
+  const parts = event.title.split(" — ");
+  return parts.length > 1 ? parts.slice(1).join(" — ") : event.title;
+}
 
 function DayCell({
   day,
@@ -466,103 +473,89 @@ function DayCell({
   onEventClick?: (event: CalendarEvent) => void;
   onDayClick?: (day: Date) => void;
 }) {
-  const [hovered, setHovered] = React.useState(false);
   const sorted = React.useMemo(() => [...dayEvents].sort(sortByTime), [dayEvents]);
   const visibleEvents = sorted.slice(0, MAX_VISIBLE_EVENTS);
   const remainingCount = sorted.length - MAX_VISIBLE_EVENTS;
+  // Job health is a LIVE state — only flag it on today's cell, not history.
+  const attention =
+    isTodayDate && sorted.some((e) => e.status === "late" || e.status === "error");
 
   return (
     <div
-      className={`relative p-1 sm:p-1.5 border-b border-r border-border/60 flex flex-col transition-all duration-200 cursor-pointer active:bg-muted/40 ${
+      role="button"
+      tabIndex={0}
+      aria-label={`${format(day, "MMMM d")}: ${sorted.length} event${sorted.length === 1 ? "" : "s"}`}
+      className={`relative flex min-h-[56px] cursor-pointer flex-col overflow-hidden border-b border-r border-border/60 p-1 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/50 sm:min-h-[104px] sm:p-1.5 hover:bg-muted/30 active:bg-muted/40 ${
         !isCurrentMonth ? "bg-muted/20 text-muted-foreground/50" : ""
-      } ${isTodayDate ? "bg-primary/5 ring-2 ring-primary/20" : ""} ${
-        hovered
-          ? "sm:z-20 sm:shadow-lg sm:shadow-black/20 sm:bg-card sm:row-span-2 sm:min-h-[200px] min-h-[64px]"
-          : "min-h-[64px] max-h-[64px] sm:min-h-[100px] sm:max-h-[100px] overflow-hidden"
-      }`}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
+      } ${isTodayDate ? "bg-primary/5" : ""}`}
       onClick={() => onDayClick?.(day)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onDayClick?.(day);
+        }
+      }}
     >
-      {/* Day number */}
-      <div className="text-xs font-medium mb-0.5 shrink-0 flex items-center justify-between tabular-nums">
+      {/* Day number + attention flag */}
+      <div className="mb-0.5 flex shrink-0 items-center justify-between text-xs font-medium tabular-nums">
         <span
           className={
             isTodayDate
-              ? "h-5 w-5 -ml-0.5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[11px] font-semibold"
+              ? "-ml-0.5 flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
               : ""
           }
         >
           {format(day, "d")}
         </span>
-        {sorted.length > 0 && !hovered && (
-          <span className="hidden sm:flex items-center gap-0.5">
-            {sorted.slice(0, 3).map((ev, i) => (
-              <span
-                key={i}
-                className={`w-1.5 h-1.5 rounded-full ${
-                  ev.status ? JOB_STATUS_META[ev.status].dot : ev.color
-                }`}
-              />
-            ))}
-            {sorted.length > 3 && (
-              <span className="text-[9px] text-muted-foreground ml-0.5">
-                +{sorted.length - 3}
-              </span>
-            )}
-          </span>
-        )}
-      </div>
-
-      {/* Mobile: dot summary only — the tap target is the whole cell */}
-      <div className="sm:hidden flex flex-wrap content-start gap-[3px] flex-1 min-h-0 overflow-hidden">
-        {sorted.slice(0, 12).map((ev, i) => (
+        {attention && (
           <span
-            key={i}
-            className={`w-1.5 h-1.5 rounded-full ${
-              ev.status ? JOB_STATUS_META[ev.status].dot : ev.color
-            }`}
+            className="h-1.5 w-1.5 rounded-full bg-amber-500"
+            title="A scheduled job on this day is late or failed"
           />
-        ))}
-        {sorted.length > 12 && (
-          <span className="text-[8px] leading-none text-muted-foreground">
-            +{sorted.length - 12}
-          </span>
         )}
       </div>
 
-      {/* Desktop: event chips (all when hovered, first 3 otherwise) */}
-      <div
-        className={`hidden sm:block flex-1 min-h-0 ${
-          hovered ? "overflow-y-auto space-y-0.5" : "overflow-hidden space-y-0.5"
-        }`}
-      >
-        {(hovered ? sorted : visibleEvents).map((event) => (
+      {/* Mobile: one honest count pill (tap for the day sheet) */}
+      {sorted.length > 0 && (
+        <div className="sm:hidden mt-auto">
+          <span
+            className={`inline-flex items-center rounded-full px-1.5 py-px text-[10px] font-semibold tabular-nums ${
+              attention ? "bg-amber-500/20 text-amber-500" : "bg-muted/60 text-muted-foreground"
+            }`}
+          >
+            {sorted.length}
+          </span>
+        </div>
+      )}
+
+      {/* Desktop: up to 3 readable chips with a status/type dot */}
+      <div className="hidden flex-1 min-h-0 space-y-0.5 overflow-hidden sm:block">
+        {visibleEvents.map((event) => (
           <div
             key={event.id}
-            className={`text-[10px] leading-tight px-1 py-0.5 rounded truncate cursor-pointer hover:brightness-110 transition-all ${event.color}`}
+            className="flex cursor-pointer items-center gap-1 rounded border border-border/40 bg-card/80 px-1 py-0.5 transition-colors hover:border-primary/40 hover:bg-muted/40"
             onClick={(e) => {
               e.stopPropagation();
               onEventClick?.(event);
             }}
             title={event.title}
           >
-            {hovered && (
-              <span className="opacity-70 tabular-nums mr-1">
-                {format(toSafeDate(event.date), "h:mm a")}
-              </span>
-            )}
-            {event.title}
+            <span
+              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                event.status ? JOB_STATUS_META[event.status].dot : event.color
+              }`}
+            />
+            <span className="truncate text-[10px] leading-tight text-foreground/90">
+              {chipTitle(event)}
+            </span>
           </div>
         ))}
+        {remainingCount > 0 && (
+          <div className="px-1 text-[9px] font-medium text-muted-foreground">
+            +{remainingCount} more — click day
+          </div>
+        )}
       </div>
-
-      {/* "+N more" indicator when not hovered and there are hidden events */}
-      {!hovered && remainingCount > 0 && (
-        <div className="hidden sm:block text-[9px] text-muted-foreground px-1 mt-auto shrink-0">
-          +{remainingCount} more
-        </div>
-      )}
     </div>
   );
 }
@@ -606,13 +599,28 @@ function StatusLegend() {
   );
 }
 
+type EventTypeFilter = "all" | "cron" | "activity" | "pipeline";
+
+function matchesFilter(event: CalendarEvent, filter: EventTypeFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "cron") return event.type === "cron";
+  if (filter === "activity") return event.type === "agent_action";
+  return event.type === "pipeline" || event.type === "onboarding" || event.type === "lease";
+}
+
 export function CalendarView({
   events,
   onEventClick,
 }: CalendarViewProps) {
   const [currentMonth, setCurrentMonth] = React.useState(new Date());
-  const [view, setView] = React.useState<"month" | "week">("month");
+  const [view, setView] = React.useState<"month" | "agenda">("month");
+  const [filter, setFilter] = React.useState<EventTypeFilter>("all");
   const [selectedDay, setSelectedDay] = React.useState<Date | null>(null);
+
+  const filtered = React.useMemo(
+    () => events.filter((e) => matchesFilter(e, filter)),
+    [events, filter]
+  );
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
@@ -621,7 +629,7 @@ export function CalendarView({
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
   const getEventsForDay = (day: Date) =>
-    events.filter((e) => isSameDay(toSafeDate(e.date), day));
+    filtered.filter((e) => isSameDay(toSafeDate(e.date), day));
 
   const navigateMonth = (direction: 1 | -1) => {
     setCurrentMonth(addMonths(currentMonth, direction));
@@ -629,147 +637,194 @@ export function CalendarView({
 
   const goToToday = () => setCurrentMonth(new Date());
 
-  if (view === "week") {
-    const weekStart = startOfWeek(currentMonth);
-    const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const filterCounts: Record<EventTypeFilter, number> = React.useMemo(() => {
+    const inMonth = events.filter((e) => isSameMonth(toSafeDate(e.date), currentMonth));
+    return {
+      all: inMonth.length,
+      cron: inMonth.filter((e) => matchesFilter(e, "cron")).length,
+      activity: inMonth.filter((e) => matchesFilter(e, "activity")).length,
+      pipeline: inMonth.filter((e) => matchesFilter(e, "pipeline")).length,
+    };
+  }, [events, currentMonth]);
 
-    return (
-      <Card className="border-border/60">
-        <CardHeader className="flex flex-row items-center justify-between pb-3">
-          <CardTitle className="flex items-center gap-2">
-            <CalendarIcon className="h-5 w-5 text-primary" />
-            Week of {format(weekStart, "MMM d, yyyy")}
-          </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setView("month")}>
-              Month
-            </Button>
-            <Button variant="ghost" size="sm" onClick={goToToday}>
-              Today
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse">
-              <thead>
-                <tr className="border-b border-border/60 bg-muted/30">
-                  <th className="w-32 p-2 text-left text-xs font-medium text-muted-foreground">
-                    Time
-                  </th>
-                  {weekDays.map((day) => (
-                    <th
-                      key={day.toISOString()}
-                      className={`p-2 text-center text-xs font-medium border-r border-border/60 ${
-                        isSameDay(day, new Date())
-                          ? "bg-primary/5 text-primary"
-                          : ""
-                      }`}
-                    >
-                      <div className="font-medium">{format(day, "EEE")}</div>
-                      <div className="text-muted-foreground">
-                        {format(day, "d")}
-                      </div>
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {Array.from({ length: 24 }, (_, hour) => (
-                  <tr key={hour} className="border-b border-border/60">
-                    <td className="w-32 p-1 text-right text-xs text-muted-foreground pr-2">
-                      {String(hour).padStart(2, "0")}:00
-                    </td>
-                    {weekDays.map((day) => {
-                      const dayEvents = events.filter(
-                        (e) =>
-                          isSameDay(toSafeDate(e.date), day) &&
-                          toSafeDate(e.date).getHours() === hour,
-                      );
-                      return (
-                        <td
-                          key={day.toISOString()}
-                          className="p-1 border-r border-border/60 relative min-h-[60px]"
-                        >
-                          {dayEvents.map((event) => (
-                            <div
-                              key={event.id}
-                              className={`absolute w-full px-1 py-0.5 text-[10px] rounded cursor-pointer hover:brightness-110 ${event.color}`}
-                              style={{ top: 0 }}
-                              onClick={() => onEventClick?.(event)}
-                            >
-                              {event.title}
-                            </div>
-                          ))}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const filterTabs: { key: EventTypeFilter; label: string }[] = [
+    { key: "all", label: "Everything" },
+    { key: "cron", label: "Schedule" },
+    { key: "activity", label: "Agent activity" },
+    { key: "pipeline", label: "Pipeline" },
+  ];
+
+  // Agenda view: the next 14 days from today, only days that have something.
+  const agendaDays = React.useMemo(() => {
+    if (view !== "agenda") return [];
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    return Array.from({ length: 14 }, (_, i) => addDays(start, i))
+      .map((day) => ({
+        day,
+        events: filtered.filter((e) => isSameDay(toSafeDate(e.date), day)).sort(sortByTime),
+      }))
+      .filter(({ events: evs }) => evs.length > 0);
+  }, [view, filtered]);
 
   return (
     <Card className="border-border/60">
-      <CardHeader className="flex flex-row items-center justify-between pb-3">
-        <CardTitle className="flex items-center gap-2">
-          <CalendarIcon className="h-5 w-5 text-primary" />
-          {format(currentMonth, "MMMM yyyy")}
-        </CardTitle>
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={() => setView("week")}>
-            Week
-          </Button>
-          <Button variant="ghost" size="sm" onClick={goToToday}>
-            <CalendarIcon className="h-4 w-4 mr-1" />
-            Today
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigateMonth(-1)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => navigateMonth(1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+      <CardHeader className="space-y-3 pb-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="flex items-center gap-2">
+            <CalendarIcon className="h-5 w-5 text-primary" />
+            {view === "month" ? format(currentMonth, "MMMM yyyy") : "Next 14 days"}
+          </CardTitle>
+          <div className="flex items-center gap-1">
+            <div className="mr-1 flex rounded-md border border-border/60 p-0.5">
+              <button
+                onClick={() => setView("month")}
+                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  view === "month" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Month
+              </button>
+              <button
+                onClick={() => setView("agenda")}
+                className={`rounded px-2 py-1 text-xs font-medium transition-colors ${
+                  view === "agenda" ? "bg-muted text-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Agenda
+              </button>
+            </div>
+            {view === "month" && (
+              <>
+                <Button variant="ghost" size="sm" onClick={goToToday}>
+                  Today
+                </Button>
+                <Button variant="ghost" size="icon" aria-label="Previous month" onClick={() => navigateMonth(-1)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" aria-label="Next month" onClick={() => navigateMonth(1)}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Event-type filter: tame the schedule noise with one tap */}
+        <div className="flex flex-wrap gap-1">
+          {filterTabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setFilter(t.key)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                filter === t.key
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border/60 text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {t.label}
+              <span className="ml-1 tabular-nums opacity-70">{filterCounts[t.key]}</span>
+            </button>
+          ))}
         </div>
       </CardHeader>
-      <CardContent className="p-0">
-        <StatusLegend />
-        <div className="grid grid-cols-7 border-t border-l border-border/60">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-            <div
-              key={day}
-              className="p-1.5 sm:p-2 text-center text-[10px] sm:text-xs font-medium text-muted-foreground border-b border-r border-border/60 bg-muted/30"
-            >
-              {day}
-            </div>
-          ))}
-          {days.map((day) => {
-            const dayEvents = getEventsForDay(day);
-            const isCurrentMonth = isSameMonth(day, currentMonth);
-            const isTodayDate = isSameDay(day, new Date());
 
-            return (
-              <DayCell
-                key={day.toISOString()}
-                day={day}
-                dayEvents={dayEvents}
-                isCurrentMonth={isCurrentMonth}
-                isTodayDate={isTodayDate}
-                onEventClick={onEventClick}
-                onDayClick={setSelectedDay}
-              />
-            );
-          })}
-        </div>
+      <CardContent className="p-0">
+        {view === "month" ? (
+          <>
+            <StatusLegend />
+            <div className="grid grid-cols-7 border-t border-l border-border/60">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                <div
+                  key={day}
+                  className="border-b border-r border-border/60 bg-muted/30 p-1.5 text-center text-[10px] font-medium text-muted-foreground sm:p-2 sm:text-xs"
+                >
+                  {day}
+                </div>
+              ))}
+              {days.map((day) => {
+                const dayEvents = getEventsForDay(day);
+                const isCurrentMonth = isSameMonth(day, currentMonth);
+                const isTodayDate = isSameDay(day, new Date());
+
+                return (
+                  <DayCell
+                    key={day.toISOString()}
+                    day={day}
+                    dayEvents={dayEvents}
+                    isCurrentMonth={isCurrentMonth}
+                    isTodayDate={isTodayDate}
+                    onEventClick={onEventClick}
+                    onDayClick={setSelectedDay}
+                  />
+                );
+              })}
+            </div>
+            <p className="px-3 py-2 text-[10px] text-muted-foreground sm:px-4">
+              Tap any day for its full list. Times shown in your device timezone (business clock is Central).
+            </p>
+          </>
+        ) : agendaDays.length === 0 ? (
+          <div className="flex flex-col items-center justify-center px-6 py-14 text-center">
+            <CalendarIcon className="mb-3 h-10 w-10 text-muted-foreground/30" />
+            <p className="text-sm font-medium">Nothing on the calendar for the next 14 days</p>
+            <p className="mt-1 max-w-xs text-xs text-muted-foreground">
+              {filter === "all"
+                ? "Scheduled jobs and agent activity will appear here as they're logged."
+                : "Nothing matches this filter — try “Everything”."}
+            </p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border/40">
+            {agendaDays.map(({ day, events: dayEvents }) => (
+              <div key={day.toISOString()} className="px-3 py-3 sm:px-4">
+                <div className="mb-2 flex items-baseline gap-2">
+                  <span className={`text-sm font-semibold ${isSameDay(day, new Date()) ? "text-primary" : ""}`}>
+                    {isSameDay(day, new Date()) ? "Today" : format(day, "EEEE")}
+                  </span>
+                  <span className="text-xs text-muted-foreground">{format(day, "MMM d")}</span>
+                  <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
+                    {dayEvents.length} item{dayEvents.length === 1 ? "" : "s"}
+                  </span>
+                </div>
+                <div className="space-y-1">
+                  {dayEvents.map((event) => (
+                    <button
+                      key={event.id}
+                      onClick={() => onEventClick?.(event)}
+                      className="flex w-full items-center gap-2.5 rounded-lg border border-border/40 bg-card/50 p-2 text-left transition-colors hover:border-primary/30 hover:bg-muted/30"
+                    >
+                      <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+                        {format(toSafeDate(event.date), "h:mm a")}
+                      </span>
+                      <span
+                        className={`h-2 w-2 shrink-0 rounded-full ${
+                          event.status ? JOB_STATUS_META[event.status].dot : event.color
+                        }`}
+                      />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-xs font-medium">{event.title}</span>
+                        {event.details && (
+                          <span className="block truncate text-[10px] text-muted-foreground">
+                            {event.details}
+                          </span>
+                        )}
+                      </span>
+                      {event.status && (
+                        <Badge
+                          variant="outline"
+                          className={`shrink-0 px-1.5 py-0 text-[9px] ${JOB_STATUS_META[event.status].pill}`}
+                        >
+                          {JOB_STATUS_META[event.status].label}
+                        </Badge>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </CardContent>
 
       <DayDetailDialog
@@ -854,7 +909,12 @@ export function KanbanView({
       key: "new",
       label: "Applied",
       color: "bg-slate-500",
-      leads: driverLeads.filter((l) => l.status === "new"),
+      // Mutually exclusive with "Qualified (≥75)" below — no double counting.
+      leads: driverLeads.filter(
+        (l) =>
+          l.status === "new" &&
+          (typeof l.score === "number" ? l.score : 0) < 75,
+      ),
     },
     {
       key: "qualified",

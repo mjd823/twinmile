@@ -54,10 +54,30 @@ interface EmailLog {
   leadType: string;
   status: string;
   sentAt: string;
-  expiresAt: string;
-  completedAt: string | null;
-  aiScore: number;
-  sessionToken: string;
+  subject: string;
+  bodyHtml: string;
+  bodyText: string;
+}
+
+interface EmailStats {
+  sentLast24h: number;
+  sentTotal: number;
+  pending: number;
+  failed: number;
+}
+
+/** Format any timestamp in America/Chicago — the business clock. */
+function fmtCT(value: string | null | undefined): string {
+  if (!value) return "Never";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 export function CronMonitorDashboard() {
@@ -66,6 +86,7 @@ export function CronMonitorDashboard() {
   const [cronJobs, setCronJobs] = React.useState<CronJob[]>([]);
   const [activityLogs, setActivityLogs] = React.useState<ActivityLog[]>([]);
   const [emailLogs, setEmailLogs] = React.useState<EmailLog[]>([]);
+  const [emailStats, setEmailStats] = React.useState<EmailStats | null>(null);
   const [expandedJob, setExpandedJob] = React.useState<string | null>(null);
   const [activeTab, setActiveTab] = React.useState<"jobs" | "activity" | "emails">("jobs");
   const [lastRefresh, setLastRefresh] = React.useState<Date>(new Date());
@@ -100,6 +121,7 @@ export function CronMonitorDashboard() {
       setCronJobs(liveJobs);
       setActivityLogs(data.data?.activityLogs || []);
       setEmailLogs(data.data?.emailLogs || []);
+      setEmailStats(data.data?.emailStats || null);
       setLastRefresh(new Date());
       setError(null);
     } catch (err: any) {
@@ -134,7 +156,7 @@ export function CronMonitorDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            Last updated: {lastRefresh.toLocaleTimeString("en-US")}
+            Last updated: {lastRefresh.toLocaleTimeString("en-US", { timeZone: "America/Chicago" })} CT
           </span>
           <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -165,8 +187,9 @@ export function CronMonitorDashboard() {
         />
         <StatusCard
           icon={<Mail className="h-5 w-5" />}
-          label="Emails Sent"
-          value={emailLogs.length}
+          label="Emails Sent (24h)"
+          value={emailStats?.sentLast24h ?? 0}
+          sublabel={emailStats ? `${emailStats.sentTotal.toLocaleString()} all-time · ${emailStats.pending} queued · ${emailStats.failed} failed` : undefined}
           color="blue"
         />
       </div>
@@ -218,7 +241,7 @@ export function CronMonitorDashboard() {
   );
 }
 
-function StatusCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) {
+function StatusCard({ icon, label, value, color, sublabel }: { icon: React.ReactNode; label: string; value: number; color: string; sublabel?: string }) {
   const colors: Record<string, string> = {
     green: "border-green-500/30 bg-green-500/5 text-green-600",
     red: "border-red-500/30 bg-red-500/5 text-red-600",
@@ -229,9 +252,10 @@ function StatusCard({ icon, label, value, color }: { icon: React.ReactNode; labe
     <Card className={`border ${colors[color]}`}>
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs font-medium text-muted-foreground uppercase">{label}</p>
-            <p className="text-3xl font-bold mt-1">{value}</p>
+            <p className="text-3xl font-bold mt-1 tabular-nums">{value}</p>
+            {sublabel && <p className="text-[10px] text-muted-foreground mt-0.5 truncate">{sublabel}</p>}
           </div>
           <div className="opacity-80">{icon}</div>
         </div>
@@ -263,11 +287,7 @@ function CronJobCard({ job, expanded, onToggle }: { job: any; expanded: boolean;
   };
   const cfg = statusConfig[status as keyof typeof statusConfig] || statusConfig.null;
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return "Never";
-    const d = new Date(dateStr);
-    return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-  };
+  const formatDate = fmtCT;
 
   return (
     <Card className={`${cfg.bg} border transition-all`}>
@@ -398,6 +418,28 @@ function CronJobCard({ job, expanded, onToggle }: { job: any; expanded: boolean;
   );
 }
 
+/** Turn a heterogeneous result payload into one readable sentence. */
+function summarizeResult(result: any): string {
+  if (!result) return "";
+  if (typeof result === "string") return result;
+  if (typeof result !== "object") return String(result);
+  if (result.summary) return String(result.summary);
+  if (result.carriersFound !== undefined)
+    return `Found ${result.carriersFound} carriers · ${result.qualified || 0} qualified · ${result.saved || 0} saved`;
+  if (result.sent !== undefined)
+    return `${result.sent} emails sent · ${result.failed || 0} failed · ${result.skipped || 0} skipped`;
+  if (result.prospectsFound !== undefined)
+    return `Found ${result.prospectsFound} prospects · ${result.prospectsSaved || 0} saved`;
+  if (result.agentsMonitored !== undefined)
+    return `Monitored ${result.agentsMonitored} agents · ${result.errorsFound || 0} errors found`;
+  if (result.tasksProcessed !== undefined)
+    return `${result.tasksProcessed} outreach tasks processed`;
+  const entries = Object.entries(result)
+    .filter(([, v]) => ["string", "number", "boolean"].includes(typeof v))
+    .slice(0, 3);
+  return entries.map(([k, v]) => `${k.replace(/([A-Z])/g, " $1").toLowerCase()}: ${String(v)}`).join(" · ");
+}
+
 function ActivityFeed({ logs }: { logs: ActivityLog[] }) {
   if (logs.length === 0) {
     return <EmptyState icon={<Zap className="h-12 w-12" />} message="No activity recorded yet" />;
@@ -438,30 +480,14 @@ function ActivityFeed({ logs }: { logs: ActivityLog[] }) {
                 <span className="font-medium text-sm">{log.agent}</span>
                 <Badge variant="outline" className="text-[10px]">{log.agentRole}</Badge>
                 <Badge variant="secondary" className="text-[10px]">
-                  {actionLabels[log.action] || log.action}
+                  {actionLabels[log.action] || String(log.action).replace(/_/g, " ")}
                 </Badge>
               </div>
-              {log.result && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  {log.result.carriersFound !== undefined && (
-                    <span className="mr-3">📊 Found: {log.result.carriersFound}</span>
-                  )}
-                  {log.result.qualified !== undefined && (
-                    <span className="mr-3">✅ Qualified: {log.result.qualified}</span>
-                  )}
-                  {log.result.saved !== undefined && (
-                    <span className="mr-3">💾 Saved: {log.result.saved}</span>
-                  )}
-                  {log.result.prospectsFound !== undefined && (
-                    <span className="mr-3">📊 Prospects: {log.result.prospectsFound}</span>
-                  )}
-                  {log.result.prospectsSaved !== undefined && (
-                    <span className="mr-3">💾 Saved: {log.result.prospectsSaved}</span>
-                  )}
-                </div>
-              )}
+              <p className="mt-1 text-xs text-muted-foreground">
+                {summarizeResult(log.result) || (log.success ? "Completed" : "Failed")}
+              </p>
               <p className="text-[10px] text-muted-foreground mt-1">
-                {new Date(log.timestamp).toLocaleString("en-US")}
+                {fmtCT(log.timestamp)} CT
               </p>
             </div>
           </CardContent>
@@ -489,31 +515,23 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3 flex-1 min-w-0">
                 <div className="mt-0.5">
-                  <Mail className={`h-5 w-5 ${log.status === "completed" ? "text-green-500" : log.status === "pending" ? "text-amber-500" : "text-muted-foreground"}`} />
+                  <Mail className="h-5 w-5 text-green-500" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm truncate">{log.leadName}</span>
-                    {log.aiScore && (
-                      <Badge variant="secondary" className="text-[10px]">Score: {log.aiScore}</Badge>
-                    )}
-                    <Badge variant="outline" className="text-[10px] capitalize">{log.leadType?.replace(/_/g, " ")}</Badge>
+                    <Badge variant="outline" className="text-[10px] capitalize">{log.type?.replace(/_/g, " ")}</Badge>
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    To: {log.recipient || "No email on file — NOT SENT"}
+                    {log.subject || "(subject unavailable)"} — to {log.recipient || "unknown"}
                   </p>
-                  <div className="flex items-center gap-3 mt-1 text-[10px] text-muted-foreground">
-                    <span>Sent: {new Date(log.sentAt).toLocaleString("en-US")}</span>
-                    {log.completedAt && (
-                      <span className="text-green-600">✓ Completed: {new Date(log.completedAt).toLocaleString("en-US")}</span>
-                    )}
-                  </div>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    Sent {fmtCT(log.sentAt)} CT
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <Badge variant={log.status === "completed" ? "default" : log.status === "pending" ? "secondary" : "destructive"} className="text-[10px] capitalize">
-                  {log.status}
-                </Badge>
+                <Badge variant="default" className="text-[10px] capitalize">{log.status}</Badge>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${expandedEmail === log.id ? "rotate-180" : ""}`} />
               </div>
             </div>
@@ -521,53 +539,30 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
 
           {expandedEmail === log.id && (
             <div className="border-t border-border/60 p-3 bg-muted/10 space-y-3">
-              {/* Email Status */}
               <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Delivery Status</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-muted-foreground">Recipient:</span>{" "}
-                    <span className="font-medium">{log.recipient || "No email — session created but email not sent"}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Session Token:</span>{" "}
-                    <code className="text-[10px] bg-muted/40 px-1 rounded">{log.sessionToken}</code>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Sent:</span>{" "}
-                    <span className="font-medium">{new Date(log.sentAt).toLocaleString("en-US")}</span>
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Expires:</span>{" "}
-                    <span className="font-medium">{new Date(log.expiresAt).toLocaleString("en-US")}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Email Content Preview — actual rendered HTML */}
-              <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Email Preview (as received)</p>
-                <div className="rounded-lg overflow-hidden border border-border/60 bg-white">
-                  <iframe
-                    srcDoc={generateEmailHTML(log.leadName, log.sessionToken)}
-                    className="w-full h-[400px] border-0"
-                    title="Email Preview"
-                    sandbox="allow-same-origin"
-                  />
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-2">
-                  This is exactly what the prospect receives via Resend. Logo, branding, and onboarding button included.
+                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">
+                  Email as delivered
                 </p>
-              </div>
-
-              {/* Onboarding Link */}
-              <div className="rounded-lg border border-border/60 bg-background/60 p-3">
-                <p className="text-xs font-semibold text-muted-foreground uppercase mb-2">Onboarding Portal Link</p>
-                <code className="text-[10px] text-primary break-all">
-                  https://twinmile.com/onboarding?token={log.sessionToken}...
-                </code>
-                <p className="text-[10px] text-muted-foreground mt-1">
-                  This link was included in the email. The prospect clicks it to start the 7-step onboarding.
+                {log.bodyHtml ? (
+                  <div className="rounded-lg overflow-hidden border border-border/60 bg-white">
+                    <iframe
+                      srcDoc={log.bodyHtml}
+                      className="w-full h-[380px] border-0"
+                      title="Email Preview"
+                      sandbox=""
+                    />
+                  </div>
+                ) : log.bodyText ? (
+                  <pre className="whitespace-pre-wrap break-words font-sans text-xs text-muted-foreground max-h-[380px] overflow-y-auto">
+                    {log.bodyText}
+                  </pre>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Sent before email copies were stored — see the Outreach tab for a re-rendered version.
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Exact copy persisted at send time — this is what the recipient saw.
                 </p>
               </div>
             </div>
@@ -589,60 +584,3 @@ function EmptyState({ icon, message }: { icon: React.ReactNode; message: string 
   );
 }
 
-// Generate the actual email HTML that Resend sends to prospects
-function generateEmailHTML(leadName: string, token: string): string {
-  const onboardingUrl = `https://twinmile.com/onboarding?token=${token}`;
-  const appName = process.env.NEXT_PUBLIC_APP_URL || "https://twinmile.com";
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Welcome to Twin Mile — Complete Your Onboarding</title>
-  </head>
-  <body style="margin:0;padding:0;background:#eef2f7;font-family:Arial,'Helvetica Neue',Helvetica,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef2f7;padding:20px 10px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #dbe3ec;">
-            <tr>
-              <td style="background:#111827;padding:20px 24px;">
-                <img src="${appName}/logo.png" alt="Twin Mile LLC" width="170" style="display:block;border:0;outline:none;text-decoration:none;height:auto;max-width:100%;" />
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:24px;color:#111827;">
-                <p style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#475569;font-weight:700;margin:0 0 10px;">Onboarding Invitation</p>
-                <h1 style="margin:0 0 10px;font-size:36px;line-height:1.2;color:#111827;">Welcome to Twin Mile, ${leadName}!</h1>
-                <p style="margin:0 0 18px;font-size:16px;line-height:1.6;color:#334155;">You've been pre-qualified for our power-only program. Complete your onboarding in just a few steps using your personal link below.</p>
-                <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;margin-bottom:22px;">
-                  <tr><td style="padding:6px 10px 6px 0;font-size:13px;font-weight:700;color:#111827;white-space:nowrap;">Name</td><td style="padding:6px 0;font-size:14px;color:#374151;">${leadName}</td></tr>
-                </table>
-                <p style="margin:14px 0 8px;font-size:14px;color:#4b5563;"><strong>Your personal onboarding link (expires in 72 hours):</strong></p>
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:8px;margin-bottom:22px;">
-                  <tr>
-                    <td style="border-radius:11px;background:#0f766e;">
-                      <a href="${onboardingUrl}" style="display:inline-block;padding:13px 20px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;">Complete Onboarding</a>
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin:14px 0 0;font-size:13px;color:#6b7280;">If the button doesn't work, copy and paste this link:<br/><a href="${onboardingUrl}" style="color:#0f766e;word-break:break-all;">${onboardingUrl}</a></p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:16px 22px;background:#f9fafb;border-top:1px solid #e5e7eb;">
-                <p style="margin:0;font-size:12px;color:#475569;">
-                  Twin Mile LLC • Houston, TX<br/>
-                  <a href="tel:+12817107787" style="color:#0f766e;text-decoration:none;">(281) 710-7787</a> •
-                  <a href="mailto:admin@twinmile.com" style="color:#0f766e;text-decoration:none;">admin@twinmile.com</a>
-                </p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>`;
-}

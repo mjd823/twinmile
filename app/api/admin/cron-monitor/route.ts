@@ -139,38 +139,64 @@ export async function GET() {
       })
     );
 
-    // Get recent activity logs
+    // Recent activity — exclude the every-15-minutes outreach heartbeat noise
+    // and sort by whichever timestamp field the row actually has (legacy rows
+    // use `timestamp`, newer rows use `createdAt`).
     const activityLogs = await db.collection("agent_activity")
-      .find({})
-      .sort({ createdAt: -1 })
-      .limit(50)
+      .aggregate([
+        { $match: { action: { $nin: ["outreach_processing", "outreach_cron"] } } },
+        { $addFields: { _sortTime: { $ifNull: ["$createdAt", "$timestamp"] } } },
+        { $sort: { _sortTime: -1 } },
+        { $limit: 50 },
+      ])
       .toArray();
 
-    // Get email logs from onboarding_sessions
-    const rawSessions = await db.collection("onboarding_sessions")
-      .find({})
-      .sort({ createdAt: -1 })
+    // REAL email numbers from outreach_tasks (what actually got sent via
+    // Resend) — previously this tab showed onboarding_sessions.length capped
+    // at a query limit of 50, which is where the bogus "50 emails sent" came
+    // from.
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const [emailSent24h, emailSentTotal, emailPending, emailFailed] = await Promise.all([
+      db.collection("outreach_tasks").countDocuments({ status: "sent", sentAt: { $gte: dayAgo } }),
+      db.collection("outreach_tasks").countDocuments({ status: "sent" }),
+      db.collection("outreach_tasks").countDocuments({ status: { $in: ["pending", "retrying"] } }),
+      db.collection("outreach_tasks").countDocuments({ status: "failed" }),
+    ]);
+
+    // Email log = the actual sent emails (exact subject/body as delivered)
+    const rawSentTasks = await db.collection("outreach_tasks")
+      .find({ status: "sent" })
+      .sort({ sentAt: -1 })
       .limit(50)
+      .project({
+        leadName: 1, leadType: 1, template: 1, status: 1, sentAt: 1, sentTo: 1,
+        leadEmail: 1, renderedSubject: 1, renderedHtml: 1, renderedBody: 1,
+      })
       .toArray();
 
-    const emailLogs = rawSessions.map((s: any) => ({
-      id: s._id?.toString(),
-      type: "onboarding_invitation",
-      recipient: s.email || s.name,
-      leadName: s.name,
-      leadType: s.leadType,
-      status: s.status,
-      sentAt: s.createdAt,
-      expiresAt: s.expiresAt,
-      completedAt: s.completedAt,
-      aiScore: s.metadata?.aiScore,
-      sessionToken: s.rawToken?.substring(0, 8) + "...",
+    const emailLogs = rawSentTasks.map((t: any) => ({
+      id: t._id?.toString(),
+      type: t.template || "outreach",
+      recipient: t.sentTo || t.leadEmail || "",
+      leadName: t.leadName || "Unknown",
+      leadType: t.leadType || "",
+      status: t.status,
+      sentAt: t.sentAt || null,
+      subject: t.renderedSubject || "",
+      bodyHtml: t.renderedHtml || "",
+      bodyText: t.renderedBody || "",
     }));
 
     return NextResponse.json({
       success: true,
       data: {
         cronJobs,
+        emailStats: {
+          sentLast24h: emailSent24h,
+          sentTotal: emailSentTotal,
+          pending: emailPending,
+          failed: emailFailed,
+        },
         activityLogs: activityLogs.map((a: any) => ({
           id: a._id?.toString(),
           action: a.action || a.type || "activity",
@@ -178,7 +204,7 @@ export async function GET() {
           agentRole: a.agent?.role || "Automated",
           agentDepartment: a.agent?.department || "System",
           result: a.result || a.details || (a.activity ? { summary: a.activity } : undefined),
-          success: a.success,
+          success: a.success !== false,
           timestamp: a.createdAt || a.timestamp,
         })),
         emailLogs,

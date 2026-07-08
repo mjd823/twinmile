@@ -27,6 +27,17 @@ export interface OutreachFunnel {
   totalProspects: number;
 }
 
+/** One row in a funnel-stage drill-down list. */
+export interface FunnelEntry {
+  name: string;
+  detail: string;
+  at: string;
+}
+
+export type FunnelStageKey = "new" | "reviewed" | "invited" | "clicked" | "replied" | "onboarded";
+
+export type FunnelStageDetails = Record<FunnelStageKey, FunnelEntry[]>;
+
 export interface SentEmailRow {
   id: string;
   recipient: string;
@@ -82,6 +93,7 @@ export interface ReplyRow {
 
 export async function getOutreachDashboardData(): Promise<{
   funnel: OutreachFunnel;
+  stageDetails: FunnelStageDetails;
   sentEmails: SentEmailRow[];
   replies: ReplyRow[];
   replyToInUse: string;
@@ -99,7 +111,8 @@ export async function getOutreachDashboardData(): Promise<{
     reviewedCount,
     invitedCount,
     clickedCount,
-    repliedCount,
+    prospectRepliedCount,
+    inboundReplyEmails,
     onboardedCount,
   ] = await Promise.all([
     db.collection("outbound_prospects").countDocuments(),
@@ -116,11 +129,58 @@ export async function getOutreachDashboardData(): Promise<{
     db.collection("outbound_prospects").countDocuments({
       $or: [{ status: "replied" }, { repliedAt: { $exists: true } }],
     }),
+    // Replies captured by the Resend inbound webhook (outreach_replies) —
+    // counted by distinct sender so multiple emails from one prospect = 1.
+    db.collection("outreach_replies").distinct("fromEmail"),
     db.collection("onboarding_sessions").countDocuments({
       leadType: "outbound_prospect",
       status: "completed",
     }),
   ]);
+  const repliedCount = Math.max(prospectRepliedCount, inboundReplyEmails.length);
+
+  // -------------------- funnel stage drill-down lists --------------------
+  const entry = (name: any, detail: any, at: any): FunnelEntry => ({
+    name: String(name || "Unknown"),
+    detail: String(detail || ""),
+    at: iso(at),
+  });
+
+  const [newDocs, reviewedDocs, invitedDocs, clickedDocs, repliedDocs, onboardedDocs] =
+    await Promise.all([
+      db.collection("outbound_prospects").find({ status: "new" })
+        .sort({ createdAt: -1 }).limit(200)
+        .project({ name: 1, contact: 1, createdAt: 1 }).toArray(),
+      db.collection("outbound_prospects").find({ status: "reviewed" })
+        .sort({ createdAt: -1 }).limit(200)
+        .project({ name: 1, contact: 1, createdAt: 1 }).toArray(),
+      db.collection("outbound_prospects").find({ status: "onboarding_invited" })
+        .sort({ updatedAt: -1, createdAt: -1 }).limit(200)
+        .project({ name: 1, contact: 1, invitedAt: 1, updatedAt: 1, createdAt: 1 }).toArray(),
+      db.collection("onboarding_sessions").find({
+        leadType: "outbound_prospect",
+        $or: [
+          { firstClickedAt: { $exists: true } },
+          { status: { $in: ["started", "documents_submitted", "completed"] } },
+        ],
+      }).sort({ firstClickedAt: -1 }).limit(200)
+        .project({ name: 1, leadName: 1, email: 1, firstClickedAt: 1, createdAt: 1 }).toArray(),
+      db.collection("outreach_replies").find({})
+        .sort({ receivedAt: -1 }).limit(200)
+        .project({ fromName: 1, fromEmail: 1, receivedAt: 1 }).toArray(),
+      db.collection("onboarding_sessions").find({ leadType: "outbound_prospect", status: "completed" })
+        .sort({ completedAt: -1 }).limit(200)
+        .project({ name: 1, leadName: 1, email: 1, completedAt: 1 }).toArray(),
+    ]);
+
+  const stageDetails: FunnelStageDetails = {
+    new: newDocs.map((p: any) => entry(p.name, p.contact?.email || p.contact?.phone, p.createdAt)),
+    reviewed: reviewedDocs.map((p: any) => entry(p.name, p.contact?.email || p.contact?.phone, p.createdAt)),
+    invited: invitedDocs.map((p: any) => entry(p.name, p.contact?.email || p.contact?.phone, p.invitedAt || p.updatedAt || p.createdAt)),
+    clicked: clickedDocs.map((s: any) => entry(s.name || s.leadName, s.email, s.firstClickedAt || s.createdAt)),
+    replied: repliedDocs.map((r: any) => entry(r.fromName || r.fromEmail, r.fromEmail, r.receivedAt)),
+    onboarded: onboardedDocs.map((s: any) => entry(s.name || s.leadName, s.email, s.completedAt)),
+  };
 
   // --------------------------- sent emails ----------------------------
   const rawTasks = await db
@@ -295,6 +355,7 @@ export async function getOutreachDashboardData(): Promise<{
       onboarded: onboardedCount,
       totalProspects,
     },
+    stageDetails,
     sentEmails,
     replies,
     replyToInUse:

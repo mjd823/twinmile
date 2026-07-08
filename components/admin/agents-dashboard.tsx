@@ -78,6 +78,17 @@ interface AgentAction {
   icon: string;
 }
 
+type AgentStatus = "busy" | "on_schedule" | "late" | "error" | "off_duty";
+
+interface ScheduledJob {
+  id: string;
+  name: string;
+  cadence: string;
+  status: "on_time" | "late" | "error" | "never_ran";
+  lastRun: string | null;
+  hoursSinceLastRun: number | null;
+}
+
 interface Agent {
   id: string;
   name: string;
@@ -86,10 +97,11 @@ interface Agent {
   color: string;
   icon: string;
   reportsTo?: string;
-  status: "active" | "idle" | "busy";
+  status: AgentStatus;
   currentTask: string;
   tasksToday: number;
   lastActivityTime: string | null;
+  scheduledJobs: ScheduledJob[];
   nextScheduled: string;
   action: AgentAction | null;
   workflow: WorkflowStep[];
@@ -102,9 +114,10 @@ interface Agent {
 interface DashboardSummary {
   totalAgents: number;
   totalTasksToday: number;
-  activeCount: number;
-  idleCount: number;
   busyCount: number;
+  onScheduleCount: number;
+  attentionCount: number;
+  offDutyCount: number;
   totalActivityRecords: number;
 }
 
@@ -130,7 +143,7 @@ export function AgentsDashboard() {
   const [summary, setSummary] = React.useState<DashboardSummary | null>(null);
   const [expandedAgent, setExpandedAgent] = React.useState<string | null>(null);
   const [showActivityDetail, setShowActivityDetail] = React.useState<string | null>(null);
-  const [filter, setFilter] = React.useState<"all" | "active" | "idle">("all");
+  const [filter, setFilter] = React.useState<"all" | "on_schedule" | "attention" | "off_duty">("all");
   const [lastRefresh, setLastRefresh] = React.useState(new Date());
 
   const fetchData = React.useCallback(async () => {
@@ -164,13 +177,15 @@ export function AgentsDashboard() {
 
   const filteredAgents = React.useMemo(() => {
     if (filter === "all") return agents;
-    if (filter === "active") return agents.filter((a) => a.status === "active" || a.status === "busy");
-    return agents.filter((a) => a.status === "idle");
+    if (filter === "on_schedule") return agents.filter((a) => a.status === "on_schedule" || a.status === "busy");
+    if (filter === "attention") return agents.filter((a) => a.status === "late" || a.status === "error");
+    return agents.filter((a) => a.status === "off_duty");
   }, [agents, filter]);
 
-  const activeCount = agents.filter((a) => a.status === "active" || a.status === "busy").length;
-  const idleCount = agents.filter((a) => a.status === "idle").length;
   const busyCount = agents.filter((a) => a.status === "busy").length;
+  const onScheduleCount = agents.filter((a) => a.status === "on_schedule" || a.status === "busy").length;
+  const attentionCount = agents.filter((a) => a.status === "late" || a.status === "error").length;
+  const offDutyCount = agents.filter((a) => a.status === "off_duty").length;
 
   return (
     <div className="space-y-6">
@@ -187,7 +202,7 @@ export function AgentsDashboard() {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            Last updated: {lastRefresh.toLocaleTimeString("en-US")}
+            Last updated: {lastRefresh.toLocaleTimeString("en-US", { timeZone: "America/Chicago" })} CT
           </span>
           <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -206,21 +221,40 @@ export function AgentsDashboard() {
         </Card>
       )}
 
+      {/* De-dup note: run-level health + the daily report live on Supervisor */}
+      <Card className="border-border/60 bg-muted/20">
+        <CardContent className="p-3 text-xs text-muted-foreground">
+          This page is the agent roster — who each agent is, what they do, and whether their
+          scheduled runs are on time. For run-level health, the daily report, and the live
+          timesheet, see{" "}
+          <a href="/admin/supervisor" className="text-primary hover:underline font-medium">Supervisor</a>{" "}
+          and <a href="/admin/timesheet" className="text-primary hover:underline font-medium">Timesheet</a>.
+        </CardContent>
+      </Card>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <SummaryCard
-          icon={<Users className="h-5 w-5" />}
-          label="Active Agents"
-          value={activeCount}
-          sublabel={`${agents.length} total`}
+          icon={<CheckCircle2 className="h-5 w-5" />}
+          label="On Schedule"
+          value={onScheduleCount}
+          sublabel={busyCount > 0 ? `${busyCount} working right now` : `of ${agents.length} agents`}
           color="green"
-          onClick={() => setShowActivityDetail(showActivityDetail === "active" ? null : "active")}
+          onClick={() => setFilter("on_schedule")}
+        />
+        <SummaryCard
+          icon={<XCircle className="h-5 w-5" />}
+          label="Needs Attention"
+          value={attentionCount}
+          sublabel="late or erroring runs"
+          color="amber"
+          onClick={() => setFilter("attention")}
         />
         <SummaryCard
           icon={<Zap className="h-5 w-5" />}
           label="Tasks Today"
           value={summary?.totalTasksToday ?? 0}
-          sublabel="across all agents"
+          sublabel="activity logged today"
           color="blue"
           onClick={() => setShowActivityDetail(showActivityDetail === "tasks" ? null : "tasks")}
         />
@@ -228,16 +262,9 @@ export function AgentsDashboard() {
           icon={<Activity className="h-5 w-5" />}
           label="Activity Records"
           value={summary?.totalActivityRecords ?? 0}
-          sublabel="in database"
+          sublabel="all-time, in database"
           color="purple"
           onClick={() => setShowActivityDetail(showActivityDetail === "activity" ? null : "activity")}
-        />
-        <SummaryCard
-          icon={<Clock className="h-5 w-5" />}
-          label="Idle Agents"
-          value={idleCount}
-          sublabel={busyCount > 0 ? `${busyCount} busy` : "none busy"}
-          color="amber"
         />
       </div>
 
@@ -259,7 +286,7 @@ export function AgentsDashboard() {
             <div className="space-y-2 max-h-96 overflow-y-auto">
               {agents
                 .filter(a => {
-                  if (showActivityDetail === "active") return a.status === "active" || a.status === "busy";
+                  if (showActivityDetail === "active") return a.status === "busy" || a.status === "on_schedule";
                   if (showActivityDetail === "tasks") return a.tasksToday > 0;
                   return true;
                 })
@@ -282,7 +309,7 @@ export function AgentsDashboard() {
                   </div>
                 ))}
               {agents.filter(a => {
-                if (showActivityDetail === "active") return a.status === "active" || a.status === "busy";
+                if (showActivityDetail === "active") return a.status === "busy" || a.status === "on_schedule";
                 if (showActivityDetail === "tasks") return a.tasksToday > 0;
                 return true;
               }).length === 0 && (
@@ -296,15 +323,18 @@ export function AgentsDashboard() {
       )}
 
       {/* Filter Tabs */}
-      <div className="flex gap-1 border-b border-border/60">
+      <div className="flex gap-1 border-b border-border/60 flex-wrap">
         <FilterTab active={filter === "all"} onClick={() => setFilter("all")} icon={<Users className="h-4 w-4" />}>
           All ({agents.length})
         </FilterTab>
-        <FilterTab active={filter === "active"} onClick={() => setFilter("active")} icon={<Zap className="h-4 w-4" />}>
-          Active ({activeCount})
+        <FilterTab active={filter === "on_schedule"} onClick={() => setFilter("on_schedule")} icon={<Zap className="h-4 w-4" />}>
+          On Schedule ({onScheduleCount})
         </FilterTab>
-        <FilterTab active={filter === "idle"} onClick={() => setFilter("idle")} icon={<Clock className="h-4 w-4" />}>
-          Idle ({idleCount})
+        <FilterTab active={filter === "attention"} onClick={() => setFilter("attention")} icon={<XCircle className="h-4 w-4" />}>
+          Needs Attention ({attentionCount})
+        </FilterTab>
+        <FilterTab active={filter === "off_duty"} onClick={() => setFilter("off_duty")} icon={<Clock className="h-4 w-4" />}>
+          Off Duty ({offDutyCount})
         </FilterTab>
       </div>
 
@@ -422,25 +452,26 @@ function AgentCard({
   onToggle: () => void;
 }) {
   const AgentIcon = ICON_MAP[agent.icon] || Users;
-  const statusConfig = {
-    active: { color: "green", icon: <CheckCircle2 className="h-4 w-4 text-green-500" />, label: "Active", bg: "bg-green-500/10 border-green-500/30" },
-    busy: { color: "blue", icon: <Zap className="h-4 w-4 text-blue-500 animate-pulse" />, label: "Busy", bg: "bg-blue-500/10 border-blue-500/30" },
-    idle: { color: "gray", icon: <Clock className="h-4 w-4 text-muted-foreground" />, label: "Idle", bg: "bg-muted/30 border-border/60" },
+  const statusConfig: Record<AgentStatus, { icon: React.ReactNode; label: string; bg: string }> = {
+    busy: { icon: <Zap className="h-4 w-4 text-blue-500 animate-pulse" />, label: "Working now", bg: "bg-blue-500/10 border-blue-500/30" },
+    on_schedule: { icon: <CheckCircle2 className="h-4 w-4 text-green-500" />, label: "On schedule", bg: "bg-green-500/10 border-green-500/30" },
+    late: { icon: <Clock className="h-4 w-4 text-amber-500" />, label: "Run overdue", bg: "bg-amber-500/10 border-amber-500/30" },
+    error: { icon: <XCircle className="h-4 w-4 text-red-500" />, label: "Last run failed", bg: "bg-red-500/10 border-red-500/30" },
+    off_duty: { icon: <Clock className="h-4 w-4 text-muted-foreground" />, label: "Off duty today", bg: "bg-muted/30 border-border/60" },
   };
-  const cfg = statusConfig[agent.status];
+  const cfg = statusConfig[agent.status] || statusConfig.off_duty;
 
   const formatTime = (ts: string | null) => {
     if (!ts) return "Never";
-    try {
-      return new Date(ts).toLocaleString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return "—";
-    }
+    const d = new Date(ts);
+    if (Number.isNaN(d.getTime())) return "—";
+    return d.toLocaleString("en-US", {
+      timeZone: "America/Chicago",
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
   };
 
   return (
@@ -457,7 +488,7 @@ function AgentCard({
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-sm truncate">{agent.name}</h3>
                 <Badge
-                  variant={agent.status === "idle" ? "secondary" : "default"}
+                  variant={agent.status === "off_duty" ? "secondary" : "default"}
                   className="text-[10px] flex items-center gap-1"
                 >
                   {cfg.icon}
@@ -496,6 +527,40 @@ function AgentCard({
             <MiniMetric icon={<Gauge className="h-4 w-4" />} label="Success Rate" value={`${agent.metrics.successRate}%`} />
             <MiniMetric icon={<CheckCircle2 className="h-4 w-4" />} label="Total" value={agent.metrics.totalTasks} />
           </div>
+
+          {/* Scheduled runs — the agent's real Vercel cron timesheet */}
+          {agent.scheduledJobs && agent.scheduledJobs.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                Scheduled Runs
+              </h4>
+              <div className="space-y-1.5">
+                {agent.scheduledJobs.map((job) => {
+                  const jobStyle =
+                    job.status === "on_time" ? "text-green-500" :
+                    job.status === "error" ? "text-red-500" :
+                    job.status === "late" ? "text-amber-500" : "text-muted-foreground";
+                  const jobLabel =
+                    job.status === "on_time" ? "On time" :
+                    job.status === "error" ? "Failed" :
+                    job.status === "late" ? "Overdue" : "Never ran";
+                  return (
+                    <div key={job.id} className="flex items-center justify-between gap-2 rounded-lg border border-border/40 bg-muted/10 p-2.5 text-xs">
+                      <div className="min-w-0">
+                        <p className="font-medium truncate">{job.name}</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {job.cadence} · last run {formatTime(job.lastRun)}
+                          {job.hoursSinceLastRun != null ? ` (${job.hoursSinceLastRun}h ago)` : ""}
+                        </p>
+                      </div>
+                      <span className={`text-[10px] font-semibold ${jobStyle}`}>{jobLabel}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Current action */}
           {agent.action && (

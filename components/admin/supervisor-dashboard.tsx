@@ -140,6 +140,7 @@ function formatRelative(ts: string | null): string {
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
     month: "short",
     day: "numeric",
     hour: "numeric",
@@ -150,6 +151,7 @@ function formatTimestamp(iso: string): string {
 function formatDateLong(iso: string): string {
   const date = new Date(iso);
   return date.toLocaleDateString("en-US", {
+    timeZone: "America/Chicago",
     weekday: "long",
     month: "long",
     day: "numeric",
@@ -529,7 +531,7 @@ export function SupervisorDashboard() {
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
             Last updated:{" "}
-            {lastRefresh.toLocaleTimeString("en-US")}
+            {lastRefresh.toLocaleTimeString("en-US", { timeZone: "America/Chicago" })} CT
           </span>
           <Button
             variant="outline"

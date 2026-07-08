@@ -12,24 +12,39 @@ import {
 } from "@/app/actions/admin";
 
 function formatLocalDate(iso: string): string {
+  if (!iso) return "—";
   const d = new Date(iso);
-  const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  
-  if (isToday) {
-    return d.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  }
-  
-  return d.toLocaleDateString(undefined, {
+  if (Number.isNaN(d.getTime())) return "—";
+  // Always America/Chicago — the business clock.
+  return d.toLocaleString("en-US", {
+    timeZone: "America/Chicago",
     month: "short",
     day: "numeric",
-  }) + " " + d.toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/**
+ * Pipeline-stage groups. Lead Engine stage tiles link here with ?stage=<key>;
+ * each key maps to the raw statuses that belong to that stage so prospect
+ * statuses (onboarding, reviewed, ready_to_dispatch, …) filter correctly.
+ */
+const STAGE_GROUPS: Record<string, string[]> = {
+  new: ["new"],
+  contacted: ["contacted"],
+  qualified: ["qualified", "reviewed"],
+  onboarding: ["onboarding", "onboarding_invited", "compliance_check"],
+  negotiating: ["quoted", "negotiating"],
+  ready: ["ready_to_dispatch"],
+  converted: ["converted"],
+  rejected: ["rejected", "lost"],
+  lost: ["lost", "rejected"],
+};
+
+function stageMatches(stageKey: string, status: string): boolean {
+  const group = STAGE_GROUPS[stageKey];
+  return group ? group.includes(status) : status === stageKey;
 }
 
 type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "lost";
@@ -71,7 +86,7 @@ type InboxItem =
       name: string;
       email: string;
       detail: string;
-      status: LeadStatus;
+      status: string;
       createdAt: string;
     }
   | {
@@ -81,20 +96,24 @@ type InboxItem =
       name: string;
       email: string;
       detail: string;
-      status: LeadStatus;
+      status: string;
       createdAt: string;
     };
 
 type TypeFilter = "all" | "quotes" | "drivers";
-type StageFilter = "all" | LeadStatus;
+type StageFilter = string; // "all" or a STAGE_GROUPS key / raw status
 type SortMode = "newest" | "oldest" | "stage_priority";
 
 export function AdminInbox({
   quoteLeads,
   driverLeads,
+  initialType = "all",
+  initialStage = "all",
 }: {
   quoteLeads: QuoteLeadRow[];
   driverLeads: DriverLeadRow[];
+  initialType?: TypeFilter;
+  initialStage?: string;
 }) {
   const [busyKey, setBusyKey] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -102,8 +121,8 @@ export function AdminInbox({
   const [archiveTarget, setArchiveTarget] = React.useState<{ kind: "quotes" | "drivers"; id: string; name: string } | null>(null);
   const [noteDraft, setNoteDraft] = React.useState("");
   const [statusDraft, setStatusDraft] = React.useState<LeadStatus>("new");
-  const [typeFilter, setTypeFilter] = React.useState<TypeFilter>("all");
-  const [stageFilter, setStageFilter] = React.useState<StageFilter>("all");
+  const [typeFilter, setTypeFilter] = React.useState<TypeFilter>(initialType);
+  const [stageFilter, setStageFilter] = React.useState<StageFilter>(initialStage);
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
   const [searchQuery, setSearchQuery] = React.useState("");
 
@@ -139,18 +158,29 @@ export function AdminInbox({
   }, [rows, selected]);
 
   const metrics = React.useMemo(() => {
-    const base = { all: rows.length, new: 0, contacted: 0, qualified: 0, converted: 0, lost: 0 };
-    for (const r of rows) base[r.status] += 1;
+    const base = { all: rows.length, new: 0, qualified: 0, onboarding: 0, ready: 0, converted: 0, rejected: 0 };
+    for (const r of rows) {
+      if (stageMatches("new", r.status)) base.new += 1;
+      else if (stageMatches("qualified", r.status) || stageMatches("contacted", r.status)) base.qualified += 1;
+      else if (stageMatches("onboarding", r.status) || stageMatches("negotiating", r.status)) base.onboarding += 1;
+      else if (stageMatches("ready", r.status)) base.ready += 1;
+      else if (stageMatches("converted", r.status)) base.converted += 1;
+      else if (stageMatches("rejected", r.status)) base.rejected += 1;
+    }
     return base;
   }, [rows]);
 
   const visibleRows = React.useMemo(() => {
-    const stagePriority: Record<LeadStatus, number> = {
+    const stagePriority: Record<string, number> = {
       qualified: 0,
+      reviewed: 0,
       new: 1,
       contacted: 2,
-      converted: 3,
-      lost: 4,
+      onboarding: 2,
+      ready_to_dispatch: 3,
+      converted: 4,
+      lost: 5,
+      rejected: 5,
     };
 
     const toTs = (iso: string) => {
@@ -160,7 +190,7 @@ export function AdminInbox({
 
     const filtered = rows.filter((r) => {
       if (typeFilter !== "all" && r.kind !== typeFilter) return false;
-      if (stageFilter !== "all" && r.status !== stageFilter) return false;
+      if (stageFilter !== "all" && !stageMatches(stageFilter, r.status)) return false;
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         return (
@@ -179,7 +209,7 @@ export function AdminInbox({
 
       if (sortMode === "oldest") return aTs - bTs;
       if (sortMode === "stage_priority") {
-        const pri = stagePriority[a.status] - stagePriority[b.status];
+        const pri = (stagePriority[a.status] ?? 9) - (stagePriority[b.status] ?? 9);
         if (pri !== 0) return pri;
         return bTs - aTs;
       }
@@ -208,7 +238,7 @@ export function AdminInbox({
   React.useEffect(() => {
     if (!selectedItem || !selected) return;
     setNoteDraft("");
-    setStatusDraft(selectedItem.status);
+    setStatusDraft(selectedItem.status as LeadStatus);
   }, [selectedItem, selected]);
 
   async function updateLead(
@@ -328,30 +358,28 @@ export function AdminInbox({
     </div>
 
     <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-        <div className="text-xs text-muted-foreground">Total</div>
-        <div className="mt-1 text-lg font-semibold">{metrics.all}</div>
-      </div>
-      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-        <div className="text-xs text-muted-foreground">New</div>
-        <div className="mt-1 text-lg font-semibold">{metrics.new}</div>
-      </div>
-      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-        <div className="text-xs text-muted-foreground">Contacted</div>
-        <div className="mt-1 text-lg font-semibold">{metrics.contacted}</div>
-      </div>
-      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-        <div className="text-xs text-muted-foreground">Qualified</div>
-        <div className="mt-1 text-lg font-semibold">{metrics.qualified}</div>
-      </div>
-      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-        <div className="text-xs text-muted-foreground">Converted</div>
-        <div className="mt-1 text-lg font-semibold">{metrics.converted}</div>
-      </div>
-      <div className="rounded-lg border border-border/60 bg-card/50 p-3 text-sm">
-        <div className="text-xs text-muted-foreground">Lost</div>
-        <div className="mt-1 text-lg font-semibold">{metrics.lost}</div>
-      </div>
+      {([
+        ["all", "Total", metrics.all],
+        ["new", "New", metrics.new],
+        ["qualified", "Qualified", metrics.qualified],
+        ["onboarding", "Onboarding", metrics.onboarding],
+        ["converted", "Converted", metrics.converted],
+        ["rejected", "Rejected / Lost", metrics.rejected],
+      ] as const).map(([key, label, count]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setStageFilter(key === "all" ? "all" : key)}
+          className={`rounded-lg border p-3 text-left text-sm transition-colors hover:border-primary/40 ${
+            stageFilter === key || (key === "all" && stageFilter === "all")
+              ? "border-primary/50 bg-primary/5"
+              : "border-border/60 bg-card/50"
+          }`}
+        >
+          <div className="text-xs text-muted-foreground">{label}</div>
+          <div className="mt-1 text-lg font-semibold tabular-nums">{count}</div>
+        </button>
+      ))}
     </div>
 
       <div className="overflow-hidden rounded-lg border border-border/60 bg-card">
@@ -379,19 +407,9 @@ export function AdminInbox({
           <button 
             className="col-span-1 flex items-center gap-1 hover:text-primary transition-colors"
             onClick={() => {
-              if (stageFilter === "all") {
-                setStageFilter("new");
-              } else if (stageFilter === "new") {
-                setStageFilter("contacted");
-              } else if (stageFilter === "contacted") {
-                setStageFilter("qualified");
-              } else if (stageFilter === "qualified") {
-                setStageFilter("converted");
-              } else if (stageFilter === "converted") {
-                setStageFilter("lost");
-              } else {
-                setStageFilter("all");
-              }
+              const cycle = ["all", "new", "qualified", "onboarding", "ready", "converted", "rejected"];
+              const idx = cycle.indexOf(stageFilter);
+              setStageFilter(cycle[(idx + 1) % cycle.length] ?? "all");
             }}
           >
             Stage {stageFilter !== "all" && `(${stageFilter.slice(0, 3).toUpperCase()})`}

@@ -31,6 +31,7 @@ import {
 
 const navigation = [
   { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
+  { name: "Leads", href: "/admin/inbox", icon: Inbox },
   { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
   { name: "Outreach", href: "/admin/outreach", icon: Send },
   { name: "Social Posts", href: "/admin/social", icon: Megaphone },
@@ -39,7 +40,6 @@ const navigation = [
   { name: "Timesheet", href: "/admin/timesheet", icon: Clock },
   { name: "Supervisor", href: "/admin/supervisor", icon: Shield },
   { name: "Calendar", href: "/admin/calendar", icon: Calendar },
-  { name: "Inbox", href: "/admin/inbox", icon: Inbox },
   { name: "Operations", href: "/admin", icon: BarChart3 },
   { name: "Fleet", href: "/admin/fleet", icon: Truck },
   { name: "Loads", href: "/admin/loads", icon: Package },

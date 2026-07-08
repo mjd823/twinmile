@@ -198,7 +198,7 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-muted-foreground">
-            Updated: {lastRefresh.toLocaleTimeString("en-US")}
+            Updated: {lastRefresh.toLocaleTimeString("en-US", { timeZone: "America/Chicago" }) + " CT"}
           </span>
           <Button variant="outline" size="sm" onClick={fetchData} disabled={loading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -300,7 +300,7 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
             <div className="flex flex-wrap gap-2">
               {sourceBreakdown.map((s) => (
                 <div key={s._id} className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-muted/40 border border-border/40">
-                  <span className="text-xs font-medium">{s._id.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
+                  <span className="text-xs font-medium">{String(s._id).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())}</span>
                   <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded-full font-bold">{s.count}</span>
                 </div>
               ))}
@@ -361,7 +361,7 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Users className="h-5 w-5 text-primary" />
-            AI Agent Team Overview ({agentStats.filter(a => a.isActive).length} active)
+            AI Agent Team Overview ({agentStats.filter(a => a.isActive).length} active in last 24h)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -390,13 +390,13 @@ export function PipelineFlowDashboard({ initialData }: PipelineFlowDashboardProp
                   <p className="text-[10px] text-muted-foreground truncate">{agent.role}</p>
                   <div className="mt-2 flex items-center justify-between text-[10px]">
                     <Badge variant={isActive ? "default" : "secondary"} className="text-[9px]">
-                      {isActive ? "Active" : "Idle"}
+                      {isActive ? "Active (24h)" : "No runs (24h)"}
                     </Badge>
                     <span className="text-muted-foreground">{count} tasks</span>
                   </div>
                   {lastActivity && (
                     <p className="text-[9px] text-muted-foreground mt-1">
-                      Last: {new Date(lastActivity).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      Last: {new Date(lastActivity).toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric" })}
                     </p>
                   )}
                 </div>
@@ -537,7 +537,7 @@ function ActivityDetailRow({ activity: a }: { activity: ActivityItem }) {
               <span className="text-xs font-medium">{a.agent}</span>
               <Badge variant="secondary" className="text-[9px]">{a.actionLabel || a.action}</Badge>
               <span className="text-[9px] text-muted-foreground ml-auto">
-                {new Date(a.timestamp).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                {new Date(a.timestamp).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}
               </span>
             </div>
             {a.result && !expanded && (
@@ -573,7 +573,7 @@ function ActivityDetailRow({ activity: a }: { activity: ActivityItem }) {
             </div>
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Timestamp</p>
-              <p className="text-xs">{new Date(a.timestamp).toLocaleString("en-US", { dateStyle: "full", timeStyle: "short" })}</p>
+              <p className="text-xs">{new Date(a.timestamp).toLocaleString("en-US", { timeZone: "America/Chicago", weekday: "long", month: "long", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) + " CT"}</p>
             </div>
             <div>
               <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">Status</p>
@@ -649,7 +649,7 @@ function ProspectRow({ prospect, expanded, onToggle }: { prospect: Prospect; exp
                 )}
               </div>
               <p className="text-xs text-muted-foreground truncate">
-                {prospect.location} • {prospect.equipment} • Added: {new Date(prospect.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                {prospect.location} • {prospect.equipment} • Added: {new Date(prospect.createdAt).toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric" })}
               </p>
             </div>
           </div>
@@ -674,7 +674,7 @@ function ProspectRow({ prospect, expanded, onToggle }: { prospect: Prospect; exp
             <InfoRow label="Safety Rating" value={prospect.safetyRating || "Not rated"} />
             <InfoRow label="Authority" value={prospect.authorityStatus || "Unknown"} />
             <InfoRow label="Source" value={prospect.source} />
-            <InfoRow label="Created" value={new Date(prospect.createdAt).toLocaleString("en-US")} />
+            <InfoRow label="Created" value={new Date(prospect.createdAt).toLocaleString("en-US", { timeZone: "America/Chicago" }) + " CT"} />
           </div>
 
           {prospect.interestSignals && prospect.interestSignals.length > 0 && (
@@ -729,9 +729,9 @@ function SessionRow({ session }: { session: OnboardingSession }) {
           </div>
           <div className="text-xs text-muted-foreground mt-0.5 space-y-0.5">
             <p>To: {session.leadEmail || "No email"}</p>
-            <p>Created: {new Date(session.createdAt).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+            <p>Created: {new Date(session.createdAt).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</p>
             {session.completedAt && (
-              <p className="text-green-600">Completed: {new Date(session.completedAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</p>
+              <p className="text-green-600">Completed: {new Date(session.completedAt).toLocaleString("en-US", { timeZone: "America/Chicago", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</p>
             )}
           </div>
         </div>
