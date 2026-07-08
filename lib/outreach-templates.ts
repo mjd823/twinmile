@@ -58,6 +58,15 @@ export const EMAIL_TEMPLATES: Record<
     text: (lead, p) =>
       `Hi ${p.name || lead.name},\n\nWe found your carrier on FMCSA and wanted to reach out about partnering with Twin Mile. We're looking for owner-operators like yourself to join our fleet.\n\nWhy Twin Mile?\n- Competitive pay per mile\n- Flexible scheduling\n- 24/7 driver support\n\nReady to learn more? Visit https://twinmile.com/drive-with-us or reply to this email.\n\nBest regards,\nTwin Mile Recruiting Team`,
   },
+  // Legacy laptop-era template name (June 2026 tasks) — a friendly follow-up
+  // for prospects who were invited but haven't started onboarding.
+  onboarding_followup: {
+    subject: (lead) => `${lead.name || "Your carrier"} — your Twin Mile onboarding link is waiting`,
+    html: (lead, p) =>
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>Just checking in — we reached out about partnering with Twin Mile and your onboarding spot is still open.</p><p><strong>What you get as an owner-operator with us:</strong></p><ul><li>Competitive pay per mile</li><li>Flexible scheduling — you pick your lanes</li><li>24/7 driver support</li></ul><p>${p?.onboardingUrl ? `Start here (about 10 minutes): <a href="${p.onboardingUrl}">${p.onboardingUrl}</a>` : `Get started at <a href="https://twinmile.com/drive-with-us">twinmile.com/drive-with-us</a>`}</p><p>Questions about rates or lanes? Just reply to this email.</p><p>Best regards,<br/>Marcus Chen<br/>Twin Mile Recruiting Team</p>`,
+    text: (lead, p) =>
+      `Hi ${p?.name || lead.name || "there"},\n\nJust checking in — we reached out about partnering with Twin Mile and your onboarding spot is still open.\n\nWhat you get as an owner-operator with us:\n- Competitive pay per mile\n- Flexible scheduling — you pick your lanes\n- 24/7 driver support\n\n${p?.onboardingUrl ? `Start here (about 10 minutes): ${p.onboardingUrl}` : `Get started at https://twinmile.com/drive-with-us`}\n\nQuestions about rates or lanes? Just reply to this email.\n\nBest regards,\nMarcus Chen\nTwin Mile Recruiting Team`,
+  },
 };
 
 export function renderOutreachEmail(

@@ -129,6 +129,26 @@ export async function GET(request: NextRequest) {
     const client = await clientPromise;
     const db = client.db();
 
+    // Daily send cap: protects the Resend quota and, more importantly, the
+    // sending domain's reputation — a fresh domain mass-blasting hundreds of
+    // cold emails in one day is how you end up in spam folders forever.
+    const DAILY_CAP = Math.max(0, parseInt(process.env.OUTREACH_DAILY_CAP || "100", 10) || 100);
+    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const sentLast24h = await db
+      .collection("outreach_tasks")
+      .countDocuments({ status: "sent", sentAt: { $gte: dayAgo } });
+    const capRemaining = Math.max(0, DAILY_CAP - sentLast24h);
+    const runLimit = Math.min(MAX_TASKS_PER_RUN, capRemaining);
+    if (runLimit === 0) {
+      return NextResponse.json({
+        ok: true,
+        report: {
+          dueTasks: 0, sent: 0, failed: 0, skipped: 0, deferred: 0,
+          note: `Daily cap reached (${sentLast24h}/${DAILY_CAP} sent in last 24h) — resuming when the window rolls.`,
+        },
+      });
+    }
+
     // Due tasks: pending/retrying and scheduled in the past, plus stale
     // "sending" tasks abandoned by a crashed run.
     const tasks = await db
@@ -148,7 +168,7 @@ export async function GET(request: NextRequest) {
         ],
       })
       .sort({ scheduledAt: 1 })
-      .limit(MAX_TASKS_PER_RUN)
+      .limit(runLimit)
       .toArray();
 
     tasks.sort((a: any, b: any) => {
@@ -396,4 +416,76 @@ export async function GET(request: NextRequest) {
       { status: 500 }
     );
   }
+}
+
+/**
+ * POST — maintenance actions (cron-secret gated).
+ * { "action": "requeue_failed", "errorMatch": "Lead not found", "limit": 1000 }
+ * Flips matching failed tasks back to "pending" (attempts reset) so the
+ * regular 15-minute runs re-attempt them under the daily cap. Used to revive
+ * the ~955 legacy laptop-era tasks that failed with bare "Lead not found".
+ */
+export async function POST(request: NextRequest) {
+  const authError = checkCronAuth(request);
+  if (authError) return authError;
+  if (!clientPromise) {
+    return NextResponse.json({ ok: false, error: "Database not configured" }, { status: 500 });
+  }
+
+  let body: any = {};
+  try {
+    body = await request.json();
+  } catch {
+    // empty body fine
+  }
+  if (body?.action !== "requeue_failed") {
+    return NextResponse.json({ ok: false, error: "Unknown action" }, { status: 400 });
+  }
+
+  const errorMatch = typeof body.errorMatch === "string" && body.errorMatch.trim()
+    ? body.errorMatch.trim()
+    : "Lead not found";
+  const limit = Math.min(Math.max(parseInt(body.limit, 10) || 1000, 1), 5000);
+
+  const client = await clientPromise;
+  const db = client.db();
+
+  // Escape regex metacharacters so errorMatch is treated as a literal prefix.
+  const escaped = errorMatch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const candidates = await db
+    .collection("outreach_tasks")
+    .find({ status: "failed", error: { $regex: escaped } })
+    .project({ _id: 1 })
+    .limit(limit)
+    .toArray();
+
+  const ids = candidates.map((c: any) => c._id);
+  const result = ids.length
+    ? await db.collection("outreach_tasks").updateMany(
+        { _id: { $in: ids }, status: "failed" },
+        {
+          $set: {
+            status: "pending",
+            attempts: 0,
+            error: null,
+            scheduledAt: new Date(),
+            requeuedAt: new Date(),
+            requeuedReason: `requeue_failed:${errorMatch}`,
+          },
+        }
+      )
+    : { modifiedCount: 0 };
+
+  await db.collection("agent_activity").insertOne({
+    agent: "Outreach Processor",
+    action: "outreach_requeue",
+    activity: `Requeued ${result.modifiedCount} failed outreach tasks (error match: "${errorMatch}") for retry under the daily cap`,
+    type: "outreach",
+    details: { requeued: result.modifiedCount, errorMatch, source: "maintenance" },
+    success: true,
+    createdAt: new Date(),
+    timestamp: new Date(),
+  });
+
+  return NextResponse.json({ ok: true, requeued: result.modifiedCount, errorMatch });
 }
