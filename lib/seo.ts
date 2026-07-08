@@ -47,28 +47,6 @@ export function orgSchema() {
   return schema;
 }
 
-export function employerRatingSchema() {
-  return {
-    "@context": "https://schema.org",
-    "@type": "EmployerAggregateRating",
-    itemReviewed: {
-      "@type": "Organization",
-      name: "Twin Mile LLC",
-      sameAs: "https://twinmile.com",
-    },
-    ratingValue: "4.8",
-    bestRating: "5",
-    worstRating: "1",
-    ratingCount: "127",
-    reviewCount: "89",
-    author: {
-      "@type": "Organization",
-      name: "Professional Drivers Association",
-      url: "https://example.com",
-    },
-  };
-}
-
 export function webSiteSchema() {
   const schema: WithContext<Record<string, unknown>> = {
     "@context": "https://schema.org",
@@ -317,10 +295,9 @@ export function jobPostingSchema(input: {
     applicantLocationRequirements: input.applicantLocationRequirements,
     occupationalCategory: "53-7032.00 - Heavy and Tractor-Trailer Truck Drivers",
     industry: "Truck Transportation",
-    experienceRequirements: {
-      "@type": "OccupationalExperienceRequirements",
-      monthsOfExperience: 24, // 2 years minimum
-    },
+    // Note: no experienceRequirements block — page copy welcomes newer CDL
+    // holders (experience preferred, not required), so we must not mark
+    // 2 years as a hard requirement in structured data.
     educationRequirements: {
       "@type": "EducationalOccupationalCredential",
       credentialCategory: "High School Diploma",

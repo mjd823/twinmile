@@ -7,6 +7,10 @@ export const SITE_CONFIG = {
   // Company identity
   companyName: process.env.NEXT_PUBLIC_COMPANY_NAME || "Twin Mile LLC",
   mcNumber: process.env.NEXT_PUBLIC_MC_NUMBER || "MC1790263",
+  // TODO(MJ): supply the real USDOT number. Left empty on purpose — the
+  // footer/drive-with-us trust block hides it until a real value is set.
+  // Do NOT put a placeholder/invented number here.
+  dotNumber: process.env.NEXT_PUBLIC_DOT_NUMBER || "",
   city: process.env.NEXT_PUBLIC_COMPANY_CITY || "Houston",
   state: process.env.NEXT_PUBLIC_COMPANY_STATE || "TX",
 

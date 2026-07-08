@@ -51,7 +51,7 @@ export default async function BlogPostPage({
             headline: post.title,
             description: post.description,
             datePublished: post.publishedAt,
-            imageUrl: `${baseUrl}/og.svg`,
+            imageUrl: `${baseUrl}/og.png`,
           }),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },

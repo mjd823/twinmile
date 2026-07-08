@@ -9,7 +9,6 @@ import {
   orgSchema,
   webSiteSchema,
   contactPointSchema,
-  employerRatingSchema,
 } from "@/lib/seo";
 
 export const metadata: Metadata = {
@@ -38,7 +37,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/og.svg",
+        url: "/og.png",
         width: 1200,
         height: 630,
         alt: "Twin Mile LLC — Fast. Tough. Reliable.",
@@ -49,7 +48,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Twin Mile LLC | Houston Logistics",
     description: "Fast, reliable, rugged logistics solutions nationwide. Get a quote or drive with us.",
-    images: ["/og.svg"],
+    images: ["/og.png"],
   },
 };
 
@@ -64,7 +63,6 @@ export default async function Home() {
           webSiteSchema(),
           localBusinessSchema(),
           contactPointSchema(),
-          employerRatingSchema(),
           breadcrumbSchema([{ name: "Home", url: `${baseUrl}/` }]),
         ]}
       />

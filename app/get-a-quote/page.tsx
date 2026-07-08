@@ -46,7 +46,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/og.svg",
+        url: "/og.png",
         width: 1200,
         height: 630,
         alt: "Get Freight Quote - Twin Mile LLC",
@@ -57,7 +57,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Get Freight Quote | Twin Mile LLC",
     description: "Request a fast freight quote from Twin Mile LLC. Freight, hotshot, last-mile, and power only services.",
-    images: ["/og.svg"],
+    images: ["/og.png"],
   },
 };
 
@@ -67,7 +67,7 @@ export default function GetAQuotePage() {
   const faqs = [
     {
       question: "How fast will I receive a quote?",
-      answer: "Most quotes are sent within 1-2 hours during business hours. For urgent requests, call us directly at (281) 710-7787 for immediate assistance.",
+      answer: "We respond within 24 hours — usually much faster during business hours. For urgent requests, call us directly at (281) 710-7787 for immediate assistance.",
     },
     {
       question: "What types of freight do you handle?",
@@ -152,7 +152,7 @@ export default function GetAQuotePage() {
             <div className="rounded-xl border border-primary/40 bg-primary/8 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Quote Response</div>
               <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">24 Hours</div>
-              <div className="mt-2 text-sm text-foreground/80">Fast, accurate pricing with detailed service breakdowns.</div>
+              <div className="mt-2 text-sm text-foreground/80">Within 24 hours — usually much faster. Accurate pricing with detailed service breakdowns.</div>
             </div>
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">On-Time Delivery</div>

@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/og.svg",
+        url: "/og.png",
         width: 1200,
         height: 630,
         alt: "Contact Twin Mile LLC - Houston Logistics",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Contact Twin Mile LLC | (281) 710-7787",
     description: "Contact Twin Mile LLC for freight quotes and logistics services. Call (281) 710-7787 or email admin@twinmile.com.",
-    images: ["/og.svg"],
+    images: ["/og.png"],
   },
 };
 
@@ -128,8 +128,8 @@ export default function ContactPage() {
             </div>
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Quote Response</div>
-              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">Instant</div>
-              <div className="mt-2 text-sm text-foreground/80">Fast quotes with detailed pricing and service options.</div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight text-primary">24 Hours</div>
+              <div className="mt-2 text-sm text-foreground/80">Within 24 hours — usually much faster. Detailed pricing and service options.</div>
             </div>
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 backdrop-blur">
               <div className="text-sm text-muted-foreground">Network</div>

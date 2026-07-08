@@ -13,9 +13,9 @@ import {
   orgSchema,
   webSiteSchema,
   jobPostingSchema,
-  employerRatingSchema,
   contactPointSchema,
 } from "@/lib/seo";
+import { SITE_CONFIG } from "@/lib/site-config";
 
 export const metadata: Metadata = {
   title: "Owner Operator Jobs Houston | 80% Gross | Power Only | Twin Mile LLC",
@@ -56,7 +56,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/og.svg",
+        url: "/og.png",
         width: 1200,
         height: 630,
         alt: "Owner Operator Jobs Houston - 80% Gross - Twin Mile LLC",
@@ -67,7 +67,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Owner Operator Jobs Houston | 80% Gross | Twin Mile LLC",
     description: "Power only trucking with 80% gross, $250k-$350k potential. Apply in 2 minutes.",
-    images: ["/og.svg"],
+    images: ["/og.png"],
   },
 };
 
@@ -177,7 +177,7 @@ export default function DriveWithUsPage() {
         unitText: "YEAR",
       },
     },
-    qualifications: "Valid CDL-A, 2+ years OTR experience, clean MVR, reliable DOT-compliant tractor, safety-first mindset. Owner-operators must have proper insurance and operating authority.",
+    qualifications: "Valid CDL-A, clean MVR, reliable DOT-compliant tractor, safety-first mindset. 2+ years OTR experience preferred — newer CDL holders are welcome to apply and are evaluated individually. Owner-operators must have proper insurance and operating authority.",
     responsibilities: "Transport freight using power only equipment, maintain professional communication, ensure on-time deliveries, follow safety protocols, manage vehicle maintenance, represent Twin Mile professionally.",
     workHours: "Flexible schedule - OTR and regional routes available",
     applicantLocationRequirements: {
@@ -198,7 +198,6 @@ export default function DriveWithUsPage() {
           webSiteSchema(),
           localBusinessSchema(),
           contactPointSchema(),
-          employerRatingSchema(),
           jobPostingSchema(jobPostingData),
           breadcrumbSchema([
             { name: "Home", url: `${baseUrl}/` },
@@ -346,6 +345,21 @@ export default function DriveWithUsPage() {
                 <div>Be specific about preferred lanes and start date (ASAP is fine).</div>
                 <div>If you're an owner-operator, mention your insurance and operating authority.</div>
               </div>
+
+              {(SITE_CONFIG.dotNumber || SITE_CONFIG.mcNumber) ? (
+                <div className="mt-8 rounded-lg border border-border/60 bg-card/30 p-4 backdrop-blur">
+                  <div className="text-xs font-semibold tracking-wide text-foreground/80">Operating authority</div>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-foreground/85">
+                    {SITE_CONFIG.dotNumber ? <span>USDOT {SITE_CONFIG.dotNumber}</span> : null}
+                    {SITE_CONFIG.mcNumber ? (
+                      <span>{SITE_CONFIG.mcNumber.startsWith("MC") ? SITE_CONFIG.mcNumber : `MC ${SITE_CONFIG.mcNumber}`}</span>
+                    ) : null}
+                  </div>
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    Verify our authority anytime on the FMCSA SAFER system.
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild className="shadow-lg shadow-primary/20">

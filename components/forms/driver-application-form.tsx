@@ -7,8 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitDriverApplicationAction } from "@/app/actions/public";
 import { captureUtm, getUtm } from "@/lib/utm";
-import { analytics } from "@/lib/analytics";
-import { aiEnhancedLeadManager } from "@/lib/ai-enhanced-lead-manager";
 
 type Status =
   | { state: "idle" }
@@ -18,7 +16,6 @@ type Status =
 
 export function DriverApplicationForm() {
   const [status, setStatus] = React.useState<Status>({ state: "idle" });
-  const [showTooltip, setShowTooltip] = React.useState(false);
   const fieldClassName =
     "h-10 border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 placeholder:text-xs transition-shadow focus-visible:border-primary/60 focus-visible:ring-primary/70 focus-visible:shadow-[0_0_0_3px_rgba(59,130,246,0.18)]";
   const areaClassName =
@@ -28,7 +25,6 @@ export function DriverApplicationForm() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    console.log("[DriverApplicationForm] Form submission started");
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -36,26 +32,16 @@ export function DriverApplicationForm() {
     const utm = getUtm();
     if (utm) payload.utm = utm;
 
-    console.log("[DriverApplicationForm] Payload prepared:", { ...payload, hp: payload.hp ? '[HONEYPOT]' : undefined });
     setStatus({ state: "submitting" });
 
-    console.log("[DriverApplicationForm] Calling submitDriverApplicationAction...");
     const result = await submitDriverApplicationAction(payload);
-    console.log("[DriverApplicationForm] Server action result:", result);
-    
+
     if (!result.ok) {
-      console.error("[DriverApplicationForm] Submission failed:", result.error);
       setStatus({ state: "error", message: result.error || "Something went wrong. Please try again." });
       return;
     }
 
-    console.log("[DriverApplicationForm] Submission successful");
-
-    // Track successful driver application with business intelligence
-    const formPayload = Object.fromEntries(formData.entries());
-    const utmData = getUtm();
-    
-    // Basic analytics tracking (with error handling)
+    // Analytics event only — no PII. Lead scoring happens server-side.
     try {
       if (typeof window !== 'undefined' && window.gtag) {
         window.gtag('event', 'generate_lead', {
@@ -63,41 +49,8 @@ export function DriverApplicationForm() {
           event_label: 'driver_application'
         });
       }
-    } catch (error) {
-      console.warn('Analytics tracking failed:', error);
-    }
-    
-    // AI lead processing (with error handling)
-    try {
-      const leadData = {
-        id: `driver_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: 'driver' as const,
-        name: formPayload.fullName as string,
-        email: formPayload.email as string,
-        phone: formPayload.phone as string,
-        truckType: formPayload.truckType as string,
-        yearsExperience: formPayload.yearsExperience as string,
-        hasOwnAuthority: formPayload.hasOwnAuthority === 'true',
-        utmSource: utmData?.utm_source,
-        utmMedium: utmData?.utm_medium,
-        timestamp: new Date().toISOString(),
-      };
-
-      const leadScore = await aiEnhancedLeadManager.processIncomingLead(leadData);
-      
-      console.log('🤖 AI Agent processed driver lead:', {
-        score: leadScore.score,
-        quality: leadScore.quality,
-        value: leadScore.estimatedValue,
-        priority: leadScore.priority,
-        autoActions: leadScore.autoActions,
-        assignee: leadScore.routing.assignee,
-        aiInsights: leadScore.aiAnalysis?.insights || [],
-        aiRecommendations: leadScore.aiAnalysis?.recommendations || [],
-        processingMethod: leadScore.processingMethod
-      });
-    } catch (error) {
-      console.warn('AI lead processing failed:', error);
+    } catch {
+      // Analytics must never block the success state.
     }
 
     setStatus({ state: "success" });
@@ -124,7 +77,7 @@ export function DriverApplicationForm() {
           <label className="text-sm font-semibold text-foreground/95" htmlFor="phone">
             Phone
           </label>
-          <Input id="phone" name="phone" autoComplete="tel" className={fieldClassName} required />
+          <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" className={fieldClassName} required />
         </div>
       </div>
 
@@ -165,32 +118,12 @@ export function DriverApplicationForm() {
       </div>
 
       <div className="grid gap-2">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-semibold text-foreground/95" htmlFor="notes">
-            Notes (optional)
-          </label>
-          <div className="relative">
-            <button
-              type="button"
-              onMouseEnter={() => setShowTooltip(true)}
-              onMouseLeave={() => setShowTooltip(false)}
-              className="flex h-4 w-4 items-center justify-center rounded-full bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
-            >
-              <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 20 20">
-                <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-              </svg>
-            </button>
-            {showTooltip && (
-              <div className="absolute left-6 top-0 z-10 w-64 rounded-lg border border-border/60 bg-popover p-3 text-xs text-foreground shadow-lg">
-                <div className="font-medium text-primary">Owner-operators:</div>
-                <div className="mt-1 text-muted-foreground">
-                  If you're an owner-operator, please mention your insurance coverage and operating authority. This helps expedite onboarding for all applicants.
-                </div>
-                <div className="absolute -left-2 top-2 h-0 w-0 border-t-4 border-r-4 border-b-4 border-l-0 border-transparent border-r-popover"></div>
-              </div>
-            )}
-          </div>
-        </div>
+        <label className="text-sm font-semibold text-foreground/95" htmlFor="notes">
+          Notes (optional)
+        </label>
+        <p className="text-xs text-muted-foreground">
+          Owner-operators: mention your insurance coverage and operating authority — it speeds up onboarding.
+        </p>
         <Textarea
           id="notes"
           name="notes"

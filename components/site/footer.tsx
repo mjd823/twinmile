@@ -1,6 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { ContactLinks } from "@/components/site/contact-links";
+import { SITE_CONFIG } from "@/lib/site-config";
 
 export function SiteFooter() {
   return (
@@ -60,6 +61,14 @@ export function SiteFooter() {
         <div className="mt-10 border-t border-border/60 pt-6 text-xs text-muted-foreground">
           Nationwide logistics • Freight transportation • Hotshot • Last‑mile • Dispatching • Warehousing • 3PL
         </div>
+
+        {(SITE_CONFIG.dotNumber || SITE_CONFIG.mcNumber) ? (
+          <div className="mt-3 text-xs text-muted-foreground">
+            {SITE_CONFIG.dotNumber ? <span>USDOT {SITE_CONFIG.dotNumber}</span> : null}
+            {SITE_CONFIG.dotNumber && SITE_CONFIG.mcNumber ? <span> • </span> : null}
+            {SITE_CONFIG.mcNumber ? <span>{SITE_CONFIG.mcNumber.startsWith("MC") ? SITE_CONFIG.mcNumber : `MC ${SITE_CONFIG.mcNumber}`}</span> : null}
+          </div>
+        ) : null}
       </div>
     </footer>
   );

@@ -7,8 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { submitQuoteLeadAction } from "@/app/actions/public";
 import { captureUtm, getUtm } from "@/lib/utm";
-import { analytics } from "@/lib/analytics";
-import { aiEnhancedLeadManager } from "@/lib/ai-enhanced-lead-manager";
 
 type Status =
   | { state: "idle" }
@@ -29,7 +27,6 @@ export function QuoteForm() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    console.log("[QuoteForm] Form submission started");
 
     const form = e.currentTarget;
     const formData = new FormData(form);
@@ -37,26 +34,16 @@ export function QuoteForm() {
     const utm = getUtm();
     if (utm) payload.utm = utm;
 
-    console.log("[QuoteForm] Payload prepared:", { ...payload, hp: payload.hp ? '[HONEYPOT]' : undefined });
     setStatus({ state: "submitting" });
 
-    console.log("[QuoteForm] Calling submitQuoteLeadAction...");
     const result = await submitQuoteLeadAction(payload);
-    console.log("[QuoteForm] Server action result:", result);
-    
+
     if (!result.ok) {
-      console.error("[QuoteForm] Submission failed:", result.error);
       setStatus({ state: "error", message: result.error || "Something went wrong. Please try again." });
       return;
     }
 
-    console.log("[QuoteForm] Submission successful");
-
-    // Track successful quote submission with business intelligence
-    const formPayload = Object.fromEntries(formData.entries());
-    const utmData = getUtm();
-    
-    // Basic analytics tracking (with error handling)
+    // Analytics event only — no PII. Lead scoring happens server-side.
     try {
       if (typeof window !== 'undefined' && window.gtag) {
         window.gtag('event', 'generate_lead', {
@@ -64,41 +51,8 @@ export function QuoteForm() {
           event_label: 'quote_request'
         });
       }
-    } catch (error) {
-      console.warn('Analytics tracking failed:', error);
-    }
-    
-    // AI lead processing (with error handling)
-    try {
-      const leadData = {
-        id: `quote_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: 'quote' as const,
-        name: formPayload.name as string,
-        email: formPayload.email as string,
-        serviceType: formPayload.serviceType as string,
-        pickupLocation: formPayload.pickupLocation as string,
-        dropoffLocation: formPayload.dropoffLocation as string,
-        company: formPayload.company as string,
-        utmSource: utmData?.utm_source,
-        utmMedium: utmData?.utm_medium,
-        utmCampaign: utmData?.utm_campaign,
-        timestamp: new Date().toISOString(),
-      };
-
-      const leadScore = await aiEnhancedLeadManager.processIncomingLead(leadData);
-      console.log('🤖 AI Agent processed lead:', {
-        score: leadScore.score,
-        quality: leadScore.quality,
-        value: leadScore.estimatedValue,
-        priority: leadScore.priority,
-        autoActions: leadScore.autoActions,
-        assignee: leadScore.routing.assignee,
-        aiInsights: leadScore.aiAnalysis?.insights || [],
-        aiRecommendations: leadScore.aiAnalysis?.recommendations || [],
-        processingMethod: leadScore.processingMethod
-      });
-    } catch (error) {
-      console.warn('AI lead processing failed:', error);
+    } catch {
+      // Analytics must never block the success state.
     }
 
     setStatus({ state: "success" });
@@ -132,7 +86,7 @@ export function QuoteForm() {
           <label className="text-sm font-semibold text-foreground/95" htmlFor="phone">
             Phone
           </label>
-          <Input id="phone" name="phone" autoComplete="tel" className={fieldClassName} required />
+          <Input id="phone" name="phone" type="tel" inputMode="tel" autoComplete="tel" className={fieldClassName} required />
         </div>
       </div>
 

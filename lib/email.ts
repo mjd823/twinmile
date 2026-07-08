@@ -101,7 +101,13 @@ function renderEmailLayout(input: EmailLayoutInput) {
 }
 
 async function sendEmail(input: SendInput) {
-  if (!resend) return;
+  if (!resend) {
+    console.error(
+      `[email] RESEND_API_KEY is not configured — email NOT sent (to: ${input.to}, subject: "${input.subject}"). ` +
+        "Set RESEND_API_KEY in the environment to enable lead notifications and confirmations."
+    );
+    return;
+  }
 
   try {
     await resend.emails.send({

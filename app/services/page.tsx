@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/og.svg",
+        url: "/og.png",
         width: 1200,
         height: 630,
         alt: "Twin Mile LLC Logistics Services",
@@ -51,7 +51,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Freight Transportation Services | Twin Mile LLC",
     description: "Complete logistics solutions: freight, hotshot, last-mile, power only, dispatching, warehousing, and 3PL.",
-    images: ["/og.svg"],
+    images: ["/og.png"],
   },
 };
 
