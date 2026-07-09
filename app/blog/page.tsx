@@ -4,7 +4,11 @@ import Link from "next/link";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import { breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
-import { BLOG_POSTS } from "@/lib/blog";
+import { getAllPublicPosts } from "@/lib/blog-store";
+
+// Published pipeline posts come from Mongo — revalidate so new publishes
+// appear within 5 minutes without a redeploy.
+export const revalidate = 300;
 
 export const metadata: Metadata = {
   title: "Blog",
@@ -13,9 +17,10 @@ export const metadata: Metadata = {
   alternates: { canonical: "/blog" },
 };
 
-export default function BlogIndexPage() {
+export default async function BlogIndexPage() {
   const baseUrl = "https://twinmile.com";
-  const featured = BLOG_POSTS[0] ?? null;
+  const posts = await getAllPublicPosts();
+  const featured = posts[0] ?? null;
 
   const TOPICS = [
     { label: "Time‑Critical", href: "/blog" },
@@ -119,7 +124,7 @@ export default function BlogIndexPage() {
           </div>
 
           <div className="grid gap-4">
-            {BLOG_POSTS.map((post) => (
+            {posts.map((post) => (
               <Link
                 key={post.slug}
                 href={`/blog/${post.slug}`}

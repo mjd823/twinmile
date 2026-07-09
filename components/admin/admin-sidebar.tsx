@@ -29,6 +29,7 @@ import {
   Megaphone,
   Phone,
   Ear,
+  Newspaper,
 } from "lucide-react";
 
 const navigation = [
@@ -39,6 +40,7 @@ const navigation = [
   { name: "Outreach", href: "/admin/outreach", icon: Send },
   { name: "Call Sheet", href: "/admin/call-sheet", icon: Phone },
   { name: "Social Posts", href: "/admin/social", icon: Megaphone },
+  { name: "Blog Pipeline", href: "/admin/blog", icon: Newspaper },
   { name: "Automation Center", href: "/admin/automation", icon: Activity },
   { name: "AI Agents", href: "/admin/agents", icon: Users },
   { name: "Timesheet", href: "/admin/timesheet", icon: Clock },

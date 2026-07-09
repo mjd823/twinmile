@@ -1,10 +1,17 @@
 import type { MetadataRoute } from "next";
 
-import { BLOG_POSTS } from "@/lib/blog";
+import { getAllPublicPosts } from "@/lib/blog-store";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+// Blog entries include published pipeline posts from Mongo — refresh hourly
+// so newly published articles get real lastmod without a redeploy.
+export const revalidate = 3600;
+
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const baseUrl = "https://twinmile.com";
   const now = new Date();
+
+  // getAllPublicPosts never throws (falls back to the 8 legacy posts).
+  const blogPosts = await getAllPublicPosts();
 
   const industrySlugs = [
     "construction",
@@ -77,9 +84,9 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 0.7,
     },
-    ...BLOG_POSTS.map((post) => ({
+    ...blogPosts.map((post) => ({
       url: `${baseUrl}/blog/${post.slug}`,
-      lastModified: new Date(post.publishedAt),
+      lastModified: post.lastModified,
       changeFrequency: "yearly" as const,
       priority: 0.5,
     })),

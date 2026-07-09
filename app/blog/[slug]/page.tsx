@@ -5,27 +5,27 @@ import { notFound } from "next/navigation";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Button } from "@/components/ui/button";
 import { blogPostingSchema, breadcrumbSchema, localBusinessSchema, orgSchema, webSiteSchema } from "@/lib/seo";
-import { BLOG_POSTS, getPostBySlug } from "@/lib/blog";
+import { getPublicPostBySlug } from "@/lib/blog-store";
 
-export function generateStaticParams() {
-  return BLOG_POSTS.map((p) => ({ slug: p.slug }));
-}
+// Posts now merge the 8 legacy static articles with published pipeline posts
+// from Mongo. ISR keeps legacy posts fast and surfaces new publishes within
+// 5 minutes; drafts are filtered out in the store and 404 here.
+export const revalidate = 300;
 
-export function generateMetadata({
+export async function generateMetadata({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
-  return params.then(({ slug }) => {
-    const post = getPostBySlug(slug);
-    if (!post) return { title: "Blog" };
+  const { slug } = await params;
+  const post = await getPublicPostBySlug(slug);
+  if (!post) return { title: "Blog" };
 
-    return {
-      title: post.title,
-      description: post.description,
-      alternates: { canonical: `/blog/${post.slug}` },
-    };
-  });
+  return {
+    title: post.title,
+    description: post.description,
+    alternates: { canonical: `/blog/${post.slug}` },
+  };
 }
 
 export default async function BlogPostPage({
@@ -34,7 +34,7 @@ export default async function BlogPostPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = getPostBySlug(slug);
+  const post = await getPublicPostBySlug(slug);
   if (!post) notFound();
 
   const baseUrl = "https://twinmile.com";
@@ -88,10 +88,38 @@ export default async function BlogPostPage({
         <div className="mx-auto w-full max-w-6xl px-5 py-14 md:py-20">
           <div className="max-w-3xl">
             <article className="prose prose-neutral dark:prose-invert">
-              {post.content.map((p, idx) => (
+              {post.content?.map((p, idx) => (
                 <p key={idx}>{p}</p>
               ))}
+              {post.sections?.map((section, idx) => (
+                <section key={idx}>
+                  <h2>{section.heading}</h2>
+                  {section.paragraphs.map((p, pIdx) => (
+                    <p key={pIdx}>{p}</p>
+                  ))}
+                </section>
+              ))}
             </article>
+
+            {post.citations && post.citations.length > 0 && (
+              <div className="mt-10 rounded-2xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur">
+                <div className="text-sm font-semibold tracking-tight">Sources</div>
+                <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+                  {post.citations.map((citation, idx) => (
+                    <li key={idx}>
+                      <a
+                        href={citation.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary underline-offset-4 hover:underline"
+                      >
+                        {citation.source}: {citation.title}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
             <div className="mt-10 rounded-2xl border border-border/60 bg-card/40 p-6 shadow-xl shadow-black/20 backdrop-blur">
               <div className="text-sm font-semibold tracking-tight">Need time‑critical execution?</div>
