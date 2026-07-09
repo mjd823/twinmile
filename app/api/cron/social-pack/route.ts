@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { checkCronAuth } from "@/lib/cron-auth";
 import { generateDailyPack } from "@/lib/social/generate-pack";
+import { pingIndexNow } from "@/lib/indexnow";
 
 /**
  * Daily recruiting post pack cron (13:45 UTC — see vercel.json).
@@ -25,6 +26,10 @@ export async function GET(request: NextRequest) {
   try {
     const force = request.nextUrl.searchParams.get("force") === "1";
     const result = await generateDailyPack({ force });
+
+    // Daily IndexNow ping of the sitemap keeps Bing/Yandex fresh; cheap,
+    // fire-and-forget, never throws.
+    await pingIndexNow(["https://twinmile.com/sitemap.xml"]);
 
     return NextResponse.json({
       ok: true,
