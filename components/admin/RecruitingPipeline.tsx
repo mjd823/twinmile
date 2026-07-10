@@ -22,7 +22,7 @@ import {
 import { PipelineFunnel } from "@/components/admin/PipelineFunnel";
 import { Pager } from "@/components/admin/Pager";
 import { AdminInbox } from "@/components/admin/admin-inbox";
-import type { PipelineCounts, QuoteStageCounts } from "@/lib/pipeline-stages";
+import { stageDef, type PipelineCounts, type QuoteStageCounts } from "@/lib/pipeline-stages";
 
 /**
  * Recruiting Pipeline — THE one pipeline page.
@@ -117,8 +117,13 @@ export function RecruitingPipeline({
   manualQuoteLeads,
   manualDriverLeads,
 }: RecruitingPipelineProps) {
-  const awaitingInvite = counts.stages.find((s) => s.key === "qualified")?.inStage ?? 0;
-  const engagedReached = counts.stages.find((s) => s.key === "engaged")?.reached ?? 0;
+  // Canonical stage rows (labels + hexes travel with the counts from
+  // lib/pipeline-stages.ts — never redefined here).
+  const stageByKey = new Map(counts.stages.map((s) => [s.key, s]));
+  const sourcedStage = stageByKey.get("sourced");
+  const qualifiedStage = stageByKey.get("qualified");
+  const invitedStage = stageByKey.get("invited");
+  const engagedStage = stageByKey.get("engaged");
 
   const TABS: { key: PipelineTab; label: string; count: number }[] = [
     { key: "prospects", label: "Prospects", count: prospects.total },
@@ -154,12 +159,25 @@ export function RecruitingPipeline({
         </div>
       </div>
 
-      {/* Headline chips — vocabulary matches the hub exactly */}
+      {/* Headline chips — labels and hexes come straight from the canonical
+          taxonomy (lib/pipeline-stages.ts); nothing is redefined here. */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <HeadlineChip label="Prospects sourced" value={counts.stages[0].reached} hex="#64748b" />
-        <HeadlineChip label="Awaiting invite" value={awaitingInvite} hex="#3b82f6" />
-        <HeadlineChip label="Invited (email sent)" value={counts.stages[2].reached} hex="#6366f1" />
-        <HeadlineChip label="Engaged (clicked)" value={engagedReached} hex="#8b5cf6" />
+        {sourcedStage && (
+          <HeadlineChip label={sourcedStage.label} value={sourcedStage.reached} hex={sourcedStage.hex} />
+        )}
+        {qualifiedStage && (
+          <HeadlineChip
+            label={capitalizeFirst(qualifiedStage.inStageLabel)}
+            value={qualifiedStage.inStage}
+            hex={qualifiedStage.hex}
+          />
+        )}
+        {invitedStage && (
+          <HeadlineChip label={invitedStage.label} value={invitedStage.reached} hex={invitedStage.hex} />
+        )}
+        {engagedStage && (
+          <HeadlineChip label={engagedStage.label} value={engagedStage.reached} hex={engagedStage.hex} />
+        )}
       </div>
 
       {/* THE funnel */}
@@ -238,6 +256,10 @@ export function RecruitingPipeline({
       </div>
     </div>
   );
+}
+
+function capitalizeFirst(s: string): string {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 function HeadlineChip({ label, value, hex }: { label: string; value: number; hex: string }) {
@@ -351,7 +373,10 @@ function ProspectRowItem({
             <InfoRow label="Source" value={prospect.source || "FMCSA"} />
             <InfoRow label="Added" value={fmtCT(prospect.createdAt, true) + " CT"} />
             {prospect.invitedAt && (
-              <InfoRow label="Invited" value={fmtCT(prospect.invitedAt, true) + " CT"} />
+              <InfoRow
+                label={stageDef("invited").shortLabel}
+                value={fmtCT(prospect.invitedAt, true) + " CT"}
+              />
             )}
           </div>
 

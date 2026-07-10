@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
+import { parsePage } from "@/lib/paginate";
 import {
   listListenerLeads,
   runSocialListener,
@@ -11,7 +12,8 @@ import {
 /**
  * Admin access to Sofia the Listener's surfaced Reddit conversations.
  *
- * GET  — newest-first leads (?limit=N, ?status=new|replied|dismissed|all)
+ * GET  — newest-first paginated leads with a real countDocuments total
+ *        (?page=N, ?status=new|replied|dismissed|all)
  * POST — one of:
  *   { "scan": true }                                 run the listener now
  *   { "postId", "action": "replied" | "dismissed" }  one-tap status flip
@@ -42,12 +44,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Database not configured" }, { status: 500 });
     }
 
-    const limit = Number(request.nextUrl.searchParams.get("limit")) || 50;
+    const page = parsePage(request.nextUrl.searchParams.get("page"));
     const status = request.nextUrl.searchParams.get("status") || "all";
 
     const client = await clientPromise;
-    const leads = await listListenerLeads(client.db(), { limit, status });
-    return NextResponse.json({ leads });
+    const { rows, ...meta } = await listListenerLeads(client.db(), { page, status });
+    return NextResponse.json({ leads: rows, ...meta });
   } catch (error) {
     console.error("[admin/listener] GET failed:", error);
     return NextResponse.json({ error: "Failed to load listener leads" }, { status: 500 });

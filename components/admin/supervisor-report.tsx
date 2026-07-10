@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { stageDef } from "@/lib/pipeline-stages";
 import {
   FileText,
   AlertTriangle,
@@ -256,7 +257,7 @@ export function SupervisorReportPanel({
           />
           <Tile
             icon={<ClipboardList className="h-4 w-4" />}
-            label="Invited"
+            label={stageDef("invited").shortLabel}
             value={fmt(num(pipeline.onboardingInvited))}
             sub={
               num(pipeline.qualifiedNotInvited) !== null
@@ -267,7 +268,7 @@ export function SupervisorReportPanel({
           />
           <Tile
             icon={<CheckCircle2 className="h-4 w-4" />}
-            label="Onboarding"
+            label={stageDef("completed").shortLabel}
             value={fmt(num(pipeline.onboardingCompleted ?? pipeline.documentsSubmitted))}
             sub={
               num(pipeline.onboardingSessions) !== null

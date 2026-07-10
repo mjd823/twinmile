@@ -12,7 +12,7 @@ export const metadata = {
 export default async function OutreachPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; status?: string }>;
+  searchParams: Promise<{ page?: string; status?: string; rpage?: string; tab?: string }>;
 }) {
   const user = await requireRole("admin");
   if (!user) return null;
@@ -23,7 +23,11 @@ export default async function OutreachPage({
   try {
     data = JSON.parse(
       JSON.stringify(
-        await getOutreachDashboardData({ page: params.page, status: params.status })
+        await getOutreachDashboardData({
+          page: params.page,
+          status: params.status,
+          repliesPage: params.rpage,
+        })
       )
     );
   } catch (error) {
@@ -44,7 +48,10 @@ export default async function OutreachPage({
 
   return (
     <main className="mx-auto w-full max-w-6xl px-5 py-6">
-      <OutreachDashboard initialData={data} />
+      <OutreachDashboard
+        initialData={data}
+        initialTab={params.tab === "replies" ? "replies" : "sent"}
+      />
     </main>
   );
 }

@@ -18,7 +18,9 @@
  * Storage: `listener_leads` collection, deduped on (source, postId).
  */
 
-import type { Db } from "mongodb";
+import type { Db, Document } from "mongodb";
+
+import { paginatedList, type Paginated } from "@/lib/paginate";
 
 export const LISTENER_AGENT = {
   name: "Sofia Rodriguez",
@@ -329,20 +331,20 @@ export async function runSocialListener(db: Db): Promise<{
   };
 }
 
-/** Newest-first list for the admin page. */
+/**
+ * Newest-first page for the admin page — shared paginator, real
+ * countDocuments total, no silent cap.
+ */
 export async function listListenerLeads(
   db: Db,
-  opts: { limit?: number; status?: string } = {}
-): Promise<ListenerLead[]> {
-  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 200);
-  const query: Record<string, unknown> = {};
+  opts: { page?: number; status?: string } = {}
+): Promise<Paginated<ListenerLead>> {
+  const query: Document = {};
   if (opts.status && opts.status !== "all") query.status = opts.status;
-  return (await db
-    .collection("listener_leads")
-    .find(query)
-    .sort({ foundAt: -1 })
-    .limit(limit)
-    .toArray()) as unknown as ListenerLead[];
+  return (await paginatedList(db.collection("listener_leads"), query, {
+    page: opts.page,
+    sort: { foundAt: -1, _id: -1 },
+  })) as unknown as Paginated<ListenerLead>;
 }
 
 /** One-tap status flip from the admin page (replied / dismissed). */

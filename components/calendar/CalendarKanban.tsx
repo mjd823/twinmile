@@ -38,6 +38,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { QUOTE_STAGES } from "@/lib/pipeline-stages";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -848,7 +849,7 @@ type LeadType = "quote" | "driver" | "lease";
 interface Stage {
   key: string;
   label: string;
-  color: string;
+  hex: string;
   leads: Record<string, unknown>[];
 }
 
@@ -863,46 +864,14 @@ export function KanbanView({
   leaseAgreements: Record<string, unknown>[];
   onLeadClick?: (lead: Record<string, unknown>, type: LeadType) => void;
 }) {
-  const quoteStages: Stage[] = [
-    {
-      key: "new",
-      label: "New",
-      color: "bg-slate-500",
-      leads: quoteLeads.filter((l) => l.status === "new"),
-    },
-    {
-      key: "qualified",
-      label: "Qualified",
-      color: "bg-blue-500",
-      leads: quoteLeads.filter((l) => l.status === "qualified"),
-    },
-    {
-      key: "quoted",
-      label: "Quoted",
-      color: "bg-indigo-500",
-      leads: quoteLeads.filter((l) => l.status === "quoted"),
-    },
-    {
-      key: "negotiating",
-      label: "Negotiating",
-      color: "bg-amber-500",
-      leads: quoteLeads.filter((l) => l.status === "negotiating"),
-    },
-    {
-      key: "converted",
-      label: "Won",
-      color: "bg-green-500",
-      leads: quoteLeads.filter((l) => l.status === "converted"),
-    },
-    {
-      key: "lost",
-      label: "Lost",
-      color: "bg-red-500",
-      leads: quoteLeads.filter(
-        (l) => l.status === "lost" || l.status === "archived",
-      ),
-    },
-  ];
+  // Columns come from the canonical quote taxonomy (lib/pipeline-stages.ts) —
+  // same stages, labels, colors, and status buckets as everywhere else.
+  const quoteStages: Stage[] = QUOTE_STAGES.map((s) => ({
+    key: s.key,
+    label: s.label,
+    hex: s.hex,
+    leads: quoteLeads.filter((l) => s.statuses.includes(String(l.status ?? ""))),
+  }));
 
   const renderStage = (stage: Stage, type: LeadType) => {
     const leads = stage.leads;
@@ -912,7 +881,8 @@ export function KanbanView({
         className="flex-1 min-w-[240px] max-w-full flex flex-col rounded-lg overflow-hidden border border-border/60"
       >
         <div
-          className={`px-3 py-2 ${stage.color} text-white flex items-center justify-between`}
+          className="px-3 py-2 text-white flex items-center justify-between"
+          style={{ backgroundColor: stage.hex }}
         >
           <span className="font-medium text-sm">{stage.label}</span>
           <Badge variant="secondary" className="text-[10px]">

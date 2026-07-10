@@ -4,6 +4,7 @@ import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OFF_FUNNEL_BUCKETS, QUOTE_STAGES, stageDef } from "@/lib/pipeline-stages";
 import {
   convertDriverLeadAction,
   convertQuoteLeadAction,
@@ -358,13 +359,16 @@ export function AdminInbox({
     </div>
 
     <div className="grid gap-6 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+      {/* Tile labels come from the canonical taxonomy (lib/pipeline-stages.ts):
+          the "onboarding" status group is the Invited stage (email sent) and
+          "converted" is the Hired stage. */}
       {([
         ["all", "Total", metrics.all],
-        ["new", "New", metrics.new],
-        ["qualified", "Qualified", metrics.qualified],
-        ["onboarding", "Onboarding", metrics.onboarding],
-        ["converted", "Converted", metrics.converted],
-        ["rejected", "Rejected / Lost", metrics.rejected],
+        ["new", QUOTE_STAGES[0].label, metrics.new],
+        ["qualified", stageDef("qualified").shortLabel, metrics.qualified],
+        ["onboarding", stageDef("invited").shortLabel, metrics.onboarding],
+        ["converted", stageDef("hired").shortLabel, metrics.converted],
+        ["rejected", OFF_FUNNEL_BUCKETS[0].label, metrics.rejected],
       ] as const).map(([key, label, count]) => (
         <button
           key={key}

@@ -100,12 +100,12 @@ export function parseStatusFilter(value: unknown): OutreachStatusFilter {
 export async function getOutreachDashboardData(opts: {
   page?: unknown;
   status?: unknown;
+  repliesPage?: unknown;
 } = {}): Promise<{
   emailStats: OutreachEmailStats;
   statusFilter: OutreachStatusFilter;
   sent: Omit<Paginated<never>, "rows"> & { rows: SentEmailRow[] };
-  replies: ReplyRow[];
-  repliesTotal: number;
+  replies: Omit<Paginated<never>, "rows"> & { rows: ReplyRow[] };
   replyToInUse: string;
   inboundConfigured: boolean;
 }> {
@@ -224,14 +224,12 @@ export async function getOutreachDashboardData(opts: {
     };
   });
 
-  // ── Replies (small collection — no cap needed today, real total shown) ────
-  const repliesTotal = await db.collection("outreach_replies").countDocuments();
-  const rawReplies = await db
-    .collection("outreach_replies")
-    .find({})
-    .sort({ receivedAt: -1, _id: -1 })
-    .limit(200)
-    .toArray();
+  // ── Replies — paginated newest first with a real total (no silent cap) ────
+  const { rows: rawReplies, ...repliesMeta } = await paginatedList(
+    db.collection("outreach_replies"),
+    {},
+    { page: parsePage(opts.repliesPage), sort: { receivedAt: -1, _id: -1 } }
+  );
 
   const matchedIds = rawReplies
     .filter((r: any) => r.matchedProspectId && r.matchedCollection === "outbound_prospects")
@@ -286,8 +284,7 @@ export async function getOutreachDashboardData(opts: {
     emailStats: { sentAllTime, sent24h, queued, failed, skipped, total },
     statusFilter,
     sent: { rows: sentRows, ...pageMeta },
-    replies,
-    repliesTotal,
+    replies: { rows: replies, ...repliesMeta },
     replyToInUse:
       process.env.OUTREACH_REPLY_TO || process.env.RESEND_NOTIFY_TO || "admin@twinmile.com",
     inboundConfigured: Boolean(process.env.RESEND_WEBHOOK_SECRET),

@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { Pager } from "@/components/admin/Pager";
 import { EmailPreviewFrame } from "@/components/admin/EmailPreviewFrame";
+import { stageDef } from "@/lib/pipeline-stages";
 import type {
   OutreachDashboardData,
   SentEmailRow,
@@ -116,7 +117,8 @@ interface TimelineEvent {
 
 function ProspectTimeline({ email }: { email: SentEmailRow }) {
   const events: TimelineEvent[] = [
-    { label: "Invited (onboarding link created)", at: email.timeline.invitedAt, icon: UserCheck },
+    // Canonical stage label — "Invited" always means the outreach email went out.
+    { label: stageDef("invited").label, at: email.timeline.invitedAt, icon: UserCheck },
     { label: "Invite email delivered", at: email.sentAt, icon: Mail },
     { label: "Opened their onboarding link", at: email.timeline.clickedAt, icon: MousePointerClick },
     { label: "Replied to us", at: email.timeline.repliedAt, icon: Reply },
@@ -569,15 +571,21 @@ function ReplyCard({
 
 function RepliesTab({
   replies,
+  meta,
+  statusFilter,
   inboundConfigured,
   replyToInUse,
   onSent,
 }: {
   replies: ReplyRow[];
+  meta: { total: number; page: number; pageCount: number; pageSize: number };
+  statusFilter: OutreachStatusFilter;
   inboundConfigured: boolean;
   replyToInUse: string;
   onSent: (id: string, sentAt: string) => void;
 }) {
+  const makeHref = (page: number) =>
+    `/admin/outreach?tab=replies&status=${statusFilter}&rpage=${page}`;
   return (
     <div className="space-y-3">
       {!inboundConfigured && (
@@ -592,6 +600,7 @@ function RepliesTab({
           </span>
         </div>
       )}
+      <Pager {...meta} makeHref={makeHref} />
       {replies.length === 0 ? (
         <Card>
           <CardContent className="p-8 text-center text-sm text-muted-foreground">
@@ -599,7 +608,12 @@ function RepliesTab({
           </CardContent>
         </Card>
       ) : (
-        replies.map((r) => <ReplyCard key={r.id} reply={r} onSent={onSent} />)
+        <>
+          {replies.map((r) => (
+            <ReplyCard key={r.id} reply={r} onSent={onSent} />
+          ))}
+          <Pager {...meta} makeHref={makeHref} />
+        </>
       )}
     </div>
   );
@@ -609,8 +623,20 @@ function RepliesTab({
 // Page shell
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function OutreachDashboard({ initialData }: { initialData: OutreachDashboardData }) {
-  const [replies, setReplies] = React.useState<ReplyRow[]>(initialData.replies);
+export function OutreachDashboard({
+  initialData,
+  initialTab = "sent",
+}: {
+  initialData: OutreachDashboardData;
+  initialTab?: "sent" | "replies";
+}) {
+  const [replies, setReplies] = React.useState<ReplyRow[]>(initialData.replies.rows);
+
+  // Server-side pagination re-renders the page with a new rows slice; keep the
+  // optimistic client copy in sync when that happens.
+  React.useEffect(() => {
+    setReplies(initialData.replies.rows);
+  }, [initialData.replies.rows]);
 
   const handleSent = (id: string, sentAt: string) => {
     setReplies((prev) =>
@@ -642,13 +668,13 @@ export function OutreachDashboard({ initialData }: { initialData: OutreachDashbo
 
       <StatChips stats={initialData.emailStats} />
 
-      <Tabs defaultValue="sent">
+      <Tabs defaultValue={initialTab}>
         <TabsList aria-label="Email views">
           <TabsTrigger value="sent">
             Emails ({initialData.sent.total.toLocaleString()})
           </TabsTrigger>
           <TabsTrigger value="replies">
-            Replies ({initialData.repliesTotal.toLocaleString()}
+            Replies ({initialData.replies.total.toLocaleString()}
             {pendingDrafts > 0 ? `, ${pendingDrafts} to answer` : ""})
           </TabsTrigger>
         </TabsList>
@@ -658,6 +684,13 @@ export function OutreachDashboard({ initialData }: { initialData: OutreachDashbo
         <TabsContent value="replies">
           <RepliesTab
             replies={replies}
+            meta={{
+              total: initialData.replies.total,
+              page: initialData.replies.page,
+              pageCount: initialData.replies.pageCount,
+              pageSize: initialData.replies.pageSize,
+            }}
+            statusFilter={initialData.statusFilter}
             inboundConfigured={initialData.inboundConfigured}
             replyToInUse={initialData.replyToInUse}
             onSent={handleSent}

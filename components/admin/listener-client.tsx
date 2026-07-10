@@ -4,6 +4,8 @@ import * as React from "react";
 import {
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Copy,
   Ear,
@@ -16,6 +18,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { pageRangeLabel } from "@/lib/paginate";
 
 /**
  * Sofia the Listener — mobile-first review queue of Reddit conversations
@@ -42,6 +45,15 @@ interface ListenerLead {
 
 const STATUS_FILTERS = ["new", "replied", "dismissed", "all"] as const;
 
+interface PageMeta {
+  total: number;
+  page: number;
+  pageCount: number;
+  pageSize: number;
+}
+
+const EMPTY_META: PageMeta = { total: 0, page: 1, pageCount: 1, pageSize: 50 };
+
 function timeAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const hours = Math.floor(ms / 3_600_000);
@@ -52,6 +64,8 @@ function timeAgo(iso: string): string {
 
 export function ListenerClient() {
   const [leads, setLeads] = React.useState<ListenerLead[]>([]);
+  const [meta, setMeta] = React.useState<PageMeta>(EMPTY_META);
+  const [page, setPage] = React.useState(1);
   const [loading, setLoading] = React.useState(true);
   const [scanning, setScanning] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -60,14 +74,20 @@ export function ListenerClient() {
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
 
-  const loadLeads = React.useCallback(async (status: string) => {
+  const loadLeads = React.useCallback(async (status: string, pageNum: number) => {
     try {
-      const res = await fetch(`/api/admin/listener?status=${status}&limit=100`, {
+      const res = await fetch(`/api/admin/listener?status=${status}&page=${pageNum}`, {
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`Failed to load leads (${res.status})`);
       const data = await res.json();
       setLeads(Array.isArray(data.leads) ? data.leads : []);
+      setMeta({
+        total: Number(data.total) || 0,
+        page: Number(data.page) || 1,
+        pageCount: Number(data.pageCount) || 1,
+        pageSize: Number(data.pageSize) || EMPTY_META.pageSize,
+      });
       setError(null);
     } catch (err) {
       console.error("Error loading listener leads:", err);
@@ -79,8 +99,8 @@ export function ListenerClient() {
 
   React.useEffect(() => {
     setLoading(true);
-    loadLeads(filter);
-  }, [filter, loadLeads]);
+    loadLeads(filter, page);
+  }, [filter, page, loadLeads]);
 
   const handleScan = async () => {
     setScanning(true);
@@ -92,7 +112,7 @@ export function ListenerClient() {
         body: JSON.stringify({ scan: true }),
       });
       if (!res.ok) throw new Error(`Scan failed (${res.status})`);
-      await loadLeads(filter);
+      await loadLeads(filter, page);
     } catch (err) {
       console.error("Error running scan:", err);
       setError("Scan failed — Reddit may be rate limiting; try again later.");
@@ -115,6 +135,9 @@ export function ListenerClient() {
           ? prev.map((l) => (l.postId === lead.postId ? { ...l, status: action } : l))
           : prev.filter((l) => l.postId !== lead.postId)
       );
+      if (filter !== "all") {
+        setMeta((m) => ({ ...m, total: Math.max(0, m.total - 1) }));
+      }
     } catch (err) {
       console.error("Error updating lead:", err);
       setError("Could not update the lead.");
@@ -162,7 +185,10 @@ export function ListenerClient() {
             key={s}
             size="sm"
             variant={filter === s ? "default" : "outline"}
-            onClick={() => setFilter(s)}
+            onClick={() => {
+              setFilter(s);
+              setPage(1);
+            }}
             className="capitalize"
           >
             {s}
@@ -193,7 +219,9 @@ export function ListenerClient() {
           No {filter === "all" ? "" : filter + " "}leads yet. Sofia scans every 6 hours.
         </p>
       ) : (
-        leads.map((lead) => (
+        <>
+        <ListenerPager meta={meta} loading={loading} onPage={setPage} />
+        {leads.map((lead) => (
           <Card key={lead.postId}>
             <CardContent className="space-y-3 p-4">
               <div className="flex items-start justify-between gap-2">
@@ -292,7 +320,53 @@ export function ListenerClient() {
               )}
             </CardContent>
           </Card>
-        ))
+        ))}
+        <ListenerPager meta={meta} loading={loading} onPage={setPage} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Real total + prev/next — client-side twin of the shared <Pager>. */
+function ListenerPager({
+  meta,
+  loading,
+  onPage,
+}: {
+  meta: PageMeta;
+  loading: boolean;
+  onPage: (page: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <p className="text-xs tabular-nums text-muted-foreground">
+        {pageRangeLabel(meta)} · newest first
+      </p>
+      {meta.pageCount > 1 && (
+        <nav className="flex items-center gap-1" aria-label="Pagination">
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading || meta.page <= 1}
+            onClick={() => onPage(meta.page - 1)}
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="h-3.5 w-3.5" />
+          </Button>
+          <span className="px-2 text-xs tabular-nums text-muted-foreground">
+            page {meta.page.toLocaleString()} / {meta.pageCount.toLocaleString()}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={loading || meta.page >= meta.pageCount}
+            onClick={() => onPage(meta.page + 1)}
+            aria-label="Next page"
+          >
+            <ChevronRight className="h-3.5 w-3.5" />
+          </Button>
+        </nav>
       )}
     </div>
   );
