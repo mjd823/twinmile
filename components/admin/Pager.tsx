@@ -75,6 +75,9 @@ function PagerLink({
     <Link
       href={href}
       aria-label={label}
+      // Keep the user's scroll position — page links must never yank the
+      // viewport back to the top of the page.
+      scroll={false}
       className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
     >
       {children}

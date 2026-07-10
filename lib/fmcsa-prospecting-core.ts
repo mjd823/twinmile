@@ -20,7 +20,7 @@ import type { Db } from "mongodb";
  *   SOCRATA_APP_TOKEN    higher Socrata rate limits
  */
 
-const CENSUS_API = "https://data.transportation.gov/resource/az4n-8mr2.json";
+export const CENSUS_API = "https://data.transportation.gov/resource/az4n-8mr2.json";
 
 export const SOFIA = {
   name: "Sofia Rodriguez",

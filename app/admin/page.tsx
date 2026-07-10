@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 
+import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
+import { getRecruitingCoverage, type RecruitingCoverage } from "@/lib/recruiting-coverage";
 import { AdminOpsDashboard } from "@/components/admin/admin-ops-dashboard";
 
 export const metadata: Metadata = {
@@ -8,10 +10,37 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
+export const dynamic = "force-dynamic";
+
+const EMPTY_COVERAGE: RecruitingCoverage = {
+  states: [],
+  totals: {
+    prospects: 0,
+    statesCovered: 0,
+    qualified: 0,
+    invited: 0,
+    engagedPlus: 0,
+    unknownLocation: 0,
+  },
+  generatedAt: new Date(0).toISOString(),
+};
+
 export default async function AdminDashboardPage() {
   const user = await requireRole("admin");
   if (!user) {
     return null;
+  }
+
+  // Real recruiting coverage for the ops map — computed server-side from
+  // outbound_prospects (every prospect carries an FMCSA location).
+  let coverage = EMPTY_COVERAGE;
+  try {
+    if (clientPromise) {
+      const client = await clientPromise;
+      coverage = await getRecruitingCoverage(client.db());
+    }
+  } catch (error) {
+    console.error("[admin] recruiting coverage unavailable:", error);
   }
 
   return (
@@ -28,7 +57,7 @@ export default async function AdminDashboardPage() {
               </div>
             </div>
             <div className="text-sm text-muted-foreground">
-              Truck Manager-style ops view (Phase A)
+              Fleet, loads, and recruiting coverage — real data only
             </div>
           </div>
         </div>
@@ -36,7 +65,7 @@ export default async function AdminDashboardPage() {
 
       <section>
         <div className="w-full py-6">
-          <AdminOpsDashboard />
+          <AdminOpsDashboard coverage={JSON.parse(JSON.stringify(coverage))} />
         </div>
       </section>
     </main>

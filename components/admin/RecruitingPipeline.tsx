@@ -14,8 +14,10 @@ import {
   ChevronDown,
   ChevronRight,
   ExternalLink,
+  HelpCircle,
   Loader2,
   CheckCircle2,
+  RefreshCw,
   XCircle,
   BarChart3,
 } from "lucide-react";
@@ -83,11 +85,14 @@ interface PageMeta {
 }
 
 export type PipelineTab = "prospects" | "manual" | "engaged" | "activity";
+export type ProspectFilter = "all" | "below75";
 
 interface RecruitingPipelineProps {
   counts: PipelineCounts;
   quotes: QuoteStageCounts;
   tab: PipelineTab;
+  prospectFilter: ProspectFilter;
+  outreachPaused: boolean;
   prospects: PageMeta & { rows: ProspectRow[] };
   engaged: EngagedRow[];
   activity: PageMeta & { rows: ActivityRow[] };
@@ -111,12 +116,26 @@ export function RecruitingPipeline({
   counts,
   quotes,
   tab,
+  prospectFilter,
+  outreachPaused,
   prospects,
   engaged,
   activity,
   manualQuoteLeads,
   manualDriverLeads,
 }: RecruitingPipelineProps) {
+  // Tabs are pure CLIENT state: all four tabs' data is already in props, so
+  // switching needs zero server work. The URL is kept in sync with
+  // history.replaceState (no router navigation = no scroll-to-top jump).
+  const [activeTab, setActiveTab] = React.useState<PipelineTab>(tab);
+  React.useEffect(() => setActiveTab(tab), [tab]);
+  const switchTab = (key: PipelineTab) => {
+    setActiveTab(key);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", `/admin/lead-engine?tab=${key}`);
+    }
+  };
+
   // Canonical stage rows (labels + hexes travel with the counts from
   // lib/pipeline-stages.ts — never redefined here).
   const stageByKey = new Map(counts.stages.map((s) => [s.key, s]));
@@ -124,12 +143,36 @@ export function RecruitingPipeline({
   const qualifiedStage = stageByKey.get("qualified");
   const invitedStage = stageByKey.get("invited");
   const engagedStage = stageByKey.get("engaged");
+  const below75 = counts.offFunnel.find((b) => b.key === "unqualified");
 
-  const TABS: { key: PipelineTab; label: string; count: number }[] = [
-    { key: "prospects", label: "Prospects", count: prospects.total },
-    { key: "manual", label: "Applications & quotes", count: manualQuoteLeads.length + manualDriverLeads.length },
-    { key: "engaged", label: "Engaged", count: engaged.length },
-    { key: "activity", label: "Activity", count: activity.total },
+  const TABS: { key: PipelineTab; label: string; count: number; subtitle: string }[] = [
+    {
+      key: "prospects",
+      label: "Prospects",
+      count: prospects.total,
+      subtitle:
+        "Every carrier Sofia has found in the FMCSA database — the outreach funnel above is built from this list.",
+    },
+    {
+      key: "manual",
+      label: "Applications & quotes",
+      count: manualQuoteLeads.length + manualDriverLeads.length,
+      subtitle:
+        "People who contacted US through the website — driver applications and freight-quote requests. This is a separate source from the outreach funnel above (driver applications do count in the funnel totals; quote requests belong to the freight-customer pipeline).",
+    },
+    {
+      key: "engaged",
+      label: "Engaged",
+      count: engaged.length,
+      subtitle:
+        "People WE emailed who clicked their onboarding link — the warmest outreach leads. Not related to the website applications tab.",
+    },
+    {
+      key: "activity",
+      label: "Activity",
+      count: activity.total,
+      subtitle: "Everything the AI agents did, newest first. Tap a row for the details in plain English.",
+    },
   ];
 
   return (
@@ -183,6 +226,10 @@ export function RecruitingPipeline({
       {/* THE funnel */}
       <PipelineFunnel counts={counts} />
 
+      {/* Plain-English explainer — what each stage means, how someone moves
+          forward, and the honest story for the below-75 bucket. */}
+      <HowItWorks below75Count={below75?.count ?? 0} outreachPaused={outreachPaused} />
+
       {/* Quote pipeline (small, separate business) */}
       <Card className="border-border/60">
         <CardHeader className="pb-2">
@@ -228,31 +275,39 @@ export function RecruitingPipeline({
         />
       </div>
 
-      {/* Tabs (links — pagination is server-side) */}
+      {/* Tabs — client-side switching (all tab data is already loaded), so
+          the page never jumps to the top or refetches. Pagination inside a
+          tab is still server-side via scroll-preserving links. */}
       <div>
-        <div className="mb-4 flex gap-1 overflow-x-auto border-b border-border/60">
+        <div className="flex gap-1 overflow-x-auto border-b border-border/60">
           {TABS.map((t) => (
-            <Link
+            <button
               key={t.key}
-              href={`/admin/lead-engine?tab=${t.key}`}
+              type="button"
+              onClick={() => switchTab(t.key)}
               className={cn(
                 "whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium transition-colors",
-                tab === t.key
+                activeTab === t.key
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground"
               )}
             >
               {t.label} ({t.count.toLocaleString()})
-            </Link>
+            </button>
           ))}
         </div>
+        <p className="mb-4 mt-2 text-xs text-muted-foreground">
+          {TABS.find((t) => t.key === activeTab)?.subtitle}
+        </p>
 
-        {tab === "prospects" && <ProspectsTab prospects={prospects} />}
-        {tab === "manual" && (
+        {activeTab === "prospects" && (
+          <ProspectsTab prospects={prospects} filter={prospectFilter} below75Count={below75?.count ?? 0} />
+        )}
+        {activeTab === "manual" && (
           <AdminInbox quoteLeads={manualQuoteLeads} driverLeads={manualDriverLeads} />
         )}
-        {tab === "engaged" && <EngagedTab rows={engaged} />}
-        {tab === "activity" && <ActivityTab activity={activity} />}
+        {activeTab === "engaged" && <EngagedTab rows={engaged} />}
+        {activeTab === "activity" && <ActivityTab activity={activity} />}
       </div>
     </div>
   );
@@ -276,15 +331,208 @@ function HeadlineChip({ label, value, hex }: { label: string; value: number; hex
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// "How this pipeline works" — the plain-English story, incl. the honest
+// answer for the below-75 bucket (they are NEVER re-scored automatically).
+// ─────────────────────────────────────────────────────────────────────────────
+
+function HowItWorks({
+  below75Count,
+  outreachPaused,
+}: {
+  below75Count: number;
+  outreachPaused: boolean;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  const steps: { title: string; body: string }[] = [
+    {
+      title: `${stageDef("sourced").shortLabel} — we found them`,
+      body: "Sofia searches the official FMCSA database (real government data) every day and pulls in real owner-operators. Each one is scored 0–100 on whether we can reach them, fleet size, miles run, and operating authority.",
+    },
+    {
+      title: `${stageDef("qualified").shortLabel} — worth pursuing`,
+      body: "A score of 75 or higher makes a prospect qualified automatically. Nobody moves forward without hitting 75.",
+    },
+    {
+      title: `${stageDef("invited").shortLabel} — we emailed them`,
+      body: outreachPaused
+        ? "Qualified prospects get an email with their personal onboarding link. Sending is PAUSED right now (your call) — invites queue up and go out once outreach is switched back on."
+        : "Qualified prospects automatically get an email with their personal onboarding link.",
+    },
+    {
+      title: `${stageDef("engaged").shortLabel} — they clicked`,
+      body: "Anyone who opens their onboarding link becomes engaged. These are the warmest leads — worth a personal call.",
+    },
+    {
+      title: `${stageDef("docs").shortLabel} → ${stageDef("completed").shortLabel} → ${stageDef("hired").shortLabel}`,
+      body: "They upload CDL, insurance, and W-9, finish onboarding, sign a lease, and start driving with Twin Mile.",
+    },
+  ];
+
+  return (
+    <div className="rounded-xl border border-border/60 bg-card/40">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex w-full items-center justify-between gap-2 p-4 text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold">
+          <HelpCircle className="h-4 w-4 text-primary" />
+          How this pipeline works — and what happens to prospects under 75
+        </span>
+        {open ? (
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+      </button>
+
+      {open && (
+        <div className="space-y-4 border-t border-border/50 p-4">
+          <ol className="space-y-3">
+            {steps.map((s, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary/15 text-[11px] font-bold text-primary">
+                  {i + 1}
+                </span>
+                <div>
+                  <p className="text-sm font-medium">{s.title}</p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-muted-foreground">{s.body}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          {/* The below-75 story — honest, with a REAL way to act on it. */}
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-3.5 space-y-2">
+            <p className="text-sm font-medium">
+              What about the {below75Count.toLocaleString()} under 75?
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              They stay parked at “{stageDef("sourced").shortLabel}”. Straight answer: scoring
+              happens <span className="font-medium text-foreground">once</span>, when a prospect is
+              first found — nothing re-scores them automatically, so without action they sit there
+              forever. Their FMCSA record does change over time (a new phone or email, more trucks,
+              a fresh filing can lift the score past 75), so you can re-check them against
+              today&apos;s FMCSA data:
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <RescoreButton />
+              <Link
+                href="/admin/lead-engine?tab=prospects&filter=below75"
+                scroll={false}
+                className="inline-flex items-center gap-1 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                See the under-75 list
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Real re-score: POSTs to /api/admin/rescore-prospects, which re-fetches each
+ * carrier's CURRENT record from the FMCSA Census API and re-runs the scoring
+ * rubric (recorded in scoreHistory). Not a fake button.
+ */
+function RescoreButton() {
+  const [state, setState] = React.useState<"idle" | "running" | "done" | "error">("idle");
+  const [message, setMessage] = React.useState<string>("");
+
+  const run = async () => {
+    setState("running");
+    setMessage("");
+    try {
+      const res = await fetch("/api/admin/rescore-prospects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ limit: 50 }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data?.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+      setState("done");
+      setMessage(
+        `Re-scored ${data.rescored} against fresh FMCSA data — ${data.newlyQualified} newly qualified, ${data.scoreChanged} score${data.scoreChanged === 1 ? "" : "s"} changed${data.notFound > 0 ? `, ${data.notFound} no longer in the FMCSA registry` : ""}. Refresh to see updates.`
+      );
+    } catch (err) {
+      setState("error");
+      setMessage(err instanceof Error ? err.message : "Re-score failed");
+    }
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={run}
+        disabled={state === "running"}
+        className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-50"
+      >
+        {state === "running" ? (
+          <>
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Checking fresh FMCSA data…
+          </>
+        ) : (
+          <>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Re-score 50 oldest with fresh FMCSA data
+          </>
+        )}
+      </button>
+      {message && (
+        <span
+          className={cn(
+            "text-xs",
+            state === "error" ? "text-red-400" : "text-emerald-400"
+          )}
+        >
+          {message}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Prospects tab — paginated, newest first, canonical stage badges
 // ─────────────────────────────────────────────────────────────────────────────
 
-function ProspectsTab({ prospects }: { prospects: PageMeta & { rows: ProspectRow[] } }) {
+function ProspectsTab({
+  prospects,
+  filter,
+  below75Count,
+}: {
+  prospects: PageMeta & { rows: ProspectRow[] };
+  filter: ProspectFilter;
+  below75Count: number;
+}) {
   const [expanded, setExpanded] = React.useState<string | null>(null);
-  const makeHref = (page: number) => `/admin/lead-engine?tab=prospects&page=${page}`;
+  const filterParam = filter === "below75" ? "&filter=below75" : "";
+  const makeHref = (page: number) => `/admin/lead-engine?tab=prospects&page=${page}${filterParam}`;
 
   return (
     <div className="space-y-3">
+      {/* Filter chips — the below-75 bucket finally has its own view. */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FilterChip href="/admin/lead-engine?tab=prospects" active={filter === "all"}>
+          All prospects
+        </FilterChip>
+        <FilterChip
+          href="/admin/lead-engine?tab=prospects&filter=below75"
+          active={filter === "below75"}
+        >
+          Below score 75 ({below75Count.toLocaleString()})
+        </FilterChip>
+        {filter === "below75" && (
+          <span className="text-[11px] text-muted-foreground">
+            — parked at “{stageDef("sourced").shortLabel}” until a re-score lifts them past 75
+          </span>
+        )}
+      </div>
       <Pager {...prospects} makeHref={makeHref} />
       {prospects.rows.length === 0 ? (
         <Card>
@@ -417,6 +665,31 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function FilterChip({
+  href,
+  active,
+  children,
+}: {
+  href: string;
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={href}
+      scroll={false}
+      className={cn(
+        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium transition-colors",
+        active
+          ? "border-primary/50 bg-primary/10 text-primary"
+          : "border-border/60 text-muted-foreground hover:text-foreground"
+      )}
+    >
+      {children}
+    </Link>
+  );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Engaged tab — the 7 warmest leads (clicked their link)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -495,8 +768,146 @@ function ActivityTab({ activity }: { activity: PageMeta & { rows: ActivityRow[] 
   );
 }
 
+// ── Humanized activity details ───────────────────────────────────────────────
+// Expanded rows used to dump raw JSON. Each known action type now renders a
+// plain-English sentence + key facts; the raw JSON survives behind a
+// collapsed "Raw data" toggle for debugging.
+
+const HIDDEN_DETAIL_KEYS = new Set([
+  "taskId",
+  "leadId",
+  "sessionToken",
+  "id",
+  "_id",
+  "source",
+  "renderedHtml",
+  "renderedBody",
+]);
+
+const FRIENDLY_KEY_LABELS: Record<string, string> = {
+  leadName: "Lead",
+  leadEmail: "Email",
+  leadType: "Lead type",
+  template: "Email template",
+  channel: "Channel",
+  status: "Status",
+  attempts: "Attempts",
+  priority: "Priority",
+  sentAt: "Sent at",
+  firstClick: "First click",
+  scanned: "Posts scanned",
+  surfaced: "Leads surfaced",
+  inserted: "Leads saved",
+  rateLimited: "Rate limited",
+  compliance: "Compliance mode",
+  carriersFound: "Carriers found",
+  qualified: "Scored 75+",
+  saved: "New prospects saved",
+  targetStates: "States searched",
+  rescored: "Re-scored",
+  newlyQualified: "Newly qualified",
+  scoreChanged: "Scores changed",
+  notFound: "Not in FMCSA anymore",
+  prospects: "New prospects",
+  outreachTasks: "Pending outreach",
+  driverLeads: "New driver applications",
+  error: "Error",
+};
+
+function looksLikeIsoDate(v: string): boolean {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(v);
+}
+
+function prettifyKey(key: string): string {
+  const label = FRIENDLY_KEY_LABELS[key];
+  if (label) return label;
+  const spaced = key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ").toLowerCase();
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+function humanValue(v: unknown): string | null {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v === "boolean") return v ? "Yes" : "No";
+  if (typeof v === "number") return v.toLocaleString();
+  if (typeof v === "string") {
+    if (looksLikeIsoDate(v)) return `${fmtCT(v, true)} CT`;
+    return v.length > 140 ? `${v.slice(0, 140)}…` : v;
+  }
+  if (Array.isArray(v) && v.every((x) => typeof x === "string" || typeof x === "number")) {
+    return v.slice(0, 8).join(", ") + (v.length > 8 ? "…" : "");
+  }
+  return null; // nested objects handled by the flattener
+}
+
+/** Flatten details into human-readable facts (one nested level deep). */
+function detailFacts(details: unknown): { label: string; value: string }[] {
+  if (!details || typeof details !== "object" || Array.isArray(details)) return [];
+  const facts: { label: string; value: string }[] = [];
+  const walk = (obj: Record<string, unknown>, depth: number) => {
+    for (const [key, val] of Object.entries(obj)) {
+      if (facts.length >= 14) return;
+      if (HIDDEN_DETAIL_KEYS.has(key)) continue;
+      const v = humanValue(val);
+      if (v !== null) {
+        facts.push({ label: prettifyKey(key), value: v });
+      } else if (depth < 1 && val && typeof val === "object" && !Array.isArray(val)) {
+        walk(val as Record<string, unknown>, depth + 1);
+      }
+    }
+  };
+  walk(details as Record<string, unknown>, 0);
+  return facts;
+}
+
+/** Plain-English one-liner for the action types we know. */
+function activitySentence(a: ActivityRow): string | null {
+  const d = (a.details && typeof a.details === "object" ? a.details : {}) as Record<string, any>;
+  const name = d.leadName || d.name;
+  const email = d.leadEmail || d.email;
+  const who = name ? `${name}${email ? ` (${email})` : ""}` : email || null;
+
+  switch (a.action) {
+    case "onboarding_invite":
+    case "auto_onboarding_invite":
+      return who
+        ? `Invited ${who} — onboarding email ${d.status === "sent" || d.result?.success ? "sent" : d.status || "queued"}.`
+        : "Sent an onboarding invitation.";
+    case "onboarding_link_clicked":
+      return who
+        ? `${who} clicked their onboarding link${d.firstClick ? " for the first time" : ""} — warm lead.`
+        : "A prospect clicked their onboarding link.";
+    case "prospect_reply_received":
+      return who ? `${who} replied to our outreach email.` : "A prospect replied to our outreach.";
+    case "fmcsa_prospecting":
+    case "outbound_prospecting": {
+      const found = d.carriersFound ?? d.found;
+      const saved = d.saved ?? d.prospectsSaved;
+      if (found !== undefined || saved !== undefined) {
+        return `Searched the FMCSA database: found ${Number(found ?? 0).toLocaleString()} real carriers, ${Number(d.qualified ?? 0).toLocaleString()} scored 75+, saved ${Number(saved ?? 0).toLocaleString()} new prospects.`;
+      }
+      return null;
+    }
+    case "prospect_rescore":
+      return `Re-checked ${Number(d.rescored ?? 0).toLocaleString()} below-75 prospects against fresh FMCSA data — ${Number(d.newlyQualified ?? 0).toLocaleString()} newly qualified.`;
+    case "social_listening":
+      return `Scanned ${Number(d.scanned ?? 0).toLocaleString()} social posts, surfaced ${Number(d.surfaced ?? 0).toLocaleString()}, saved ${Number(d.inserted ?? 0).toLocaleString()} as leads.`;
+    case "supervisor_monitoring": {
+      const n = Array.isArray(d.bottlenecks) ? d.bottlenecks.length : null;
+      return n === null
+        ? "Wrote the daily supervisor report."
+        : `Wrote the daily supervisor report — ${n === 0 ? "no issues flagged" : `${n} finding${n === 1 ? "" : "s"} flagged`}.`;
+    }
+    case "daily_ops":
+      return null; // its `activity` string is already the summary shown above
+    default:
+      return null;
+  }
+}
+
 function ActivityRowItem({ activity: a }: { activity: ActivityRow }) {
   const [expanded, setExpanded] = React.useState(false);
+  const sentence = activitySentence(a);
+  const facts = expanded ? detailFacts(a.details) : [];
   return (
     <div className="overflow-hidden rounded-lg border border-border/40 bg-muted/20">
       <button
@@ -515,19 +926,38 @@ function ActivityRowItem({ activity: a }: { activity: ActivityRow }) {
                 {fmtCT(a.timestamp, true)} CT
               </span>
             </div>
-            {a.summary && !expanded && (
-              <p className="mt-0.5 truncate text-[10px] text-muted-foreground">{a.summary}</p>
+            {(sentence || a.summary) && !expanded && (
+              <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                {sentence || a.summary}
+              </p>
             )}
           </div>
         </div>
       </button>
       {expanded && (
-        <div className="border-t border-border/40 bg-background/40 p-3">
-          {a.summary && <p className="mb-2 rounded bg-muted/40 p-2 text-xs">{a.summary}</p>}
+        <div className="space-y-2.5 border-t border-border/40 bg-background/40 p-3">
+          {(sentence || a.summary) && (
+            <p className="text-xs leading-relaxed">{sentence || a.summary}</p>
+          )}
+          {sentence && a.summary && a.summary !== sentence && (
+            <p className="text-xs leading-relaxed text-muted-foreground">{a.summary}</p>
+          )}
+          {facts.length > 0 && (
+            <div className="grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2">
+              {facts.map((f, i) => (
+                <InfoRow key={i} label={f.label} value={f.value} />
+              ))}
+            </div>
+          )}
           {a.details != null && (
-            <pre className="max-h-48 overflow-auto rounded bg-muted/40 p-2 text-[10px] font-mono">
-              {JSON.stringify(a.details, null, 2)}
-            </pre>
+            <details className="group">
+              <summary className="cursor-pointer text-[10px] text-muted-foreground/70 hover:text-muted-foreground">
+                Raw data (for debugging)
+              </summary>
+              <pre className="mt-1.5 max-h-48 overflow-auto rounded bg-muted/40 p-2 text-[10px] font-mono">
+                {JSON.stringify(a.details, null, 2)}
+              </pre>
+            </details>
           )}
         </div>
       )}

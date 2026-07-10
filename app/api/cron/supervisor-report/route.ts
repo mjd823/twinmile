@@ -1,34 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
-import { CRON_JOBS, lastActivityFor } from "@/lib/cron-jobs";
+import { CRON_JOBS, classifyCronJob, lastActivityFor } from "@/lib/cron-jobs";
 import { getPipelineCounts, QUALIFIED_SCORE_THRESHOLD } from "@/lib/pipeline-stages";
+import { generateSupervisorAnalysis } from "@/lib/supervisor-llm";
 
 /**
  * GET /api/cron/supervisor-report
  *
- * Vercel cron port of the laptop "AI Supervisor — Monitor" job (and
- * log-supervisor-report.js, which used to write a hand-built snapshot).
- * Unlike the legacy script, every number here is computed live from Mongo:
+ * The AI Supervisor's daily report. Every number is computed live from Mongo:
  *
- *   - pipeline counts (prospects -> qualified -> invited -> sessions)
- *   - outreach queue health (pending / sent today / failed)
- *   - cron health for every Vercel job in lib/cron-jobs.ts (stale detection)
+ *   - pipeline counts (the canonical taxonomy in lib/pipeline-stages.ts)
+ *   - outreach queue health (pending / sent today / failed + WHY they failed)
+ *   - cron health via the ONE shared classification (lib/cron-jobs.ts
+ *     classifyCronJob) — jobs waiting for their first slot are "scheduled",
+ *     never false-alarmed as stale/never-ran
  *   - per-agent activity summary (last seen + 24h task count)
- *   - deterministic bottleneck detection
+ *   - deterministic bottleneck detection (ground truth), then an LLM analysis
+ *     pass (lib/supervisor-llm.ts) that turns the same real signals into
+ *     root-cause findings with a suggested fix and an autoFixable flag for
+ *     the hub fleet watchdog path (Projects/hub: lib/watchdog.ts).
  *
- * Writes the report to agent_activity as action "supervisor_monitoring"
- * (the action the admin cron monitor maps to the AI Supervisor row), plus a
- * small "daily_ops" heartbeat that replaces the old 7AM Daily AI Operations
- * job (this cron fires 12:00 UTC = 7AM CDT, same slot).
+ * The LLM may not invent findings — it only explains the deterministic
+ * signals it is given, and the report writes fine without it if the LLM is
+ * unavailable (analysis: null + analysisError).
  *
- * NOTE: the old manual "supervisor auto-fix" script (supervisor_run.cjs,
- * commit c860187) was REMOVED — it wrote a mostly-hardcoded snapshot of this
- * same "supervisor_monitoring" action (fake cron statuses frozen at June 2026)
- * plus heuristic prospect scoring, and would clobber this route's live report
- * if re-run. Detect-and-fix for broken deploys/sites/crons is now handled by
- * the Mission Control hub watchdog (Projects/hub: lib/watchdog.ts), which
- * queues real Claude Code fix tasks; this route stays report-only.
+ * Writes the report to agent_activity as action "supervisor_monitoring" with
+ * result.source "vercel-cron" (the admin page filters on that source, so the
+ * still-running legacy external "daily_3x_scan" writer can never shadow it).
  *
  * Schedule (vercel.json): "0 12 * * *" UTC.
  */
@@ -41,6 +40,12 @@ const SUPERVISOR = {
   role: "System Monitor",
   department: "Operations",
 };
+
+/** Remediations the hub fleet watchdog can actually run — the ONLY things the LLM may mark autoFixable. */
+const KNOWN_AUTO_FIXES = [
+  "Archive/cancel orphaned outreach tasks whose lead record no longer exists (error 'Lead not found')",
+  "Requeue failed outreach tasks whose error was transient (rate limit / timeout)",
+];
 
 /** Match createdAt stored as either Date or ISO string (both exist in this DB). */
 function sinceFilter(field: string, since: Date) {
@@ -83,42 +88,64 @@ export async function GET(request: NextRequest) {
     const onboardingInvited = stageByKey.get("invited")?.reached ?? 0;
     const sessionsCompleted = stageByKey.get("completed")?.reached ?? 0;
 
-    // ── Outreach queue ─────────────────────────────────────────────────────
-    const [outreachPending, outreachSentToday, outreachFailed] = await Promise.all([
-      db.collection("outreach_tasks").countDocuments({ status: { $in: ["pending", "retrying"] } }),
-      db.collection("outreach_tasks").countDocuments({ status: "sent", sentAt: { $gte: dayAgo } }),
-      db.collection("outreach_tasks").countDocuments({ status: "failed" }),
-    ]);
+    // ── Outreach queue (counts + WHY things failed, not just how many) ─────
+    const [outreachPending, outreachSentToday, outreachFailed, failureBreakdownRaw] =
+      await Promise.all([
+        db.collection("outreach_tasks").countDocuments({ status: { $in: ["pending", "retrying"] } }),
+        db.collection("outreach_tasks").countDocuments({ status: "sent", sentAt: { $gte: dayAgo } }),
+        db.collection("outreach_tasks").countDocuments({ status: "failed" }),
+        db
+          .collection("outreach_tasks")
+          .aggregate([
+            { $match: { status: "failed" } },
+            {
+              $group: {
+                _id: { error: { $ifNull: ["$error", "unknown error"] }, template: "$template" },
+                count: { $sum: 1 },
+              },
+            },
+            { $sort: { count: -1 } },
+            { $limit: 5 },
+          ])
+          .toArray(),
+      ]);
+    const failureBreakdown = failureBreakdownRaw.map((r: any) => ({
+      error: String(r._id?.error ?? "unknown error").slice(0, 200),
+      template: r._id?.template ? String(r._id.template) : null,
+      count: r.count as number,
+    }));
+    const outreachPaused = process.env.OUTREACH_AUTOMATION !== "live";
 
     // ── Fleet ──────────────────────────────────────────────────────────────
     const trucksInFleet = await db.collection("trucks").countDocuments();
 
-    // ── Cron health (every Vercel job) ─────────────────────────────────────
+    // ── Cron health — the ONE shared classification ────────────────────────
     const cronJobs = await Promise.all(
       CRON_JOBS.map(async (job) => {
         const last = await lastActivityFor(db, job.actions);
         const hoursSince = last.at
           ? (now.getTime() - last.at.getTime()) / 3600000
           : null;
-        let status: "healthy" | "stale" | "error" | "never_ran";
-        if (!last.at) status = "never_ran";
-        else if (last.success === false) status = "error";
-        else if (hoursSince !== null && hoursSince > job.expectedEveryHours) status = "stale";
-        else status = "healthy";
+        const cls = classifyCronJob(job, { at: last.at, success: last.success }, now);
         return {
           id: job.id,
           name: job.name,
           schedule: job.schedule,
+          cadence: job.cadence,
           responsible: job.agentName,
           lastRun: last.at,
           hoursSinceLastRun: hoursSince === null ? null : Math.round(hoursSince * 10) / 10,
-          status,
+          status: cls.status,
+          reason: cls.reason,
+          nextExpectedRun: cls.nextExpectedRun,
         };
       })
     );
     const cronHealth = {
       totalJobs: cronJobs.length,
       healthy: cronJobs.filter((j) => j.status === "healthy").length,
+      // Waiting for a slot that hasn't happened yet — NOT unhealthy.
+      scheduled: cronJobs.filter((j) => j.status === "scheduled").length,
       stale: cronJobs.filter((j) => j.status === "stale").length,
       error: cronJobs.filter((j) => j.status === "error").length,
       neverRan: cronJobs.filter((j) => j.status === "never_ran").length,
@@ -148,7 +175,7 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // ── Bottleneck detection (deterministic) ───────────────────────────────
+    // ── Bottleneck detection (deterministic — ground truth) ────────────────
     const bottlenecks: { severity: "critical" | "warning"; description: string }[] = [];
 
     if (pipelineCounts.hasAnomaly) {
@@ -160,10 +187,10 @@ export async function GET(request: NextRequest) {
     }
     if (awaitingInvite > 0) {
       const inviteJob = cronJobs.find((j) => j.id === "onboarding-invites");
-      const paused = process.env.OUTREACH_AUTOMATION !== "live";
       bottlenecks.push({
-        severity: !paused && inviteJob && inviteJob.status !== "healthy" ? "critical" : "warning",
-        description: `${awaitingInvite} qualified prospect(s) (status "qualified", aiScore >= ${QUALIFIED_SCORE_THRESHOLD}) awaiting onboarding invites${paused ? " — outreach automation is PAUSED, so this is expected until it goes live" : `. Invite cron status: ${inviteJob?.status ?? "unknown"}.`}`,
+        severity:
+          !outreachPaused && inviteJob && inviteJob.status !== "healthy" ? "critical" : "warning",
+        description: `${awaitingInvite} qualified prospect(s) (status "qualified", aiScore >= ${QUALIFIED_SCORE_THRESHOLD}) awaiting onboarding invites${outreachPaused ? " — outreach automation is PAUSED, so this is expected until it goes live" : `. Invite cron status: ${inviteJob?.status ?? "unknown"}.`}`,
       });
     }
     if (trucksInFleet === 0 && (onboardingInvited > 0 || sessionsCompleted > 0)) {
@@ -173,24 +200,82 @@ export async function GET(request: NextRequest) {
       });
     }
     if (outreachFailed > 0) {
+      const top = failureBreakdown[0];
       bottlenecks.push({
         severity: "warning",
-        description: `${outreachFailed} outreach task(s) in failed state.`,
+        description: `${outreachFailed} outreach task(s) in failed state${top ? ` — most common: "${top.error}" (${top.count}x${top.template ? `, template ${top.template}` : ""})` : ""}.`,
       });
     }
     if (outreachPending > 50) {
       bottlenecks.push({
         severity: "warning",
-        description: `Outreach backlog: ${outreachPending} pending/retrying tasks.`,
+        description: `Outreach backlog: ${outreachPending} pending/retrying tasks${outreachPaused ? " — expected while outreach automation is PAUSED; they will drain once it goes live" : ""}.`,
       });
     }
     for (const job of cronJobs) {
-      if (job.status === "stale" || job.status === "error") {
+      // "scheduled" is waiting for its first slot — only genuine misses alarm.
+      if (job.status === "stale" || job.status === "error" || job.status === "never_ran") {
         bottlenecks.push({
           severity: "critical",
-          description: `Cron "${job.name}" is ${job.status} (last run: ${job.lastRun ? job.lastRun.toISOString() : "never"}).`,
+          description: `Cron "${job.name}" is ${job.status.replace("_", " ")}: ${job.reason}`,
         });
       }
+    }
+
+    // ── LLM analysis pass — explains the deterministic signals ─────────────
+    const deployment = {
+      commitSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 8) || null,
+      commitMessage: process.env.VERCEL_GIT_COMMIT_MESSAGE?.slice(0, 200) || null,
+      branch: process.env.VERCEL_GIT_COMMIT_REF || null,
+    };
+    let analysis: Awaited<ReturnType<typeof generateSupervisorAnalysis>> | null = null;
+    let analysisError: string | null = null;
+    try {
+      analysis = await generateSupervisorAnalysis({
+        generatedAt: now.toISOString(),
+        outreachAutomation: outreachPaused ? "paused (owner decision — do not re-enable)" : "live",
+        pipeline: {
+          stages: pipelineCounts.stages.map((s) => ({
+            stage: s.label,
+            reachedCumulative: s.reached,
+            parkedHereNow: s.inStage,
+          })),
+          offFunnel: pipelineCounts.offFunnel.map((b) => ({ bucket: b.label, count: b.count })),
+          totals: pipelineCounts.totals,
+          awaitingInvite,
+          newProspectsLast24h: newProspectsToday,
+          qualifiedScoreThreshold: QUALIFIED_SCORE_THRESHOLD,
+          note: "Below-75 prospects are never re-scored automatically; a manual re-score action pulls fresh FMCSA data.",
+        },
+        outreach: {
+          pending: outreachPending,
+          sentLast24h: outreachSentToday,
+          failed: outreachFailed,
+          failureBreakdown,
+        },
+        fleet: { trucks: trucksInFleet },
+        cronHealth: {
+          totalJobs: cronHealth.totalJobs,
+          healthy: cronHealth.healthy,
+          waitingForFirstSlot: cronHealth.scheduled,
+          stale: cronHealth.stale,
+          error: cronHealth.error,
+          neverRan: cronHealth.neverRan,
+          jobs: cronJobs.map((j) => ({
+            name: j.name,
+            cadence: j.cadence,
+            status: j.status,
+            why: j.reason,
+            lastRun: j.lastRun ? j.lastRun.toISOString() : null,
+          })),
+        },
+        deterministicFindings: bottlenecks,
+        latestDeployment: deployment,
+        knownAutoFixes: KNOWN_AUTO_FIXES,
+      });
+    } catch (err) {
+      analysisError = err instanceof Error ? err.message : String(err);
+      console.error("[cron/supervisor-report] LLM analysis unavailable:", analysisError);
     }
 
     const report = {
@@ -217,6 +302,8 @@ export async function GET(request: NextRequest) {
         pending: outreachPending,
         sentLast24h: outreachSentToday,
         failed: outreachFailed,
+        failureBreakdown,
+        automation: outreachPaused ? "paused" : "live",
       },
       fleet: { trucks: trucksInFleet },
       cronHealth,
@@ -227,6 +314,9 @@ export async function GET(request: NextRequest) {
         : bottlenecks.length > 0
           ? "warning"
           : "none",
+      analysis,
+      analysisError,
+      deployment,
       source: "vercel-cron",
     };
 

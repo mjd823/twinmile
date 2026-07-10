@@ -38,7 +38,10 @@ async function getPageData(): Promise<PageData> {
     const [reportDocs, jobStatuses] = await Promise.all([
       db
         .collection("agent_activity")
-        .find({ action: "supervisor_monitoring" })
+        // Only OUR reports: a legacy external "daily_3x_scan" writer still
+        // logs junk supervisor_monitoring docs (no createdAt, no result) —
+        // requiring result.source keeps them out of "latest report" forever.
+        .find({ action: "supervisor_monitoring", "result.source": "vercel-cron" })
         .sort({ createdAt: -1, timestamp: -1 })
         .limit(1)
         .toArray(),

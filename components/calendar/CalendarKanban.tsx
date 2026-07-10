@@ -44,7 +44,7 @@ import { QUOTE_STAGES } from "@/lib/pipeline-stages";
 // Types
 // ---------------------------------------------------------------------------
 
-export type JobStatus = "on_time" | "late" | "error" | "never_ran";
+export type JobStatus = "on_time" | "scheduled" | "late" | "error" | "never_ran";
 
 export interface CalendarEvent {
   id: string;
@@ -108,6 +108,11 @@ export const JOB_STATUS_META: Record<
     label: "On time",
     dot: "bg-emerald-500",
     pill: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
+  },
+  scheduled: {
+    label: "Waiting for first slot",
+    dot: "bg-sky-500",
+    pill: "bg-sky-500/15 text-sky-400 border-sky-500/30",
   },
   late: {
     label: "Late",

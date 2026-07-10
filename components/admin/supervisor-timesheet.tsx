@@ -19,6 +19,11 @@ const STATUS_META: Record<
     dot: "bg-emerald-500",
     pill: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
   },
+  scheduled: {
+    label: "Waiting for first slot",
+    dot: "bg-sky-500",
+    pill: "bg-sky-500/15 text-sky-400 border-sky-500/30",
+  },
   late: {
     label: "Late",
     dot: "bg-amber-500",
@@ -102,6 +107,12 @@ export function SupervisorTimesheet({ report }: { report: JobStatusReport | null
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               {summary.onTime} on time
             </span>
+            {(summary.scheduled ?? 0) > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
+                {summary.scheduled} waiting for first slot
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               {summary.late} late
@@ -188,9 +199,9 @@ export function SupervisorTimesheet({ report }: { report: JobStatusReport | null
                       >
                         {meta.label}
                       </Badge>
-                      {job.status === "late" && (
-                        <p className="text-[10px] text-muted-foreground mt-0.5">
-                          expected every {job.expectedEveryHours}h
+                      {job.reason && job.status !== "on_time" && (
+                        <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[220px] whitespace-normal">
+                          {job.reason}
                         </p>
                       )}
                     </td>

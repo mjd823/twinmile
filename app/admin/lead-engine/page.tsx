@@ -5,6 +5,7 @@ import {
   getQuoteStageCounts,
   stageForProspect,
   ENGAGED_SESSION_FILTER,
+  QUALIFIED_SCORE_THRESHOLD,
 } from "@/lib/pipeline-stages";
 import { paginatedList, parsePage } from "@/lib/paginate";
 import {
@@ -66,6 +67,35 @@ const ACTION_LABELS: Record<string, string> = {
   proactive_seo_analysis: "SEO Analysis",
   proactive_strategic_research: "Strategic Research",
   proactive_compliance_research: "Compliance Research",
+  // Legacy rows store the action under `type` instead of `action`.
+  outreach: "Outreach Email",
+  outreach_task_failed: "Outreach Email Failed",
+  outreach_batch_complete: "Outreach Batch Complete",
+  supervisor_scoring_audit: "Prospect Scoring Audit",
+  social_listening: "Social Listener Scan",
+  call_sheet: "Daily Call Sheet",
+  prospect_priorities: "Prospect Priorities",
+  prospect_rescore: "Prospect Re-score",
+  blog_draft: "Blog Draft Generated",
+  social_pack: "Social Content Pack",
+};
+
+/**
+ * Per-email heartbeat noise hidden from the Activity feed. Matched against
+ * the COALESCED action (action ?? type) — 1,600+ legacy rows carry the action
+ * under `type` only, and a plain $nin on `action` let all of them through
+ * (76% of the feed was exactly the noise this filter meant to hide).
+ */
+const NOISE_ACTIONS = [
+  "outreach_processing",
+  "outreach_cron",
+  "outreach_cron_summary",
+  "outreach", // legacy per-email row (type only)
+  "outreach_task_failed", // legacy per-email failure row (type only)
+];
+
+const ACTIVITY_NOISE_FILTER = {
+  $expr: { $not: { $in: [{ $ifNull: ["$action", "$type"] }, NOISE_ACTIONS] } },
 };
 
 function isoDate(value: unknown): string {
@@ -88,10 +118,16 @@ function parseTab(value: unknown): PipelineTab {
   return v === "manual" || v === "engaged" || v === "activity" ? v : "prospects";
 }
 
+export type ProspectFilter = "all" | "below75";
+
+function parseFilter(value: unknown): ProspectFilter {
+  return String(value ?? "all") === "below75" ? "below75" : "all";
+}
+
 export default async function RecruitingPipelinePage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; page?: string }>;
+  searchParams: Promise<{ tab?: string; page?: string; filter?: string }>;
 }) {
   const user = await requireRole("admin");
   if (!user) return null;
@@ -99,6 +135,16 @@ export default async function RecruitingPipelinePage({
   const params = await searchParams;
   const tab = parseTab(params.tab);
   const page = parsePage(params.page);
+  const prospectFilter = parseFilter(params.filter);
+  // "Below score 75" = the off-funnel bucket: still new AND scored under the
+  // threshold (same definition as lib/pipeline-stages.getPipelineCounts).
+  const prospectMatch =
+    prospectFilter === "below75"
+      ? {
+          $or: [{ status: "new" }, { status: { $exists: false } }],
+          $nor: [{ aiScore: { $gte: QUALIFIED_SCORE_THRESHOLD } }],
+        }
+      : {};
 
   try {
     if (!clientPromise) throw new Error("Database not configured");
@@ -111,13 +157,11 @@ export default async function RecruitingPipelinePage({
         getQuoteStageCounts(db),
         // Prospects: newest first (safe post 2026-07 date-normalization
         // migration), REAL total, 50/page.
-        paginatedList(db.collection("outbound_prospects"), {}, {
+        paginatedList(db.collection("outbound_prospects"), prospectMatch, {
           page: tab === "prospects" ? page : 1,
           sort: { createdAt: -1, _id: -1 },
         }),
-        db.collection("agent_activity").countDocuments({
-          action: { $nin: ["outreach_processing", "outreach_cron", "outreach_cron_summary"] },
-        }),
+        db.collection("agent_activity").countDocuments(ACTIVITY_NOISE_FILTER),
         db
           .collection("onboarding_sessions")
           .find(ENGAGED_SESSION_FILTER as never)
@@ -136,7 +180,7 @@ export default async function RecruitingPipelinePage({
     const rawActivity = await db
       .collection("agent_activity")
       .aggregate([
-        { $match: { action: { $nin: ["outreach_processing", "outreach_cron", "outreach_cron_summary"] } } },
+        { $match: ACTIVITY_NOISE_FILTER },
         { $addFields: { _sortTime: { $ifNull: ["$createdAt", "$timestamp"] } } },
         { $sort: { _sortTime: -1 } },
         { $skip: (boundedActivityPage - 1) * activityPageSize },
@@ -235,6 +279,8 @@ export default async function RecruitingPipelinePage({
           counts={JSON.parse(JSON.stringify(counts))}
           quotes={quotes}
           tab={tab}
+          prospectFilter={prospectFilter}
+          outreachPaused={process.env.OUTREACH_AUTOMATION !== "live"}
           prospects={{
             rows: prospectRows,
             total: prospectsPage.total,

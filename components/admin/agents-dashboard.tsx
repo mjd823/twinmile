@@ -84,7 +84,7 @@ interface ScheduledJob {
   id: string;
   name: string;
   cadence: string;
-  status: "on_time" | "late" | "error" | "never_ran";
+  status: "on_time" | "scheduled" | "late" | "error" | "never_ran";
   lastRun: string | null;
   hoursSinceLastRun: number | null;
 }
@@ -539,10 +539,12 @@ function AgentCard({
                 {agent.scheduledJobs.map((job) => {
                   const jobStyle =
                     job.status === "on_time" ? "text-green-500" :
+                    job.status === "scheduled" ? "text-sky-500" :
                     job.status === "error" ? "text-red-500" :
                     job.status === "late" ? "text-amber-500" : "text-muted-foreground";
                   const jobLabel =
                     job.status === "on_time" ? "On time" :
+                    job.status === "scheduled" ? "Waiting for first slot" :
                     job.status === "error" ? "Failed" :
                     job.status === "late" ? "Overdue" : "Never ran";
                   return (

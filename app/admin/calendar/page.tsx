@@ -229,6 +229,7 @@ const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
 
     const STATUS_COLOR: Record<JobStatus, string> = {
       on_time: "bg-emerald-500/70 text-emerald-50",
+      scheduled: "bg-sky-500/70 text-sky-50",
       late: "bg-amber-500/80 text-amber-950",
       error: "bg-red-500/80 text-red-50",
       never_ran: "bg-zinc-500/60 text-zinc-100",

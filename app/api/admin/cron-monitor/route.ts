@@ -1,63 +1,59 @@
 import { NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { getAuthUser } from "@/lib/auth/session";
+import { CRON_JOBS, classifyCronJob, lastActivityFor } from "@/lib/cron-jobs";
 
-// Static cron job definitions (same as the component)
-const CRON_JOB_DEFS = [
-  { id: "00796b3c6135", name: "Process Outreach Tasks", schedule: "*/15 * * * *", description: "Processes pending outreach tasks every 15 minutes", skill: "claude-code" },
-  { id: "93aaa6272b8c", name: "Auto Onboarding Invitations", schedule: "0 8-20/2 * * *", description: "Sends onboarding invitations to qualified leads every 2 hours", skill: "claude-code" },
-  { id: "10177a8ab2cf", name: "Sofia — Outbound Prospecting", schedule: "0 8 * * *", description: "FMCSA Census API + web search + browser scouting", skill: "web" },
-  { id: "8c53c6ce9d90", name: "Daily AI Operations", schedule: "0 7 * * *", description: "Reviews overnight activity, processes pending tasks", skill: "web" },
-  { id: "9ee75230bf31", name: "Monthly Business Intelligence", schedule: "0 5 1 * *", description: "Aggregates monthly metrics for BI report", skill: "web" },
-  { id: "e8dd1c631f6a", name: "Driver Engagement", schedule: "30 9 * * *", description: "Checks for drivers needing follow-up, sends messages", skill: "web" },
-  { id: "4be574df5689", name: "Marcus Chen — Sales Review", schedule: "0 9 * * *", description: "Reviews qualified leads, drafts outreach strategies", skill: "web" },
-  { id: "05ded9849d2f", name: "David Kumar — Ops Check", schedule: "0 10 * * *", description: "Fleet/driver capacity, market rates, freight trends", skill: "web" },
-  { id: "146d13ca8622", name: "Jennifer Foster — HR Review", schedule: "0 11 * * *", description: "Onboarding progress, compliance, retention strategies", skill: "web" },
-  { id: "e92124812273", name: "Robert Chang — Finance Review", schedule: "0 12 * * *", description: "Revenue analysis, factoring rates, cost optimization", skill: "web" },
-  { id: "c977f5067376", name: "Emily Watson — Customer Success", schedule: "0 14 * * *", description: "Customer research, online reputation, retention", skill: "web" },
-  { id: "2171a406ef62", name: "Isabella Martinez — Marketing", schedule: "0 8 * * 1", description: "Lead sources, competitor marketing, SEO (weekly)", skill: "web" },
-  { id: "5dff3683b416", name: "Alexandra Sterling — CEO Review", schedule: "0 6 * * 1", description: "Organization performance, industry research (weekly)", skill: "web" },
-  { id: "cfa808bb49c6", name: "AI Supervisor — Monitor", schedule: "0 6,12,18 * * *", description: "Monitors all 3x daily — proactive work + error fixes", skill: "web" },
-];
-
-// Map cron job IDs to their responsible agent
-const JOB_AGENT_MAP: Record<string, { name: string; role: string; avatar: string }> = {
-  "00796b3c6135": { name: "System", role: "Automation", avatar: "⚙️" },
-  "93aaa6272b8c": { name: "System", role: "Onboarding", avatar: "📋" },
-  "10177a8ab2cf": { name: "Sofia Rodriguez", role: "Lead Gen", avatar: "🔍" },
-  "8c53c6ce9d90": { name: "AI Supervisor", role: "Operations", avatar: "👁️" },
-  "9ee75230bf31": { name: "Robert Chang", role: "Finance", avatar: "📊" },
-  "e8dd1c631f6a": { name: "Emily Watson", role: "Customer Success", avatar: "🤝" },
-  "4be574df5689": { name: "Marcus Chen", role: "Sales Director", avatar: "💼" },
-  "05ded9849d2f": { name: "David Kumar", role: "Operations", avatar: "🚛" },
-  "146d13ca8622": { name: "Jennifer Foster", role: "HR Director", avatar: "👤" },
-  "e92124812273": { name: "Robert Chang", role: "Finance", avatar: "💰" },
-  "c977f5067376": { name: "Emily Watson", role: "Customer Success", avatar: "❤️" },
-  "2171a406ef62": { name: "Isabella Martinez", role: "Marketing", avatar: "📢" },
-  "5dff3683b416": { name: "Alexandra Sterling", role: "CEO", avatar: "👑" },
-  "cfa808bb49c6": { name: "AI Supervisor", role: "Monitor", avatar: "🛡️" },
-};
-const JOB_ACTIVITY_MAP: Record<string, string[]> = {
-  "00796b3c6135": ["outreach_processing", "process_outreach", "outreach_cron", "outreach_cron_summary", "outreach_summary", "outreach_seeding", "seed_outreach_tasks"],
-  "93aaa6272b8c": ["auto_onboarding_invite", "onboarding_invite"],
-  "10177a8ab2cf": ["fmcsa_prospecting", "outbound_prospecting", "web_prospecting", "browser_prospecting"],
-  "8c53c6ce9d90": ["daily_ai_ops", "daily_ops"],
-  "9ee75230bf31": ["monthly_bi", "monthly_report"],
-  "e8dd1c631f6a": ["driver_engagement", "engagement"],
-  "4be574df5689": ["daily_sales_review", "sales_review"],
-  "05ded9849d2f": ["daily_ops_check", "ops_check", "proactive_fuel_cost_analysis"],
-  "146d13ca8622": ["hr_onboarding_review", "onboarding_link_clicked", "proactive_compliance_research"],
-  "e92124812273": ["daily_finance_review", "finance_review"],
-  "c977f5067376": ["customer_success_check", "customer_support"],
-  "2171a406ef62": ["marketing_analysis", "proactive_seo_analysis"],
-  "5dff3683b416": ["ceo_strategic_review", "proactive_strategic_research"],
-  "cfa808bb49c6": ["supervisor_monitoring"],
-};
 /**
  * GET /api/admin/cron-monitor
- * Returns all Hermes cron jobs with their status derived from agent_activity collection.
- * This approach works on Vercel (no hermes CLI needed) because cron jobs log to MongoDB.
+ *
+ * CONSOLIDATED onto lib/cron-jobs.ts — this route used to carry its own
+ * hardcoded list of 14 jobs from the dead Hermes laptop system, with obsolete
+ * schedules (e.g. "0 8-20/2" vs the real "0 14-23/2") and jobs that no longer
+ * exist (Monthly BI, Driver Engagement). It now reports the SAME registry and
+ * the SAME health classification as the supervisor report and the agent
+ * timesheet, so /admin/automation can never disagree with /admin/supervisor.
  */
+
+/** Per-job one-line descriptions for the automation dashboard cards. */
+const JOB_DESCRIPTIONS: Record<string, string> = {
+  "process-outreach": "Processes pending outreach email tasks every 15 minutes",
+  "onboarding-invites": "Sends onboarding invitations to qualified prospects (score 75+)",
+  prospecting: "Sofia searches the FMCSA Census API for real owner-operators daily",
+  "prospect-priorities": "Flags new-authority and insurance-lapse priority prospects",
+  "call-sheet": "Builds the daily call sheet for phone-only prospects",
+  "social-listener": "Reads trucking subreddits for owner-operators worth contacting",
+  "supervisor-report": "Writes the daily supervisor report with LLM root-cause analysis",
+  "agent-reviews:sales": "Daily sales review of qualified leads and outreach strategy",
+  "agent-reviews:ops": "Daily ops check: fleet capacity, market rates, freight trends",
+  "agent-reviews:hr": "Daily HR review of onboarding progress and compliance",
+  "agent-reviews:finance": "Daily finance review: revenue, factoring, cost optimization",
+  "agent-reviews:customer-success": "Daily customer research and reputation check",
+  "agent-reviews:marketing": "Weekly (Mon) marketing analysis: lead sources, SEO",
+  "agent-reviews:ceo": "Weekly (Mon) CEO review: whole-org performance",
+};
+
+const AGENT_META: Record<string, { role: string; avatar: string }> = {
+  "Outreach Processor": { role: "Automation", avatar: "⚙️" },
+  "Auto Onboarding Processor": { role: "Onboarding", avatar: "📋" },
+  "Sofia Rodriguez": { role: "Lead Gen", avatar: "🔍" },
+  "AI Supervisor": { role: "Monitor", avatar: "🛡️" },
+  "Marcus Chen": { role: "Sales Director", avatar: "💼" },
+  "David Kumar": { role: "Operations", avatar: "🚛" },
+  "Jennifer Foster": { role: "HR Director", avatar: "👤" },
+  "Robert Chang": { role: "Finance", avatar: "💰" },
+  "Emily Watson": { role: "Customer Success", avatar: "🤝" },
+  "Isabella Martinez": { role: "Marketing", avatar: "📢" },
+  "Alexandra Sterling": { role: "CEO", avatar: "👑" },
+};
+
+/** Dashboard status buckets: ok | scheduled | late | error | null (never ran). */
+const HEALTH_TO_LAST_STATUS: Record<string, string | null> = {
+  healthy: "ok",
+  scheduled: "scheduled",
+  stale: "late",
+  error: "error",
+  never_ran: null,
+};
 export async function GET() {
   try {
     const user = await getAuthUser();
@@ -72,69 +68,45 @@ export async function GET() {
     const client = await clientPromise;
     const db = client.db();
 
-    // Get recent activity for each job
+    // One row per REGISTERED Vercel cron job — same registry + health
+    // classification as the supervisor report and agent timesheet.
+    const now = new Date();
     const cronJobs = await Promise.all(
-      CRON_JOB_DEFS.map(async (def) => {
-        const activityTypes = JOB_ACTIVITY_MAP[def.id] || [];
-        // Find the most recent activity for this job
-        const lastActivity = await db.collection("agent_activity")
-          .find({ action: { $in: activityTypes } })
-          .sort({ createdAt: -1, timestamp: -1 })
-          .limit(1)
-          .toArray();
+      CRON_JOBS.map(async (job) => {
+        const last = await lastActivityFor(db, job.actions);
+        const cls = classifyCronJob(job, { at: last.at, success: last.success }, now);
 
         // Count activities in the last 24 hours (createdAt OR legacy timestamp)
         const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        const recentWindow = {
-          action: { $in: activityTypes },
+        const todayCount = await db.collection("agent_activity").countDocuments({
+          action: { $in: job.actions },
           $or: [
             { createdAt: { $gte: twentyFourHoursAgo } },
             { timestamp: { $gte: twentyFourHoursAgo } },
           ],
-        };
-        const todayCount = await db.collection("agent_activity")
-          .countDocuments(recentWindow);
+        });
 
-        // Older rows sometimes omit success; absence means the job logged normally.
-        const recentSuccess = await db.collection("agent_activity")
-          .countDocuments({
-            ...recentWindow,
-            success: { $ne: false },
-          });
-
-        const last = lastActivity[0];
-        const lastRun = last?.createdAt || last?.timestamp || null;
-        const lastSuccess = last ? last.success !== false : null;
-        const lastResult = last?.result || last?.details || null;
-
-        // Determine status: green if any recent normal run, red only explicit failure, gray if never run
-        let lastStatus: string | null;
-        if (recentSuccess > 0 || lastSuccess === true) {
-          lastStatus = "ok";
-        } else if (last && last.success === false) {
-          lastStatus = "error";
-        } else {
-          lastStatus = null;
-        }
-
-        // Calculate next run based on schedule (simplified)
-        const nextRun = calculateNextRun(def.schedule);
+        const meta = AGENT_META[job.agentName] || { role: "Automation", avatar: "⚙️" };
+        const nextRun =
+          cls.nextExpectedRun?.toISOString() ??
+          calculateNextRun(job.schedule.split(" (")[0]);
 
         return {
-          id: def.id,
-          name: def.name,
-          schedule: def.schedule,
-          description: def.description,
-          skill: def.skill,
-          agent: JOB_AGENT_MAP[def.id] || { name: "System", role: "Automation", avatar: "⚙️" },
-          lastRun,
-          lastStatus,
-          lastResult,
+          id: job.id,
+          name: job.name,
+          schedule: job.schedule,
+          description: JOB_DESCRIPTIONS[job.id] || "",
+          statusReason: cls.reason,
+          skill: "vercel-cron",
+          agent: { name: job.agentName, ...meta },
+          lastRun: last.at,
+          lastStatus: HEALTH_TO_LAST_STATUS[cls.status] ?? null,
+          lastResult: last.result,
           nextRun,
           todayCount,
           enabled: true,
-          model: "openrouter/owl-alpha",
-          provider: "openrouter",
+          model: null,
+          provider: "vercel",
         };
       })
     );

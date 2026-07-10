@@ -5,12 +5,14 @@ import {
   FileText,
   AlertTriangle,
   AlertCircle,
+  Bot,
   CheckCircle2,
   Users,
   Mail,
   Truck,
   Timer,
   ClipboardList,
+  Wrench,
 } from "lucide-react";
 
 /**
@@ -48,6 +50,44 @@ function fmt(v: number | null): string {
 interface Finding {
   severity: "critical" | "warning" | "info";
   text: string;
+}
+
+interface AnalysisFinding {
+  severity: "critical" | "warning" | "info";
+  title: string;
+  rootCause: string;
+  suggestedFix: string;
+  autoFixable: boolean;
+  evidence: string;
+}
+
+/** Pull the LLM analysis (summary + root-cause findings) out of the report. */
+function extractAnalysis(result: Record<string, unknown>): {
+  summary: string;
+  findings: AnalysisFinding[];
+} | null {
+  const a = obj(result.analysis);
+  if (!a || typeof a.summary !== "string" || !a.summary.trim()) return null;
+  const findings: AnalysisFinding[] = [];
+  if (Array.isArray(a.findings)) {
+    for (const f of a.findings) {
+      const fo = obj(f);
+      const title = typeof fo.title === "string" ? fo.title : "";
+      if (!title) continue;
+      findings.push({
+        severity:
+          fo.severity === "critical" || fo.severity === "warning"
+            ? fo.severity
+            : "info",
+        title,
+        rootCause: typeof fo.rootCause === "string" ? fo.rootCause : "",
+        suggestedFix: typeof fo.suggestedFix === "string" ? fo.suggestedFix : "",
+        autoFixable: fo.autoFixable === true,
+        evidence: typeof fo.evidence === "string" ? fo.evidence : "",
+      });
+    }
+  }
+  return { summary: a.summary, findings };
 }
 
 /** Pull a blunt findings list out of whatever shape the report uses. */
@@ -179,10 +219,16 @@ export function SupervisorReportPanel({
   }
 
   const pipeline = obj(result.pipeline);
+  const pipelineTotals = obj(pipeline.totals);
+  const pipelineStages = Array.isArray(pipeline.stages)
+    ? pipeline.stages.map((s) => obj(s))
+    : [];
+  const qualifiedStage = pipelineStages.find((s) => s.key === "qualified");
   const outreach = obj(result.outreach ?? result.outreachSystem);
   const fleet = obj(result.fleet);
   const cronHealth = obj(result.cronHealth);
   const findings = extractFindings(result);
+  const analysis = extractAnalysis(result);
   const criticalCount = findings.filter((f) => f.severity === "critical").length;
   const severity =
     typeof result.bottleneckSeverity === "string"
@@ -195,11 +241,20 @@ export function SupervisorReportPanel({
 
   const cronHealthy = num(cronHealth.healthy);
   const cronTotal = num(cronHealth.totalJobs);
+  // Jobs waiting for a slot that hasn't happened yet (e.g. a Monday-only job
+  // ported mid-week). Waiting, NOT broken — never painted red.
+  const cronWaiting = num(cronHealth.scheduled) ?? 0;
   const cronBad =
     (num(cronHealth.stale) ?? 0) +
     (num(cronHealth.error) ?? 0) +
     (num(cronHealth.critical) ?? 0) +
+    // Old reports (pre scheduled-status) counted first-slot waiters as
+    // neverRan; new reports only put genuine misses here.
     (num(cronHealth.neverRan) ?? 0);
+  const cronSubParts: string[] = [];
+  if (cronBad > 0) cronSubParts.push(`${cronBad} need${cronBad === 1 ? "s" : ""} attention`);
+  if (cronWaiting > 0) cronSubParts.push(`${cronWaiting} not due yet`);
+  const cronSub = cronSubParts.length > 0 ? cronSubParts.join(" · ") : "all running on time";
 
   const generatedLabel = generatedAt
     ? new Date(generatedAt).toLocaleString("en-US", {
@@ -252,8 +307,8 @@ export function SupervisorReportPanel({
           <Tile
             icon={<Users className="h-4 w-4" />}
             label="Prospects"
-            value={fmt(num(pipeline.totalProspects))}
-            sub={`${fmt(num(pipeline.qualified))} qualified`}
+            value={fmt(num(pipeline.totalProspects) ?? num(pipelineTotals.prospects))}
+            sub={`${fmt(num(pipeline.qualified) ?? num(qualifiedStage?.reached))} qualified`}
           />
           <Tile
             icon={<ClipboardList className="h-4 w-4" />}
@@ -292,23 +347,77 @@ export function SupervisorReportPanel({
           />
           <Tile
             icon={<Timer className="h-4 w-4" />}
-            label="Cron health"
+            label="Cron jobs"
             value={
               cronHealthy !== null && cronTotal !== null
-                ? `${cronHealthy}/${cronTotal}`
+                ? `${cronHealthy} of ${cronTotal} healthy`
                 : "—"
             }
-            sub={cronBad > 0 ? `${cronBad} unhealthy` : "all healthy"}
+            sub={cronSub}
             tone={cronBad > 0 ? "bad" : "good"}
           />
         </div>
+
+        {/* ── The supervisor's read — LLM root-cause analysis ───────────── */}
+        {analysis && (
+          <div className="rounded-lg border border-primary/25 bg-primary/[0.04] p-3.5 space-y-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <Bot className="h-4 w-4 text-primary" />
+              The supervisor&apos;s read
+            </h3>
+            <p className="text-sm leading-relaxed">{analysis.summary}</p>
+            {analysis.findings.length > 0 && (
+              <ul className="space-y-2">
+                {analysis.findings.map((f, i) => (
+                  <li
+                    key={i}
+                    className="rounded-lg border border-border/40 bg-background/50 p-3 space-y-1.5"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge
+                        variant="outline"
+                        className={`text-[9px] px-1.5 py-0 shrink-0 ${SEVERITY_STYLES[f.severity].pill}`}
+                      >
+                        {SEVERITY_STYLES[f.severity].label}
+                      </Badge>
+                      <span className="text-xs font-semibold">{f.title}</span>
+                      {f.autoFixable && (
+                        <Badge className="border-transparent bg-emerald-500/15 text-emerald-400 gap-1 text-[9px] px-1.5 py-0">
+                          <Wrench className="h-2.5 w-2.5" />
+                          Fleet can auto-fix
+                        </Badge>
+                      )}
+                    </div>
+                    {f.rootCause && (
+                      <p className="text-xs leading-relaxed">
+                        <span className="font-medium text-muted-foreground">Why: </span>
+                        {f.rootCause}
+                      </p>
+                    )}
+                    {f.suggestedFix && (
+                      <p className="text-xs leading-relaxed">
+                        <span className="font-medium text-muted-foreground">Fix: </span>
+                        {f.suggestedFix}
+                      </p>
+                    )}
+                    {f.evidence && (
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">
+                        {f.evidence}
+                      </p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* ── Blunt findings ────────────────────────────────────────────── */}
         {findings.length > 0 ? (
           <div>
             <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
               <AlertTriangle className="h-4 w-4 text-amber-400" />
-              Findings — no sugarcoating
+              Automatic checks — no sugarcoating
             </h3>
             <ul className="space-y-1.5">
               {findings.map((f, i) => (

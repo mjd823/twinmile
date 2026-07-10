@@ -22,6 +22,7 @@ interface CronJob {
   name: string;
   schedule: string;
   description?: string;
+  statusReason?: string;
   agent?: CronAgent;
   lastRun: string | null;
   lastStatus: string | null;
@@ -105,16 +106,17 @@ export function CronMonitorDashboard() {
         name: j.name,
         schedule: j.schedule,
         description: j.description || "",
+        statusReason: j.statusReason || "",
         agent: j.agent || { name: "System", role: "Automation", avatar: "⚙️" },
-        skill: j.skill || "web",
+        skill: j.skill || "vercel-cron",
         lastRun: j.lastRun || j.last_run_at || null,
         lastStatus: j.lastStatus || j.last_status || null,
         lastResult: j.lastResult || null,
         nextRun: j.nextRun || j.next_run_at || null,
         todayCount: j.todayCount || 0,
         enabled: j.enabled ?? true,
-        model: j.model || "openrouter/owl-alpha",
-        provider: j.provider || "openrouter",
+        model: j.model || null,
+        provider: j.provider || null,
         promptPreview: j.prompt_preview || "",
         workdir: j.workdir,
       }));
@@ -139,8 +141,8 @@ export function CronMonitorDashboard() {
   }, [fetchData]);
 
   const okCount = cronJobs.filter(j => j.lastStatus === "ok").length;
-  const errorCount = cronJobs.filter(j => j.lastStatus === "error").length;
-  const pendingCount = cronJobs.filter(j => !j.lastStatus).length;
+  const errorCount = cronJobs.filter(j => j.lastStatus === "error" || j.lastStatus === "late").length;
+  const pendingCount = cronJobs.filter(j => !j.lastStatus || j.lastStatus === "scheduled").length;
 
   return (
     <div className="space-y-6">
@@ -176,13 +178,13 @@ export function CronMonitorDashboard() {
         />
         <StatusCard
           icon={<XCircle className="h-5 w-5" />}
-          label="Erroring Jobs"
+          label="Need Attention"
           value={errorCount}
           color="red"
         />
         <StatusCard
           icon={<Clock className="h-5 w-5" />}
-          label="Not Run Yet"
+          label="Waiting for First Slot"
           value={pendingCount}
           color="amber"
         />
@@ -282,9 +284,11 @@ function TabButton({ active, onClick, icon, children }: { active: boolean; onCli
 function CronJobCard({ job, expanded, onToggle }: { job: any; expanded: boolean; onToggle: () => void }) {
   const status = job.lastStatus;
   const statusConfig = {
-    ok: { color: "green", icon: <CheckCircle2 className="h-5 w-5 text-green-500" />, label: "Success", bg: "bg-green-500/10 border-green-500/30" },
+    ok: { color: "green", icon: <CheckCircle2 className="h-5 w-5 text-green-500" />, label: "On time", bg: "bg-green-500/10 border-green-500/30" },
     error: { color: "red", icon: <XCircle className="h-5 w-5 text-red-500" />, label: "Error", bg: "bg-red-500/10 border-red-500/30" },
-    null: { color: "gray", icon: <Clock className="h-5 w-5 text-muted-foreground" />, label: "Pending", bg: "bg-muted/30 border-border/60" },
+    late: { color: "amber", icon: <AlertCircle className="h-5 w-5 text-amber-500" />, label: "Overdue", bg: "bg-amber-500/10 border-amber-500/30" },
+    scheduled: { color: "sky", icon: <Clock className="h-5 w-5 text-sky-400" />, label: "Waiting for first slot", bg: "bg-sky-500/10 border-sky-500/30" },
+    null: { color: "gray", icon: <Clock className="h-5 w-5 text-muted-foreground" />, label: "Never ran", bg: "bg-muted/30 border-border/60" },
   };
   const cfg = statusConfig[status as keyof typeof statusConfig] || statusConfig.null;
 
@@ -312,7 +316,9 @@ function CronJobCard({ job, expanded, onToggle }: { job: any; expanded: boolean;
                   {cfg.label}
                 </Badge>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5 truncate">{job.description}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                {job.statusReason || job.description}
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-4 flex-shrink-0">
@@ -342,11 +348,11 @@ function CronJobCard({ job, expanded, onToggle }: { job: any; expanded: boolean;
             </div>
 
             <div className="space-y-2">
-              <h4 className="text-xs font-semibold text-muted-foreground uppercase">Model</h4>
+              <h4 className="text-xs font-semibold text-muted-foreground uppercase">Runs on</h4>
               <div className="flex items-center gap-2">
                 <Cpu className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium">{job.model}</span>
-                <Badge variant="outline" className="text-[10px]">{job.provider}</Badge>
+                <span className="text-sm font-medium">{job.model || "Vercel cron"}</span>
+                {job.provider && <Badge variant="outline" className="text-[10px]">{job.provider}</Badge>}
               </div>
             </div>
 

@@ -26,6 +26,13 @@ export interface CronJobDef {
   expectedEveryHours: number;
   /** "daily" | "weekly" -- weekly jobs only log on Mondays (America/Chicago) */
   cadence: "daily" | "weekly" | "sub-daily";
+  /**
+   * ISO date the Vercel cron was first deployed. Used so a weekly job ported
+   * mid-week is reported "scheduled — first run next Monday" instead of the
+   * false alarms "never ran"/"stale" (the exact bug that made the July 2026
+   * report cry wolf about the Monday-only marketing + CEO reviews).
+   */
+  deployedAt?: string;
 }
 
 export const CRON_JOBS: CronJobDef[] = [
@@ -146,6 +153,9 @@ export const CRON_JOBS: CronJobDef[] = [
     schedule: "0 16 * * * (Mondays, America/Chicago)",
     expectedEveryHours: 8 * 24 + 2,
     cadence: "weekly",
+    // Ported from the laptop system on Mon Jul 7 2026 — one day AFTER that
+    // week's Monday slot, so its first Vercel run is the following Monday.
+    deployedAt: "2026-07-07T00:00:00Z",
   },
   {
     id: "agent-reviews:ceo",
@@ -155,6 +165,7 @@ export const CRON_JOBS: CronJobDef[] = [
     schedule: "0 16 * * * (Mondays, America/Chicago)",
     expectedEveryHours: 8 * 24 + 2,
     cadence: "weekly",
+    deployedAt: "2026-07-07T00:00:00Z",
   },
 ];
 
@@ -164,6 +175,153 @@ export function chicagoWeekday(date: Date = new Date()): string {
     timeZone: "America/Chicago",
     weekday: "long",
   }).format(date);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ONE cron-health classification — shared by the supervisor report, the agent
+// timesheet, and the cron monitor, so every surface tells the same truth.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type CronHealthStatus =
+  | "healthy"
+  | "scheduled" // waiting for a slot that hasn't happened yet — NOT unhealthy
+  | "stale"
+  | "error"
+  | "never_ran";
+
+export interface CronClassification {
+  status: CronHealthStatus;
+  /** Plain-English one-liner explaining WHY — shown in the UI, fed to the LLM. */
+  reason: string;
+  /** Next expected run (weekly jobs), informational. */
+  nextExpectedRun: Date | null;
+}
+
+/** Weekly agent-review jobs fire in the 16:00 UTC slot, Mondays only. */
+const WEEKLY_SLOT_UTC_HOUR = 16;
+/** How long after a due slot we wait before calling a weekly job stale. */
+const WEEKLY_GRACE_MS = 2 * 60 * 60 * 1000;
+
+function mondaySlotOnOrBefore(now: Date): Date {
+  const d = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), WEEKLY_SLOT_UTC_HOUR, 0, 0)
+  );
+  while (d.getUTCDay() !== 1 || d.getTime() > now.getTime()) {
+    d.setUTCDate(d.getUTCDate() - 1);
+  }
+  return d;
+}
+
+function mondaySlotAfter(now: Date): Date {
+  const d = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), WEEKLY_SLOT_UTC_HOUR, 0, 0)
+  );
+  while (d.getUTCDay() !== 1 || d.getTime() <= now.getTime()) {
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return d;
+}
+
+function fmtDayCT(d: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Chicago",
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  }).format(d);
+}
+
+/**
+ * Classify one job from its latest logged run. Truthful by design:
+ *  - a weekly job whose Vercel port hasn't reached its first Monday slot is
+ *    "scheduled" (waiting), never "never_ran"/"stale";
+ *  - "stale"/"never_ran" are reserved for jobs that genuinely missed a slot.
+ */
+export function classifyCronJob(
+  job: CronJobDef,
+  last: { at: Date | null; success: boolean | null },
+  now: Date = new Date()
+): CronClassification {
+  if (last.at && last.success === false) {
+    return {
+      status: "error",
+      reason: `Last run (${fmtDayCT(last.at)}) reported a failure — check its logs.`,
+      nextExpectedRun: null,
+    };
+  }
+
+  const deployed = job.deployedAt ? new Date(job.deployedAt) : null;
+
+  if (job.cadence === "weekly") {
+    const lastDue = mondaySlotOnOrBefore(now);
+    const nextDue = mondaySlotAfter(now);
+
+    // The Vercel cron was deployed AFTER the most recent Monday slot — it has
+    // never had a chance to run. Waiting, not broken.
+    if (deployed && lastDue.getTime() < deployed.getTime()) {
+      return {
+        status: "scheduled",
+        reason: `Runs Mondays only. Ported to Vercel ${fmtDayCT(deployed)} — first run is ${fmtDayCT(nextDue)}.`,
+        nextExpectedRun: nextDue,
+      };
+    }
+    if (last.at && last.at.getTime() >= lastDue.getTime()) {
+      return {
+        status: "healthy",
+        reason: `Ran in its most recent Monday slot (${fmtDayCT(last.at)}). Next: ${fmtDayCT(nextDue)}.`,
+        nextExpectedRun: nextDue,
+      };
+    }
+    // Slot just opened — give the run a grace window before alarming.
+    if (now.getTime() - lastDue.getTime() < WEEKLY_GRACE_MS) {
+      return {
+        status: "scheduled",
+        reason: `Monday slot in progress — expecting a run shortly.`,
+        nextExpectedRun: lastDue,
+      };
+    }
+    if (!last.at) {
+      return {
+        status: "never_ran",
+        reason: `Never logged a run and missed the ${fmtDayCT(lastDue)} Monday slot.`,
+        nextExpectedRun: nextDue,
+      };
+    }
+    return {
+      status: "stale",
+      reason: `Missed the ${fmtDayCT(lastDue)} Monday slot — last ran ${fmtDayCT(last.at)}.`,
+      nextExpectedRun: nextDue,
+    };
+  }
+
+  // Daily / sub-daily jobs: freshness window.
+  if (!last.at) {
+    if (deployed && now.getTime() - deployed.getTime() < job.expectedEveryHours * 3600000) {
+      return {
+        status: "scheduled",
+        reason: `Just deployed — first run expected within ${job.expectedEveryHours}h.`,
+        nextExpectedRun: null,
+      };
+    }
+    return {
+      status: "never_ran",
+      reason: "Never logged a run despite its schedule having passed.",
+      nextExpectedRun: null,
+    };
+  }
+  const hoursSince = (now.getTime() - last.at.getTime()) / 3600000;
+  if (hoursSince <= job.expectedEveryHours) {
+    return {
+      status: "healthy",
+      reason: `Ran ${hoursSince < 1 ? `${Math.max(1, Math.round(hoursSince * 60))}m` : `${Math.round(hoursSince)}h`} ago (expected at least every ${job.expectedEveryHours}h).`,
+      nextExpectedRun: null,
+    };
+  }
+  return {
+    status: "stale",
+    reason: `Genuinely missed its schedule — last ran ${Math.round(hoursSince)}h ago, expected at least every ${job.expectedEveryHours}h.`,
+    nextExpectedRun: null,
+  };
 }
 
 /**
