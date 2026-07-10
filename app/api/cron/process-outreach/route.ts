@@ -4,7 +4,7 @@ import { Resend } from "resend";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
 import {
-  renderOutreachEmail,
+  composeOutreachEmail,
   type Lead,
   type Personalization,
 } from "@/lib/outreach-templates";
@@ -368,7 +368,10 @@ export async function GET(request: NextRequest) {
         // outreach dashboard can show precisely what each recipient received.
         let renderedFields: Record<string, unknown> = {};
         if (task.channel === "email") {
-          const t = renderOutreachEmail(task.template, { ...lead, name: leadName }, p);
+          // Branded composition: template fragment wrapped in the Twin Mile
+          // layout (header/logo/CTA/footer). renderedHtml persists the FULL
+          // document so the admin preview is byte-identical to the send.
+          const t = composeOutreachEmail(task.template, { ...lead, name: leadName }, p);
           const { data, error } = await resend.emails.send({
             from: FROM,
             to: leadEmail,

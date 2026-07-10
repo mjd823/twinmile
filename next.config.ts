@@ -21,7 +21,10 @@ const nextConfig: NextConfig = {
           "base-uri 'self'",
           "frame-ancestors 'none'",
           "object-src 'none'",
-          "img-src 'self' data: blob:",
+          // https://twinmile.com so the branded email preview iframes
+          // (srcdoc inherits this CSP) can load the logo when the admin is
+          // viewed from localhost or a preview deploy.
+          "img-src 'self' data: blob: https://twinmile.com",
           "font-src 'self' data:",
           "style-src 'self' 'unsafe-inline'",
           isProd

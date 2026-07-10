@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
 import { computeJobStatuses } from "@/lib/agent-status";
+import { getPipelineCounts, QUALIFIED_SCORE_THRESHOLD } from "@/lib/pipeline-stages";
 
 /**
  * GET /api/admin/agent-status
@@ -66,28 +67,19 @@ export async function GET(request: NextRequest) {
     const statusReport = await computeJobStatuses(db, now);
     const jobs = statusReport.jobs;
 
-    // ── Headline business counts ───────────────────────────────────────────
-    const [
-      prospectsTotal,
-      prospectsQualified,
-      prospectsInvited,
-      outreachSentToday,
-      outreachPending,
-      outreachFailed,
-      sessionsPending,
-      sessionsCompleted,
-      trucks,
-    ] = await Promise.all([
-      db.collection("outbound_prospects").countDocuments(),
-      db.collection("outbound_prospects").countDocuments({ aiScore: { $gte: 75 } }),
-      db.collection("outbound_prospects").countDocuments({ status: "onboarding_invited" }),
-      db.collection("outreach_tasks").countDocuments({ status: "sent", sentAt: { $gte: dayAgo } }),
-      db.collection("outreach_tasks").countDocuments({ status: { $in: ["pending", "retrying"] } }),
-      db.collection("outreach_tasks").countDocuments({ status: "failed" }),
-      db.collection("onboarding_sessions").countDocuments({ status: "pending" }),
-      db.collection("onboarding_sessions").countDocuments({ status: "completed" }),
-      db.collection("trucks").countDocuments(),
-    ]);
+    // ── Canonical pipeline counts (lib/pipeline-stages — the ONE taxonomy;
+    //    the hub renders these labels verbatim so it can never disagree with
+    //    the admin) + labeled email-ops numbers ─────────────────────────────
+    const [pipeline, outreachSentToday, outreachSentAllTime, outreachPending, outreachFailed, trucks] =
+      await Promise.all([
+        getPipelineCounts(db),
+        db.collection("outreach_tasks").countDocuments({ status: "sent", sentAt: { $gte: dayAgo } }),
+        db.collection("outreach_tasks").countDocuments({ status: "sent" }),
+        db.collection("outreach_tasks").countDocuments({ status: { $in: ["pending", "retrying", "sending", "drafted"] } }),
+        db.collection("outreach_tasks").countDocuments({ status: "failed" }),
+        db.collection("trucks").countDocuments(),
+      ]);
+    const stageByKey = new Map(pipeline.stages.map((s) => [s.key, s]));
 
     // Diagnostic samples (shape only, no PII beyond ids/types) for remote debugging
     const [failedSample] = await db
@@ -141,22 +133,58 @@ export async function GET(request: NextRequest) {
       chicagoWeekday: statusReport.chicagoWeekday,
       summary: statusReport.summary,
       jobs,
+      // CANONICAL pipeline block — stage keys/labels/hex + BOTH counts per
+      // stage (reached = cumulative funnel, inStage = "here now"). The hub's
+      // Mission Control card renders these labels verbatim so hub === admin.
+      pipeline: {
+        stages: pipeline.stages.map((s) => ({
+          key: s.key,
+          label: s.label,
+          shortLabel: s.shortLabel,
+          hex: s.hex,
+          reached: s.reached,
+          inStage: s.inStage,
+          inStageLabel: s.inStageLabel,
+          conversionFromPrev: s.conversionFromPrev,
+          anomaly: s.anomaly ?? false,
+        })),
+        offFunnel: pipeline.offFunnel,
+        totals: pipeline.totals,
+        hasAnomaly: pipeline.hasAnomaly,
+        qualifiedScoreThreshold: QUALIFIED_SCORE_THRESHOLD,
+      },
+      // Email operations — every number labeled with its window.
+      emailOps: {
+        sent24h: outreachSentToday,
+        sentAllTime: outreachSentAllTime,
+        queued: outreachPending,
+        failed: outreachFailed,
+        failureReasons: failureReasons.map((r) => ({ reason: r._id, count: r.count })),
+        automation: process.env.OUTREACH_AUTOMATION || "unset",
+      },
       metrics: {
+        // Legacy block kept for older hub builds. NOTE: `qualified` here has
+        // ALWAYS meant score >= threshold (cumulative — "reached"), which is
+        // now spelled out via the canonical `pipeline` block above.
         prospects: {
-          total: prospectsTotal,
-          qualified: prospectsQualified,
-          invited: prospectsInvited,
+          total: pipeline.totals.prospects,
+          qualified: stageByKey.get("qualified")?.reached ?? 0,
+          invited: stageByKey.get("invited")?.reached ?? 0,
+          awaitingInvite: stageByKey.get("qualified")?.inStage ?? 0,
           bySource: bySourceTag.map((r) => ({ sourceTag: r._id, count: r.count })),
         },
         outreach: {
           sentLast24h: outreachSentToday,
+          sentAllTime: outreachSentAllTime,
           pending: outreachPending,
           failed: outreachFailed,
           failureReasons: failureReasons.map((r) => ({ reason: r._id, count: r.count })),
         },
         onboarding: {
-          sessionsPending,
-          sessionsCompleted,
+          // Raw session counts are banned from UI — surface stages instead.
+          engaged: stageByKey.get("engaged")?.reached ?? 0,
+          docsSubmitted: stageByKey.get("docs")?.reached ?? 0,
+          completed: stageByKey.get("completed")?.reached ?? 0,
         },
         fleet: { trucks },
       },

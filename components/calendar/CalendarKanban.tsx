@@ -904,66 +904,6 @@ export function KanbanView({
     },
   ];
 
-  const driverStages: Stage[] = [
-    {
-      key: "new",
-      label: "Applied",
-      color: "bg-slate-500",
-      // Mutually exclusive with "Qualified (≥75)" below — no double counting.
-      leads: driverLeads.filter(
-        (l) =>
-          l.status === "new" &&
-          (typeof l.score === "number" ? l.score : 0) < 75,
-      ),
-    },
-    {
-      key: "qualified",
-      label: "Qualified (≥75)",
-      color: "bg-blue-500",
-      leads: driverLeads.filter(
-        (l) =>
-          (typeof l.score === "number" ? l.score : 0) >= 75 &&
-          l.status === "new",
-      ),
-    },
-    {
-      key: "onboarding",
-      label: "Onboarding",
-      color: "bg-indigo-500",
-      leads: driverLeads.filter((l) => l.status === "onboarding"),
-    },
-    {
-      key: "compliance_check",
-      label: "Compliance",
-      color: "bg-amber-500",
-      leads: driverLeads.filter((l) => l.status === "compliance_check"),
-    },
-    {
-      key: "ready_to_dispatch",
-      label: "Ready to Dispatch",
-      color: "bg-green-500",
-      leads: driverLeads.filter((l) => l.status === "ready_to_dispatch"),
-    },
-    {
-      key: "lease_agreement",
-      label: "Lease Agreement",
-      color: "bg-purple-500",
-      leads: leaseAgreements.filter((l) => l.status === "pending_review"),
-    },
-    {
-      key: "lease_approved",
-      label: "Lease Approved",
-      color: "bg-purple-700",
-      leads: leaseAgreements.filter((l) => l.status === "approved"),
-    },
-    {
-      key: "rejected",
-      label: "Rejected",
-      color: "bg-red-500",
-      leads: driverLeads.filter((l) => l.status === "rejected"),
-    },
-  ];
-
   const renderStage = (stage: Stage, type: LeadType) => {
     const leads = stage.leads;
     return (
@@ -1051,17 +991,16 @@ export function KanbanView({
         {quoteStages.map((s) => renderStage(s, "quote"))}
       </div>
 
-      <div className="flex items-center justify-between border-t border-border/60 pt-4">
-        <h3 className="text-lg font-semibold flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full bg-orange-500" />
-          Driver Pipeline
-        </h3>
-        <Badge variant="outline" className="text-[10px]">
-          {driverLeads.length + leaseAgreements.length} total
-        </Badge>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        {driverStages.map((s) => renderStage(s, "driver"))}
+      {/* The driver-pipeline kanban that used to live here showed ~3
+          leads_drivers while excluding 1,400+ prospects — a third thing named
+          "Driver Pipeline" with its own numbers. Driver recruiting lives in
+          ONE place now: the Recruiting Pipeline. */}
+      <div className="border-t border-border/60 pt-4 text-sm text-muted-foreground">
+        Driver recruiting moved to{" "}
+        <a href="/admin/lead-engine" className="text-primary hover:underline">
+          Recruiting Pipeline
+        </a>
+        {" "}— one pipeline, one set of numbers.
       </div>
     </div>
   );

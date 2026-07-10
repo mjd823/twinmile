@@ -65,36 +65,66 @@ function buildTools(agentId: string) {
   });
 }
 
-// Build metrics from activity counts
-function buildMetrics(agentId: string, activity: any[], tasksToday: number) {
+// Full-collection windowed metrics per agent (no 500-row sample): one
+// $group aggregation with $ifNull-coalesced timestamps.
+interface AgentAggMetrics {
+  total: number;
+  successful: number;
+  today: number;
+  week: number;
+  month: number;
+  lastActivity: Date | null;
+}
+
+async function aggregateAgentMetrics(db: any): Promise<Map<string, AgentAggMetrics>> {
   const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
   const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const tasksThisWeek = activity.filter((a) => {
-    const ts = new Date(a.timestamp || a.createdAt || now);
-    return ts >= weekAgo;
-  }).length;
+  const rows = await db
+    .collection("agent_activity")
+    .aggregate([
+      {
+        $addFields: {
+          _t: { $ifNull: ["$createdAt", "$timestamp"] },
+          _name: {
+            $cond: [
+              { $eq: [{ $type: "$agent" }, "string"] },
+              "$agent",
+              { $ifNull: ["$agent.name", { $ifNull: ["$agentId", "Unknown"] }] },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: "$_name",
+          total: { $sum: 1 },
+          successful: { $sum: { $cond: [{ $ne: ["$success", false] }, 1, 0] } },
+          today: { $sum: { $cond: [{ $gte: ["$_t", todayStart] }, 1, 0] } },
+          week: { $sum: { $cond: [{ $gte: ["$_t", weekAgo] }, 1, 0] } },
+          month: { $sum: { $cond: [{ $gte: ["$_t", monthAgo] }, 1, 0] } },
+          lastActivity: { $max: "$_t" },
+        },
+      },
+    ])
+    .toArray();
 
-  const tasksThisMonth = activity.filter((a) => {
-    const ts = new Date(a.timestamp || a.createdAt || now);
-    return ts >= monthAgo;
-  }).length;
-
-  const successful = activity.filter((a) => a.success !== false).length;
-  const total = activity.length;
-  const successRate = total > 0 ? Math.round((successful / total) * 1000) / 10 : 0;
-
-  const lastActivityTime = activity[0]?.timestamp || activity[0]?.createdAt || null;
-
-  return {
-    tasksToday,
-    tasksThisWeek,
-    tasksThisMonth,
-    totalTasks: total,
-    successRate,
-    lastActivityTime,
-  };
+  return new Map(
+    rows.map((r: any) => [
+      String(r._id),
+      {
+        total: r.total || 0,
+        successful: r.successful || 0,
+        today: r.today || 0,
+        week: r.week || 0,
+        month: r.month || 0,
+        lastActivity: r.lastActivity || null,
+      },
+    ])
+  );
 }
 
 export type AgentScheduleStatus = "busy" | "on_schedule" | "late" | "error" | "off_duty";
@@ -149,18 +179,21 @@ export async function GET() {
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
-    // Fetch real activity for each agent from agent_activity collection.
-    // The collection stores the agent name either as a top-level string or
-    // nested under agent.name — query both shapes.
-    const [allActivityRaw, totalActivityRecords, statusReport] = await Promise.all([
+    // Recent activity rows (for the per-agent activity feeds) sorted by the
+    // COALESCED timestamp (legacy rows only have `timestamp`), plus
+    // full-collection windowed metrics (aggregation — not a row sample).
+    const [allActivityRaw, totalActivityRecords, metricsByName, statusReport] = await Promise.all([
       db
         .collection("agent_activity")
-        .find({})
-        .sort({ timestamp: -1, createdAt: -1 })
-        .limit(500)
+        .aggregate([
+          { $addFields: { _sortTime: { $ifNull: ["$createdAt", "$timestamp"] } } },
+          { $sort: { _sortTime: -1 } },
+          { $limit: 500 },
+        ])
         .toArray(),
       // Real total — previously this reported the query's 500-row cap.
       db.collection("agent_activity").countDocuments(),
+      aggregateAgentMetrics(db),
       computeJobStatuses(db),
     ]);
 
@@ -184,20 +217,29 @@ export async function GET() {
     // Build the final agent payloads
     const agents = AGENTS.map((def) => {
       const activity = activityByName[def.name] || [];
-      const tasksToday = activity.filter((a) => {
-        const ts = new Date(a.timestamp || a.createdAt || now);
-        return ts >= todayStart;
-      }).length;
+      const agg: AgentAggMetrics = metricsByName.get(def.name) || {
+        total: 0, successful: 0, today: 0, week: 0, month: 0, lastActivity: null,
+      };
+      const tasksToday = agg.today;
 
-      const lastActivityTime =
-        activity[0]?.timestamp || activity[0]?.createdAt || null;
+      const lastActivityTime = agg.lastActivity
+        ? new Date(agg.lastActivity).toISOString()
+        : activity[0]?.timestamp || activity[0]?.createdAt || null;
       const agentJobs = jobsByAgent[def.name] || [];
       const status = deriveStatus(agentJobs, lastActivityTime, isMondayCT);
 
       const action = AGENT_ACTIONS[def.id];
       const workflow: WorkflowStep[] = AGENT_WORKFLOWS[def.id] || [];
       const tools = buildTools(def.id);
-      const metrics = buildMetrics(def.id, activity, tasksToday);
+      // Full-collection metrics: real all-time totals + windowed counts.
+      const metrics = {
+        tasksToday,
+        tasksThisWeek: agg.week,
+        tasksThisMonth: agg.month,
+        totalTasks: agg.total,
+        successRate: agg.total > 0 ? Math.round((agg.successful / agg.total) * 1000) / 10 : 0,
+        lastActivityTime,
+      };
 
       const currentTask =
         activity[0]?.activity ||

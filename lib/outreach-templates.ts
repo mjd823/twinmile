@@ -9,6 +9,8 @@
  * renderer is only a fallback for historical rows.
  */
 
+import { renderEmailLayout } from "@/lib/email-layout";
+
 // Leads come from heterogeneous collections (leads_quotes, leads_drivers,
 // outbound_prospects) with different shapes -- same loose typing as the
 // legacy script.
@@ -37,10 +39,18 @@ const PROVENANCE_HTML =
   `<p style="font-size:13px;color:#6b7280;">Quick note on how we got your info: we found your authority through the public FMCSA registry — we only reach out to active, registered carriers.</p>`;
 const PROVENANCE_TEXT =
   `(Quick note on how we got your info: we found your authority through the public FMCSA registry — we only reach out to active, registered carriers.)`;
-const CTA_HTML =
-  `<p>If you're open to it, take a look: <a href="https://twinmile.com/drive-with-us">twinmile.com/drive-with-us</a> — or just reply to this email and I'll answer whatever you want to know about rates and lanes.</p>`;
-const CTA_TEXT =
-  `If you're open to it, take a look: https://twinmile.com/drive-with-us — or just reply to this email and I'll answer whatever you want to know about rates and lanes.`;
+// First-touch CTA: link straight to the prospect's tokenized onboarding link
+// when the invite cron provided one (personalization.onboardingUrl); legacy
+// tasks without it keep the generic /drive-with-us link so re-renders of old
+// sends stay byte-identical to what actually went out.
+const ctaHtml = (p: Personalization) =>
+  p?.onboardingUrl
+    ? `<p>If you're open to it, your onboarding link is ready (about 10 minutes, saves your progress): <a href="${p.onboardingUrl}">Start onboarding</a> — or just reply to this email and I'll answer whatever you want to know about rates and lanes.</p>`
+    : `<p>If you're open to it, take a look: <a href="https://twinmile.com/drive-with-us">twinmile.com/drive-with-us</a> — or just reply to this email and I'll answer whatever you want to know about rates and lanes.</p>`;
+const ctaText = (p: Personalization) =>
+  p?.onboardingUrl
+    ? `If you're open to it, your onboarding link is ready (about 10 minutes, saves your progress): ${p.onboardingUrl} — or just reply to this email and I'll answer whatever you want to know about rates and lanes.`
+    : `If you're open to it, take a look: https://twinmile.com/drive-with-us — or just reply to this email and I'll answer whatever you want to know about rates and lanes.`;
 const SIGNOFF_HTML = `<p>Best regards,<br/>Marcus Chen<br/>Twin Mile Recruiting Team</p>`;
 const SIGNOFF_TEXT = `Best regards,\nMarcus Chen\nTwin Mile Recruiting Team`;
 
@@ -48,30 +58,30 @@ const PROSPECT_OPENERS: OpenerVariant[] = [
   {
     subject: (lead) => `${lead.name || "Your carrier"} — keeping your truck loaded`,
     html: (lead, p) =>
-      `<p>Hi ${p?.name || lead.name || "there"},</p><p>Running your own authority means the miles only pay when the truck is loaded. That's exactly the problem we solve at Twin Mile — steady freight for owner-operators, without giving up the independence you built.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>Running your own authority means the miles only pay when the truck is loaded. That's exactly the problem we solve at Twin Mile — steady freight for owner-operators, without giving up the independence you built.</p>${WHY_HTML}${ctaHtml(p)}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
     text: (lead, p) =>
-      `Hi ${p?.name || lead.name || "there"},\n\nRunning your own authority means the miles only pay when the truck is loaded. That's exactly the problem we solve at Twin Mile — steady freight for owner-operators, without giving up the independence you built.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+      `Hi ${p?.name || lead.name || "there"},\n\nRunning your own authority means the miles only pay when the truck is loaded. That's exactly the problem we solve at Twin Mile — steady freight for owner-operators, without giving up the independence you built.\n\n${WHY_TEXT}\n\n${ctaText(p)}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
   },
   {
     subject: (lead) => `Steady freight for ${lead.name || "your operation"}?`,
     html: (lead, p) =>
-      `<p>Hi ${p?.name || lead.name || "there"},</p><p>You've done the hard part — your own truck, your own authority. We'd like to handle the part that eats your evenings: keeping the calendar full. Twin Mile partners with owner-operators who want consistent loads without the load-board grind.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>You've done the hard part — your own truck, your own authority. We'd like to handle the part that eats your evenings: keeping the calendar full. Twin Mile partners with owner-operators who want consistent loads without the load-board grind.</p>${WHY_HTML}${ctaHtml(p)}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
     text: (lead, p) =>
-      `Hi ${p?.name || lead.name || "there"},\n\nYou've done the hard part — your own truck, your own authority. We'd like to handle the part that eats your evenings: keeping the calendar full. Twin Mile partners with owner-operators who want consistent loads without the load-board grind.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+      `Hi ${p?.name || lead.name || "there"},\n\nYou've done the hard part — your own truck, your own authority. We'd like to handle the part that eats your evenings: keeping the calendar full. Twin Mile partners with owner-operators who want consistent loads without the load-board grind.\n\n${WHY_TEXT}\n\n${ctaText(p)}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
   },
   {
     subject: () => `A better week of miles — Twin Mile`,
     html: (lead, p) =>
-      `<p>Hi ${p?.name || lead.name || "there"},</p><p>Most owner-operators we talk to aren't looking for a lecture about "opportunity" — they want honest rates, lanes that make sense, and dispatch that picks up the phone. That's what we run at Twin Mile, and we're adding a few more owner-operators right now.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>Most owner-operators we talk to aren't looking for a lecture about "opportunity" — they want honest rates, lanes that make sense, and dispatch that picks up the phone. That's what we run at Twin Mile, and we're adding a few more owner-operators right now.</p>${WHY_HTML}${ctaHtml(p)}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
     text: (lead, p) =>
-      `Hi ${p?.name || lead.name || "there"},\n\nMost owner-operators we talk to aren't looking for a lecture about "opportunity" — they want honest rates, lanes that make sense, and dispatch that picks up the phone. That's what we run at Twin Mile, and we're adding a few more owner-operators right now.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+      `Hi ${p?.name || lead.name || "there"},\n\nMost owner-operators we talk to aren't looking for a lecture about "opportunity" — they want honest rates, lanes that make sense, and dispatch that picks up the phone. That's what we run at Twin Mile, and we're adding a few more owner-operators right now.\n\n${WHY_TEXT}\n\n${ctaText(p)}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
   },
   {
     subject: (lead) => `${lead.name || "Your authority"} + Twin Mile — worth a look?`,
     html: (lead, p) =>
-      `<p>Hi ${p?.name || lead.name || "there"},</p><p>I'll keep this short out of respect for your drive time. Twin Mile is a Texas-based carrier partnering with owner-operators on power-only and dry van freight — steady miles, transparent pay, no games.</p>${WHY_HTML}${CTA_HTML}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
+      `<p>Hi ${p?.name || lead.name || "there"},</p><p>I'll keep this short out of respect for your drive time. Twin Mile is a Texas-based carrier partnering with owner-operators on power-only and dry van freight — steady miles, transparent pay, no games.</p>${WHY_HTML}${ctaHtml(p)}${PROVENANCE_HTML}${SIGNOFF_HTML}`,
     text: (lead, p) =>
-      `Hi ${p?.name || lead.name || "there"},\n\nI'll keep this short out of respect for your drive time. Twin Mile is a Texas-based carrier partnering with owner-operators on power-only and dry van freight — steady miles, transparent pay, no games.\n\n${WHY_TEXT}\n\n${CTA_TEXT}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
+      `Hi ${p?.name || lead.name || "there"},\n\nI'll keep this short out of respect for your drive time. Twin Mile is a Texas-based carrier partnering with owner-operators on power-only and dry van freight — steady miles, transparent pay, no games.\n\n${WHY_TEXT}\n\n${ctaText(p)}\n\n${PROVENANCE_TEXT}\n\n${SIGNOFF_TEXT}`,
   },
 ];
 
@@ -145,6 +155,130 @@ export function renderOutreachEmail(
   const t = EMAIL_TEMPLATES[templateName];
   if (!t) throw new Error(`Unknown template: ${templateName}`);
   return { subject: t.subject(lead), html: t.html(lead, p), text: t.text(lead, p) };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Branded composition — every outbound email ships inside the Twin Mile
+// layout (header/logo/teal CTA/footer). The cron sends EXACTLY this and the
+// admin preview shows EXACTLY this.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** True when html is already a complete branded document, not a fragment. */
+export function isFullEmailDocument(html: string): boolean {
+  return /^\s*<!doctype/i.test(html || "");
+}
+
+interface LayoutParams {
+  eyebrow: string;
+  title: string;
+  subtitle: string;
+  primaryCta?: { label: string; href: string };
+}
+
+function layoutParamsFor(templateName: string, lead: Lead, p: Personalization): LayoutParams {
+  const onboardingHref: string = p?.onboardingUrl || "https://twinmile.com/drive-with-us";
+  switch (templateName) {
+    case "prospect_outreach":
+      return {
+        eyebrow: "Owner-Operator Partnerships",
+        title: "Keep your truck loaded",
+        subtitle: "Steady freight for owner-operators — without giving up your independence.",
+        primaryCta: { label: "See how it works", href: onboardingHref },
+      };
+    case "onboarding_followup":
+      return {
+        eyebrow: "Owner-Operator Partnerships",
+        title: "Your onboarding link is waiting",
+        subtitle: "About 10 minutes — it saves your progress as you go.",
+        primaryCta: { label: "Start onboarding", href: onboardingHref },
+      };
+    case "quote_initial":
+    case "quote_followup":
+      return {
+        eyebrow: "Freight Quote",
+        title: "Your quote request",
+        subtitle: "Thanks for reaching out — here is where things stand.",
+        primaryCta: { label: "Get a quote", href: "https://twinmile.com/get-a-quote" },
+      };
+    case "driver_welcome":
+    case "driver_followup":
+      return {
+        eyebrow: "Drive with Twin Mile",
+        title: "Your application",
+        subtitle: "Thanks for applying to drive with Twin Mile.",
+        primaryCta: { label: "Drive with us", href: "https://twinmile.com/drive-with-us" },
+      };
+    default:
+      return {
+        eyebrow: "Twin Mile LLC",
+        title: "A note from Twin Mile",
+        subtitle: "",
+      };
+  }
+}
+
+/**
+ * Render a template AND wrap it in the branded Twin Mile layout.
+ * { subject, html, text } — html is the complete document as delivered.
+ */
+export function composeOutreachEmail(
+  templateName: string,
+  lead: Lead,
+  p: Personalization
+): { subject: string; html: string; text: string } {
+  const t = renderOutreachEmail(templateName, lead, p);
+  const params = layoutParamsFor(templateName, lead, p);
+  const html = renderEmailLayout({
+    preheader: t.subject,
+    eyebrow: params.eyebrow,
+    title: params.title,
+    subtitle: params.subtitle,
+    bodyHtml: t.html,
+    primaryCta: params.primaryCta,
+  });
+  return { subject: t.subject, html, text: t.text };
+}
+
+/**
+ * Wrap a PERSISTED body fragment (a task sent before the branded composer
+ * shipped) in the branded layout — the fragment itself is the exact copy
+ * that was delivered; the layout adds the brand chrome around it for display.
+ */
+export function composePersistedEmailHtml(
+  templateName: string,
+  subject: string,
+  fragmentHtml: string,
+  p: Personalization
+): string {
+  if (isFullEmailDocument(fragmentHtml)) return fragmentHtml;
+  const params = layoutParamsFor(templateName, {}, p || {});
+  return renderEmailLayout({
+    preheader: subject || params.title,
+    eyebrow: params.eyebrow,
+    title: params.title,
+    subtitle: params.subtitle,
+    bodyHtml: fragmentHtml,
+    primaryCta: params.primaryCta,
+  });
+}
+
+/** Wrap a reply draft's html fragment in the same branded layout. */
+export function composeReplyEmailHtml(draft: {
+  subject?: string | null;
+  html: string;
+  onboardingUrl?: string | null;
+}): string {
+  if (isFullEmailDocument(draft.html)) return draft.html;
+  return renderEmailLayout({
+    preheader: draft.subject || "Re: Drive with Twin Mile",
+    eyebrow: "Owner-Operator Partnerships",
+    title: "Good to hear from you",
+    subtitle: "Here is everything you need to take the next step.",
+    bodyHtml: draft.html,
+    primaryCta: draft.onboardingUrl
+      ? { label: "Start onboarding", href: draft.onboardingUrl }
+      : { label: "Drive with Twin Mile", href: "https://twinmile.com/drive-with-us" },
+  });
 }
 
 /**

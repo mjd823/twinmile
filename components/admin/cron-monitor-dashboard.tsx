@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { EmailPreviewFrame } from "@/components/admin/EmailPreviewFrame";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -506,6 +507,15 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
 
   return (
     <div className="space-y-2">
+      {/* Automation shows the last N sends for cron health; deep email
+          browsing (all pages, real totals, replies) lives in ONE place. */}
+      <p className="text-xs text-muted-foreground">
+        Latest {logs.length} sends —{" "}
+        <a href="/admin/outreach" className="text-primary hover:underline">
+          see all in Emails
+        </a>
+        .
+      </p>
       {logs.map((log) => (
         <Card key={log.id} className="border-border/60 hover:border-border transition-colors">
           <button
@@ -544,14 +554,7 @@ function EmailLogView({ logs }: { logs: EmailLog[] }) {
                   Email as delivered
                 </p>
                 {log.bodyHtml ? (
-                  <div className="rounded-lg overflow-hidden border border-border/60 bg-white">
-                    <iframe
-                      srcDoc={log.bodyHtml}
-                      className="w-full h-[380px] border-0"
-                      title="Email Preview"
-                      sandbox=""
-                    />
-                  </div>
+                  <EmailPreviewFrame html={log.bodyHtml} title="Email Preview" />
                 ) : log.bodyText ? (
                   <pre className="whitespace-pre-wrap break-words font-sans text-xs text-muted-foreground max-h-[380px] overflow-y-auto">
                     {log.bodyText}

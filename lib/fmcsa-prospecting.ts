@@ -422,8 +422,9 @@ export async function runFMCSAProspecting(
       safetyRating: c.safetyRating,
       powerUnits: c.powerUnits,
       drivers: c.drivers,
-      createdAt: new Date().toISOString(),
-      enrichedAt: new Date().toISOString(),
+      // BSON Dates, never ISO strings (see 2026-07 normalize migration).
+      createdAt: new Date(),
+      enrichedAt: new Date(),
     }));
 
     if (enriched.length > 0) {

@@ -62,16 +62,23 @@ const getCalendarEvents = async (): Promise<CalendarEvent[]> => {
 
     const events: CalendarEvent[] = [];
 
-    // Recent agent activities (exclude outreach_processing/cron which runs every 15min — too noisy for calendar)
-    const activities = await db
-      .collection<RawActivity>("agent_activity")
-      .find({
-        createdAt: { $gte: HISTORY_START },
-        action: { $nin: ["outreach_processing", "outreach_cron", "outreach_cron_summary", "outreach_summary", "outreach_seeding", "seed_outreach_tasks"] },
-      })
-      .sort({ createdAt: -1 })
-      .limit(500)
-      .toArray();
+    // Recent agent activities (exclude outreach_processing/cron which runs
+    // every 15min — too noisy for calendar). Sorted on the COALESCED
+    // timestamp so legacy rows that only carry `timestamp` sort correctly.
+    const activities = (await db
+      .collection("agent_activity")
+      .aggregate([
+        {
+          $match: {
+            action: { $nin: ["outreach_processing", "outreach_cron", "outreach_cron_summary", "outreach_summary", "outreach_seeding", "seed_outreach_tasks"] },
+          },
+        },
+        { $addFields: { _sortTime: { $ifNull: ["$createdAt", "$timestamp"] } } },
+        { $match: { _sortTime: { $gte: HISTORY_START } } },
+        { $sort: { _sortTime: -1 } },
+        { $limit: 500 },
+      ])
+      .toArray()) as RawActivity[];
 
     activities.forEach((a) => {
       const when = a.createdAt ?? a.timestamp;

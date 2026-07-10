@@ -139,44 +139,77 @@ export async function GET(
     const db = client.db();
     const config = AGENT_CONFIG[agentId];
     const searchName = AGENT_NAME_MAP[agentId];
-    const recentActivity = await db.collection("agent_activity")
-      .find({ $or: [{ agent: searchName }, { "agent.name": searchName }, { agentId }] })
-      .sort({ timestamp: -1 })
-      .limit(50)
-      .toArray();
-    const upcomingTasks = generateUpcomingTasks(agentId);
-    const { isBusinessHours: isBH, nextBusinessHour } = getBusinessHours();
+    const nameFilter = { $or: [{ agent: searchName }, { "agent.name": searchName }, { agentId }] };
     const now = new Date();
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0);
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-    const tasksToday = recentActivity.filter((a) => {
-      const ts = new Date(a.timestamp);
-      return ts.getDate() === now.getDate() && ts.getMonth() === now.getMonth() && ts.getFullYear() === now.getFullYear();
-    }).length;
-    const tasksThisWeek = recentActivity.filter((a) => new Date(a.timestamp) >= weekAgo).length;
-    const tasksThisMonth = recentActivity.filter((a) => new Date(a.timestamp) >= monthAgo).length;
-    const successfulTasks = recentActivity.filter((a) => a.success !== false).length;
-    const totalTasks = recentActivity.length;
-    const successRate = totalTasks > 0 ? (successfulTasks / totalTasks) * 100 : 0;
+
+    // Windowed metrics + 30-day history from aggregations over the FULL
+    // collection (not the 50-row feed sample), timestamps coalesced so legacy
+    // rows that only carry `timestamp` count too.
+    const [recentActivity, windowAggRows, dailyAgg] = await Promise.all([
+      db.collection("agent_activity").aggregate([
+        { $match: nameFilter },
+        { $addFields: { _sortTime: { $ifNull: ["$createdAt", "$timestamp"] } } },
+        { $sort: { _sortTime: -1 } },
+        { $limit: 50 },
+      ]).toArray(),
+      db.collection("agent_activity").aggregate([
+        { $match: nameFilter },
+        { $addFields: { _t: { $ifNull: ["$createdAt", "$timestamp"] } } },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: 1 },
+            successful: { $sum: { $cond: [{ $ne: ["$success", false] }, 1, 0] } },
+            today: { $sum: { $cond: [{ $gte: ["$_t", todayStart] }, 1, 0] } },
+            week: { $sum: { $cond: [{ $gte: ["$_t", weekAgo] }, 1, 0] } },
+            month: { $sum: { $cond: [{ $gte: ["$_t", monthAgo] }, 1, 0] } },
+            firstActivity: { $min: "$_t" },
+            lastActivity: { $max: "$_t" },
+          },
+        },
+      ]).toArray(),
+      db.collection("agent_activity").aggregate([
+        { $match: nameFilter },
+        { $addFields: { _t: { $ifNull: ["$createdAt", "$timestamp"] } } },
+        { $match: { _t: { $gte: monthAgo } } },
+        {
+          $group: {
+            _id: { $dateToString: { format: "%Y-%m-%d", date: "$_t", timezone: "America/Chicago" } },
+            total: { $sum: 1 },
+            successful: { $sum: { $cond: [{ $ne: ["$success", false] }, 1, 0] } },
+          },
+        },
+      ]).toArray(),
+    ]);
+    const upcomingTasks = generateUpcomingTasks(agentId);
+    const { isBusinessHours: isBH, nextBusinessHour } = getBusinessHours();
+
+    const win = windowAggRows[0] || { total: 0, successful: 0, today: 0, week: 0, month: 0, firstActivity: null, lastActivity: null };
+    const tasksToday = win.today;
+    const tasksThisWeek = win.week;
+    const tasksThisMonth = win.month;
+    const totalTasks = win.total;
+    const successRate = totalTasks > 0 ? (win.successful / totalTasks) * 100 : 0;
+
+    const dailyByDate = new Map<string, { total: number; successful: number }>(
+      dailyAgg.map((d: any) => [String(d._id), { total: d.total, successful: d.successful }])
+    );
     const performanceHistory = [];
     for (let i = 29; i >= 0; i--) {
       const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
-      const dayStart = new Date(date); dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(date); dayEnd.setHours(23, 59, 59, 999);
-      const dayActivities = recentActivity.filter((a) => {
-        const ts = new Date(a.timestamp);
-        return ts >= dayStart && ts <= dayEnd;
-      });
-      const dayTotal = dayActivities.length;
-      const daySuccessful = dayActivities.filter((a) => a.success !== false).length;
+      const key = date.toLocaleDateString("en-CA", { timeZone: "America/Chicago" });
+      const day = dailyByDate.get(key) || { total: 0, successful: 0 };
       performanceHistory.push({
-        date: date.toISOString().split("T")[0],
-        tasksCompleted: dayTotal,
-        successRate: dayTotal > 0 ? (daySuccessful / dayTotal) * 100 : 100,
+        date: key,
+        tasksCompleted: day.total,
+        successRate: day.total > 0 ? (day.successful / day.total) * 100 : 100,
       });
     }
     const currentTask = recentActivity.length > 0 ? recentActivity[0].activity || recentActivity[0].action || "No current task" : "No current task";
-    const lastActivity = recentActivity.length > 0 ? recentActivity[0].timestamp : null;
+    const lastActivity = win.lastActivity || null;
     const nextTaskTime = isBH ? new Date(now.getTime() + 60 * 60 * 1000).toISOString() : nextBusinessHour.toISOString();
     const cfg = AGENT_CONFIG[agentId];
     const response = {
@@ -187,9 +220,9 @@ export async function GET(
       color: cfg.color,
       reportsTo: cfg.reportsTo,
       metrics: { tasksToday, tasksThisWeek, tasksThisMonth, successRate: Math.round(successRate * 10) / 10, avgTaskDuration: 0, lastActivity, currentTask, nextScheduledTask: nextTaskTime },
-      recentActivity: recentActivity.map((a) => ({ id: a._id?.toString() || "", type: a.type || a.action || "activity", description: a.activity || a.action || "Activity performed", details: a.details || {}, timestamp: a.timestamp, success: a.success !== false })),
+      recentActivity: recentActivity.map((a) => ({ id: a._id?.toString() || "", type: a.type || a.action || "activity", description: a.activity || a.action || "Activity performed", details: a.details || {}, timestamp: a._sortTime || a.timestamp || a.createdAt, success: a.success !== false })),
       upcomingTasks: upcomingTasks.slice(0, 10),
-      kpis: { tasksCompleted: totalTasks, successRate: Math.round(successRate * 10) / 10, avgDuration: 0, activeSince: recentActivity.length > 0 ? new Date(Math.min(...recentActivity.map((a) => new Date(a.timestamp).getTime()))).toISOString() : new Date().toISOString() },
+      kpis: { tasksCompleted: totalTasks, successRate: Math.round(successRate * 10) / 10, avgDuration: 0, activeSince: win.firstActivity ? new Date(win.firstActivity).toISOString() : new Date().toISOString() },
       performanceHistory,
       upcomingTasksList: upcomingTasks.slice(0, 10),
       businessHours: { isBusinessHours: isBH, nextBusinessHour: nextBusinessHour.toISOString() },

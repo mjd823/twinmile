@@ -303,13 +303,17 @@ export async function GET(req: Request) {
     weekStart.setDate(weekStart.getDate() - dow);
     weekStart.setHours(0, 0, 0, 0);
 
-    // Pull recent activity (last 500 docs, newest first) — same pattern as
-    // /api/admin/agents so the shapes line up even if field names vary.
+    // Pull the FULL activity window for this timesheet week (coalesced
+    // timestamp, newest first) — no arbitrary row cap that could clip a busy
+    // week's counts.
+    const windowStart = new Date(weekStart.getTime() - 24 * 60 * 60 * 1000);
     const allActivityRaw: any[] = await db
       .collection("agent_activity")
-      .find({})
-      .sort({ createdAt: -1, timestamp: -1 })
-      .limit(800)
+      .aggregate([
+        { $addFields: { _sortTime: { $ifNull: ["$createdAt", "$timestamp"] } } },
+        { $match: { _sortTime: { $gte: windowStart } } },
+        { $sort: { _sortTime: -1 } },
+      ])
       .toArray();
 
     // Normalize order after fetch because legacy rows may use timestamp while newer rows use createdAt.

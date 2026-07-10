@@ -435,7 +435,7 @@ export async function runProspectPriorities(
             sourceTags: mergedTags,
             insuranceLapse: tags.includes("fmcsa-insurance-lapse"),
             newAuthority: tags.includes("fmcsa-new-authority"),
-            priorityUpdatedAt: now.toISOString(),
+            priorityUpdatedAt: now,
           },
         }
       );
@@ -498,9 +498,10 @@ export async function runProspectPriorities(
             bipdOnFile: parseFloat(candidate.motus.bipd_file || "0") || 0,
           }
         : null,
-      createdAt: now.toISOString(),
-      enrichedAt: now.toISOString(),
-      priorityUpdatedAt: now.toISOString(),
+      // BSON Dates, never ISO strings (see 2026-07 normalize migration).
+      createdAt: now,
+      enrichedAt: now,
+      priorityUpdatedAt: now,
     });
     inserted++;
     insertedByTag[tag] = (insertedByTag[tag] || 0) + 1;

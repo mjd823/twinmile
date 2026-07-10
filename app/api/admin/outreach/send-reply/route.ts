@@ -3,6 +3,7 @@ import { ObjectId } from "mongodb";
 import { Resend } from "resend";
 import clientPromise from "@/lib/mongodb";
 import { getAuthUser } from "@/lib/auth/session";
+import { composeReplyEmailHtml } from "@/lib/outreach-templates";
 
 /**
  * POST /api/admin/outreach/send-reply
@@ -67,7 +68,12 @@ export async function POST(request: NextRequest) {
     const draft = reply.draftResponse || {};
     const subject = String(body.subject || draft.subject || "Re: Drive with Twin Mile");
     const text = String(body.text || draft.text || "");
-    const html = String(body.html || draft.html || "");
+    const rawHtml = String(body.html || draft.html || "");
+    // Wrap the draft fragment in the branded Twin Mile layout (no-op when the
+    // html is already a complete document) so replies match outreach emails.
+    const html = rawHtml
+      ? composeReplyEmailHtml({ subject, html: rawHtml, onboardingUrl: draft.onboardingUrl })
+      : "";
     if (!text && !html) {
       return NextResponse.json(
         { ok: false, error: "No draft content to send — provide text or html" },

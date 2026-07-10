@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUser } from "@/lib/auth/session";
 import clientPromise from "@/lib/mongodb";
+import { getPipelineCounts } from "@/lib/pipeline-stages";
 
 /**
  * POST /api/admin/supervisor/chat
@@ -30,21 +31,22 @@ export async function POST(req: Request) {
 
     let response = "";
 
-    // Pipeline status queries
+    // Pipeline status queries — answered from the SAME canonical counts the
+    // screens render (lib/pipeline-stages), so the chat can never contradict
+    // the Recruiting Pipeline page or the hub.
     if (message.includes("pipeline") || message.includes("status") || message.includes("overview")) {
-      const total = await db.collection("outbound_prospects").countDocuments();
-      const qualified = await db.collection("outbound_prospects").countDocuments({ aiScore: { $gte: 75 } });
-      const newProspects = await db.collection("outbound_prospects").countDocuments({ status: "new" });
-      const reviewed = await db.collection("outbound_prospects").countDocuments({ status: "reviewed" });
-      const invited = await db.collection("outbound_prospects").countDocuments({ status: "onboarding_invited" });
-      const sessions = await db.collection("onboarding_sessions").countDocuments();
-      const clicked = await db.collection("onboarding_sessions").countDocuments({ firstClickedAt: { $exists: true } });
-      const withEmail = await db.collection("outbound_prospects").countDocuments({ "contact.email": { $exists: true } });
-      const coldCall = await db.collection("outbound_prospects").countDocuments({
-        status: "reviewed", "contact.email": { $exists: false }, "contact.phone": { $exists: true }
-      });
+      const counts = await getPipelineCounts(db);
+      const funnelLines = counts.stages
+        .map(
+          (s) =>
+            `• ${s.label}: **${s.reached.toLocaleString()}** reached · ${s.inStage.toLocaleString()} ${s.inStageLabel} now${s.anomaly ? " ⚠️ anomaly" : ""}`
+        )
+        .join("\n");
+      const awaitingInvite = counts.stages.find((s) => s.key === "qualified")?.inStage ?? 0;
+      const engaged = counts.stages.find((s) => s.key === "engaged")?.reached ?? 0;
+      const offFunnel = counts.offFunnel.map((b) => `${b.label}: ${b.count}`).join(" | ");
 
-      response = `📊 **Pipeline Status**\n\n• Total Prospects: ${total}\n• Qualified (≥75): ${qualified}\n• New: ${newProspects} | Reviewed: ${reviewed} | Invited: ${invited}\n• Onboarding Sessions: ${sessions} | Clicked: ${clicked}\n• With Email: ${withEmail} | Cold Call Queue: ${coldCall}\n\n${invited > 0 && clicked === 0 ? "⚠️ You have invited prospects but none have clicked the link yet. Consider following up." : ""}\n${qualified > invited ? `⚠️ ${qualified - invited} qualified prospects haven't been invited to onboarding yet.` : "✅ All qualified prospects have been invited."}`;
+      response = `📊 **Pipeline Status** (reached = cumulative funnel, second number = parked there now)\n\n${funnelLines}\n\nOff funnel — ${offFunnel}\n\n${engaged === 0 && (counts.stages[2]?.reached ?? 0) > 0 ? "⚠️ Invited prospects exist but nobody has clicked yet. Consider follow-ups." : ""}\n${awaitingInvite > 0 ? `ℹ️ ${awaitingInvite} qualified prospect(s) are awaiting an invite (the invite cron sends these when outreach automation is live).` : "✅ No qualified prospects waiting on an invite."}${counts.hasAnomaly ? "\n\n🚨 A stage exceeds the previous stage's cumulative count — data drift, investigate." : ""}`;
     }
 
     // Email queries
@@ -139,7 +141,7 @@ export async function POST(req: Request) {
     // Cold call queue
     else if (message.includes("cold call") || message.includes("phone") || message.includes("no email")) {
       const coldCall = await db.collection("outbound_prospects").find({
-        status: "reviewed",
+        status: "qualified",
         "contact.email": { $exists: false },
         "contact.phone": { $exists: true },
       }).sort({ aiScore: -1 }).limit(10).toArray();

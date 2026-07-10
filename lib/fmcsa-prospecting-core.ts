@@ -379,8 +379,10 @@ export async function runFmcsaProspecting(
     powerUnits: parseInt(c.power_units || "0", 10),
     drivers: parseInt(c.total_drivers || "0", 10),
     interstate: c.interstate_beyond_100_miles === "1",
-    createdAt: now.toISOString(),
-    enrichedAt: now.toISOString(),
+    // BSON Dates, never ISO strings — string createdAt broke newest-first
+    // sorting across the whole admin (BSON sorts Date > String).
+    createdAt: now,
+    enrichedAt: now,
   }));
 
   // Insert only DOT numbers still absent (re-check right before write).

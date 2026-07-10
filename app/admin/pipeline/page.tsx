@@ -1,40 +1,10 @@
-import { requireRole } from "@/lib/auth/session";
-import { PipelineFlowDashboard } from "@/components/admin/pipeline-flow-dashboard";
-import { getPipelineFunnelData } from "@/lib/admin-pipeline-data";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-export const metadata = {
-  title: "Pipeline Flow | Twin Mile Admin",
-};
-
-export default async function PipelineFlowPage() {
-  const user = await requireRole("admin");
-  if (!user) return null;
-
-  let data;
-  try {
-    data = JSON.parse(JSON.stringify(await getPipelineFunnelData()));
-  } catch (error) {
-    console.error("[pipeline-flow-page] Failed to load pipeline data:", error);
-    const message = error instanceof Error ? error.message : "Unknown error";
-    return (
-      <main className="mx-auto w-full max-w-6xl px-5 py-6">
-        <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-6">
-          <h2 className="text-lg font-semibold text-red-400">Pipeline data unavailable</h2>
-          <p className="text-sm text-muted-foreground mt-2">
-            {message.includes("snappy") ? "Database compression error — please contact support." : "Could not connect to the database. Please try refreshing."}
-          </p>
-          <p className="text-xs text-muted-foreground mt-2 font-mono">{message.substring(0, 200)}</p>
-        </div>
-      </main>
-    );
-  }
-
-  return (
-    <main className="mx-auto w-full max-w-6xl px-5 py-6">
-      <PipelineFlowDashboard initialData={data} />
-    </main>
-  );
+/**
+ * /admin/pipeline merged into /admin/lead-engine (Recruiting Pipeline).
+ * Two pages both claiming to be "the pipeline" with different numbers was the
+ * worst source of confusion — there is now exactly one.
+ */
+export default function PipelineRedirect() {
+  redirect("/admin/lead-engine");
 }

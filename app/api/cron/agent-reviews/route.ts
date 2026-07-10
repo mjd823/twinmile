@@ -90,7 +90,9 @@ export async function GET(request: NextRequest) {
     ] = await Promise.all([
       db.collection("outbound_prospects").countDocuments(),
       db.collection("outbound_prospects").countDocuments({ aiScore: { $gte: 75 } }),
-      db.collection("outbound_prospects").countDocuments({ status: "reviewed", aiScore: { $gte: 75 } }),
+      // "Awaiting invite": status "qualified" is what the invite cron consumes
+      // (legacy "reviewed" was migrated to "qualified" in 2026-07).
+      db.collection("outbound_prospects").countDocuments({ status: "qualified", aiScore: { $gte: 75 } }),
       db.collection("outbound_prospects").countDocuments({ status: "onboarding_invited" }),
       db.collection("outbound_prospects").countDocuments(sinceFilter("createdAt", dayAgo)),
       db.collection("outreach_tasks").countDocuments({ status: "sent", sentAt: { $gte: dayAgo } }),

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,9 +26,17 @@ import {
   UserCheck,
   Sparkles,
   AlertTriangle,
-  ChevronRight,
+  ArrowUpRight,
+  Loader2,
 } from "lucide-react";
-import type { OutreachDashboardData, SentEmailRow, ReplyRow, FunnelEntry, FunnelStageKey } from "@/lib/outreach-data";
+import { Pager } from "@/components/admin/Pager";
+import { EmailPreviewFrame } from "@/components/admin/EmailPreviewFrame";
+import type {
+  OutreachDashboardData,
+  SentEmailRow,
+  ReplyRow,
+  OutreachStatusFilter,
+} from "@/lib/outreach-data";
 
 function fmt(dateIso: string): string {
   if (!dateIso) return "—";
@@ -46,9 +55,11 @@ function fmt(dateIso: string): string {
 const STATUS_STYLES: Record<string, string> = {
   sent: "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
   failed: "border-red-500/30 bg-red-500/10 text-red-500",
+  skipped: "border-red-500/20 bg-red-500/5 text-red-400",
   retrying: "border-amber-500/30 bg-amber-500/10 text-amber-500",
   pending: "border-sky-500/30 bg-sky-500/10 text-sky-500",
   sending: "border-sky-500/30 bg-sky-500/10 text-sky-500",
+  drafted: "border-sky-500/30 bg-sky-500/10 text-sky-500",
   received: "border-sky-500/30 bg-sky-500/10 text-sky-500",
   responded: "border-emerald-500/30 bg-emerald-500/10 text-emerald-500",
 };
@@ -66,123 +77,36 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-const FUNNEL_STAGES: {
-  key: FunnelStageKey;
-  label: string;
-  icon: React.ElementType;
-  timeLabel: string;
-}[] = [
-  { key: "new", label: "New", icon: Sparkles, timeLabel: "Found" },
-  { key: "reviewed", label: "Reviewed", icon: CheckCircle2, timeLabel: "Found" },
-  { key: "invited", label: "Invited", icon: Mail, timeLabel: "Invited" },
-  { key: "clicked", label: "Clicked", icon: MousePointerClick, timeLabel: "Clicked" },
-  { key: "replied", label: "Replied", icon: Reply, timeLabel: "Replied" },
-  { key: "onboarded", label: "Onboarded", icon: UserCheck, timeLabel: "Completed" },
-];
+// ─────────────────────────────────────────────────────────────────────────────
+// Header stats — every number labeled with its window, all-time totals real
+// ─────────────────────────────────────────────────────────────────────────────
 
-function FunnelHeader({
-  funnel,
-  stageDetails,
-  inboundConfigured,
-}: {
-  funnel: OutreachDashboardData["funnel"];
-  stageDetails: OutreachDashboardData["stageDetails"] | undefined;
-  inboundConfigured: boolean;
-}) {
-  const [openStage, setOpenStage] = React.useState<FunnelStageKey | null>(null);
-  const stageDef = FUNNEL_STAGES.find((s) => s.key === openStage) || null;
-  const rows: FunnelEntry[] = (openStage && stageDetails?.[openStage]) || [];
-
+function StatChips({ stats }: { stats: OutreachDashboardData["emailStats"] }) {
+  const chips = [
+    { label: "sent all-time", value: stats.sentAllTime, tone: "text-emerald-500" },
+    { label: "sent last 24h", value: stats.sent24h, tone: "text-emerald-400" },
+    { label: "queued (paused)", value: stats.queued, tone: "text-sky-500" },
+    { label: "failed", value: stats.failed, tone: "text-red-500" },
+  ];
   return (
-    <>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {FUNNEL_STAGES.map((stage, i) => {
-          const Icon = stage.icon;
-          return (
-            <button
-              key={stage.key}
-              type="button"
-              onClick={() => setOpenStage(stage.key)}
-              className="text-left"
-              title={`See who is at the ${stage.label} stage`}
-            >
-              <Card className="relative h-full overflow-hidden transition-colors hover:border-primary/40">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    <Icon className="h-3.5 w-3.5" />
-                    {stage.label}
-                  </div>
-                  <div className="mt-1 text-3xl font-bold tabular-nums">
-                    {funnel[stage.key]}
-                  </div>
-                  {stage.key === "replied" && !inboundConfigured && (
-                    <div className="mt-1 text-[10px] leading-tight text-amber-500">
-                      counts start once the Resend inbound webhook is live
-                    </div>
-                  )}
-                  {i < FUNNEL_STAGES.length - 1 && (
-                    <ChevronRight className="absolute right-1 top-1/2 hidden h-4 w-4 -translate-y-1/2 text-muted-foreground/40 lg:block" />
-                  )}
-                </CardContent>
-              </Card>
-            </button>
-          );
-        })}
-      </div>
-      <p className="text-[11px] text-muted-foreground -mt-3">
-        Click any stage to see exactly who is there. All times Central (CT).
-      </p>
-
-      {/* Stage drill-down */}
-      <Dialog open={Boolean(openStage)} onOpenChange={(open) => !open && setOpenStage(null)}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          {stageDef && (
-            <>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <stageDef.icon className="h-4 w-4" />
-                  {stageDef.label} — {funnel[stageDef.key]} prospect{funnel[stageDef.key] === 1 ? "" : "s"}
-                </DialogTitle>
-                <DialogDescription>
-                  {stageDef.key === "clicked"
-                    ? "Prospects who clicked their onboarding link — these are your warmest leads."
-                    : stageDef.key === "replied"
-                      ? "Inbound replies captured by the Resend webhook."
-                      : `Everyone currently at the ${stageDef.label.toLowerCase()} stage.`}
-                  {rows.length >= 200 && " Showing the 200 most recent."}
-                </DialogDescription>
-              </DialogHeader>
-              {rows.length === 0 ? (
-                <p className="py-6 text-center text-sm text-muted-foreground">
-                  {stageDef.key === "replied" && !inboundConfigured
-                    ? "No replies captured yet — reply capture activates once the Resend inbound webhook is configured."
-                    : "Nobody here yet."}
-                </p>
-              ) : (
-                <div className="divide-y divide-border/40 rounded-md border border-border/60">
-                  {rows.map((r, i) => (
-                    <div key={i} className="flex items-center justify-between gap-3 px-3 py-2">
-                      <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{r.name}</div>
-                        {r.detail && (
-                          <div className="truncate text-xs text-muted-foreground">{r.detail}</div>
-                        )}
-                      </div>
-                      <div className="shrink-0 text-right text-[11px] text-muted-foreground">
-                        <div>{stageDef.timeLabel}</div>
-                        <div className="font-medium text-foreground">{fmt(r.at)}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-    </>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      {chips.map((c) => (
+        <Card key={c.label}>
+          <CardContent className="p-3.5">
+            <div className={cn("text-2xl font-bold tabular-nums", c.tone)}>
+              {c.value.toLocaleString()}
+            </div>
+            <div className="mt-0.5 text-xs text-muted-foreground">{c.label}</div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Timeline (unchanged concept: strictly chronological, plain English)
+// ─────────────────────────────────────────────────────────────────────────────
 
 interface TimelineEvent {
   label: string;
@@ -190,13 +114,6 @@ interface TimelineEvent {
   icon: React.ElementType;
 }
 
-/**
- * The prospect timeline, strictly chronological with plain-English labels.
- * "Invited (link created)" is when the onboarding session/token was minted —
- * which can be DAYS before "Invite email delivered" (when Resend actually
- * sent it). Rendering them in true time order keeps the sequence readable
- * instead of "email sent July 8, invited June 28".
- */
 function ProspectTimeline({ email }: { email: SentEmailRow }) {
   const events: TimelineEvent[] = [
     { label: "Invited (onboarding link created)", at: email.timeline.invitedAt, icon: UserCheck },
@@ -241,6 +158,17 @@ function ProspectTimeline({ email }: { email: SentEmailRow }) {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Email detail — the REAL branded email, fetched from the preview endpoint
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface PreviewPayload {
+  subject: string;
+  html: string;
+  text: string;
+  source: "persisted" | "recomposed" | "unavailable";
+}
+
 function EmailDetailDialog({
   email,
   onClose,
@@ -248,13 +176,46 @@ function EmailDetailDialog({
   email: SentEmailRow | null;
   onClose: () => void;
 }) {
+  const [preview, setPreview] = React.useState<PreviewPayload | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState("");
+
+  React.useEffect(() => {
+    if (!email) {
+      setPreview(null);
+      setError("");
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/admin/outreach/preview?taskId=${email.id}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled) return;
+        if (!json.ok) throw new Error(json.error || "Preview failed");
+        setPreview(json);
+        setError("");
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Preview failed");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [email]);
+
   return (
     <Dialog open={Boolean(email)} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[88vh] max-w-2xl overflow-y-auto">
         {email && (
           <>
             <DialogHeader>
-              <DialogTitle className="pr-6">{email.subject || "(no subject)"}</DialogTitle>
+              <DialogTitle className="pr-6">
+                {preview?.subject || email.subject || "(no subject)"}
+              </DialogTitle>
               <DialogDescription>
                 To <span className="font-medium text-foreground">{email.leadName}</span>{" "}
                 &lt;{email.recipient || "no email"}&gt; · template{" "}
@@ -266,14 +227,16 @@ function EmailDetailDialog({
               <StatusBadge status={email.status} />
               {email.sentAt ? <span>Sent {fmt(email.sentAt)}</span> : <span>Scheduled {fmt(email.scheduledAt)}</span>}
               {email.replyTo && <span>· replies to {email.replyTo}</span>}
-              <span>
-                ·{" "}
-                {email.bodySource === "persisted"
-                  ? "exact copy as sent"
-                  : email.bodySource === "rendered"
-                    ? "re-rendered from template (sent before copies were stored)"
-                    : "content unavailable"}
-              </span>
+              {preview && (
+                <span>
+                  ·{" "}
+                  {preview.source === "persisted"
+                    ? "exact copy as sent"
+                    : preview.source === "recomposed"
+                      ? "re-rendered from template (sent before copies were stored)"
+                      : "content unavailable"}
+                </span>
+              )}
             </div>
 
             {email.status === "failed" && email.error && (
@@ -285,33 +248,28 @@ function EmailDetailDialog({
               </div>
             )}
 
-            <div className="rounded-md border border-border/60 bg-muted/30 p-4">
+            <div className="rounded-md border border-border/60 bg-muted/30 p-3 sm:p-4">
               <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 Email as the recipient sees it
               </div>
-              {email.bodyHtml ? (
-                <div className="overflow-hidden rounded-md border border-border/60 bg-white">
-                  <iframe
-                    srcDoc={email.bodyHtml}
-                    title="Email preview"
-                    sandbox=""
-                    className="h-[360px] w-full border-0"
-                  />
+              {loading ? (
+                <div className="flex h-40 items-center justify-center text-muted-foreground">
+                  <Loader2 className="h-5 w-5 animate-spin" />
                 </div>
-              ) : email.body ? (
-                <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
-                  {email.body}
-                </pre>
+              ) : error ? (
+                <p className="text-sm text-red-400">{error}</p>
+              ) : preview?.html ? (
+                <EmailPreviewFrame html={preview.html} />
               ) : (
                 <p className="text-sm text-muted-foreground">Body not available for this task.</p>
               )}
-              {email.bodyHtml && email.body && (
+              {preview?.text && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
                     Show plain-text version
                   </summary>
                   <pre className="mt-2 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-muted-foreground">
-                    {email.body}
+                    {preview.text}
                   </pre>
                 </details>
               )}
@@ -344,93 +302,145 @@ function EmailDetailDialog({
   );
 }
 
-function SentEmailsTab({ emails }: { emails: SentEmailRow[] }) {
-  const [selected, setSelected] = React.useState<SentEmailRow | null>(null);
+// ─────────────────────────────────────────────────────────────────────────────
+// Sent tab — paginated, newest first, real totals, status filter
+// ─────────────────────────────────────────────────────────────────────────────
 
-  if (emails.length === 0) {
-    return (
-      <Card>
-        <CardContent className="p-8 text-center text-sm text-muted-foreground">
-          No outreach emails yet. Tasks queued by the agents will show here once processed.
-        </CardContent>
-      </Card>
-    );
-  }
+const FILTERS: { key: OutreachStatusFilter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "sent", label: "Sent" },
+  { key: "queued", label: "Queued" },
+  { key: "failed", label: "Failed" },
+];
+
+function SentEmailsTab({ data }: { data: OutreachDashboardData }) {
+  const [selected, setSelected] = React.useState<SentEmailRow | null>(null);
+  const { sent, statusFilter } = data;
+  const makeHref = (page: number) =>
+    `/admin/outreach?status=${statusFilter}&page=${page}`;
 
   return (
-    <>
-      {/* Desktop table */}
-      <div className="hidden overflow-x-auto rounded-lg border border-border/60 md:block">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border/60 bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-4 py-3 font-medium">Recipient</th>
-              <th className="px-4 py-3 font-medium">Subject</th>
-              <th className="px-4 py-3 font-medium">Template</th>
-              <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">Sent</th>
-            </tr>
-          </thead>
-          <tbody>
-            {emails.map((e) => (
-              <tr
-                key={e.id}
-                className="cursor-pointer border-b border-border/40 transition-colors last:border-0 hover:bg-accent/50"
-                onClick={() => setSelected(e)}
-              >
-                <td className="px-4 py-3">
-                  <div className="font-medium">{e.leadName}</div>
-                  <div className="text-xs text-muted-foreground">{e.recipient || "no email"}</div>
-                </td>
-                <td className="max-w-[280px] truncate px-4 py-3">{e.subject || "—"}</td>
-                <td className="px-4 py-3">
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{e.template}</code>
-                </td>
-                <td className="px-4 py-3">
-                  <StatusBadge status={e.status} />
-                  {e.status === "failed" && e.error && (
-                    <div className="mt-1 max-w-[200px] truncate text-xs text-red-400" title={e.error}>
-                      {e.error}
-                    </div>
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                  {fmt(e.sentAt || e.scheduledAt)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile cards */}
-      <div className="grid gap-2 md:hidden">
-        {emails.map((e) => (
-          <button
-            key={e.id}
-            className="rounded-lg border border-border/60 bg-card p-3 text-left transition-colors hover:bg-accent/50"
-            onClick={() => setSelected(e)}
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {FILTERS.map((f) => (
+          <Link
+            key={f.key}
+            href={`/admin/outreach?status=${f.key}&page=1`}
+            className={cn(
+              "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+              statusFilter === f.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted"
+            )}
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate font-medium">{e.leadName}</div>
-                <div className="truncate text-xs text-muted-foreground">{e.recipient || "no email"}</div>
-              </div>
-              <StatusBadge status={e.status} />
-            </div>
-            <div className="mt-1.5 truncate text-sm text-muted-foreground">{e.subject || "—"}</div>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <Clock className="h-3 w-3" />
-              {fmt(e.sentAt || e.scheduledAt)}
-            </div>
-          </button>
+            {f.label}
+          </Link>
         ))}
       </div>
 
+      <Pager
+        page={sent.page}
+        pageCount={sent.pageCount}
+        pageSize={sent.pageSize}
+        total={sent.total}
+        makeHref={makeHref}
+      />
+
+      {sent.rows.length === 0 ? (
+        <Card>
+          <CardContent className="p-8 text-center text-sm text-muted-foreground">
+            No emails here. Queued outreach shows once tasks exist; sending stays paused until the
+            system is production-ready.
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Desktop table */}
+          <div className="hidden overflow-x-auto rounded-lg border border-border/60 md:block">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border/60 bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-4 py-3 font-medium">Recipient</th>
+                  <th className="px-4 py-3 font-medium">Subject</th>
+                  <th className="px-4 py-3 font-medium">Template</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Sent</th>
+                </tr>
+              </thead>
+              <tbody>
+                {sent.rows.map((e) => (
+                  <tr
+                    key={e.id}
+                    className="cursor-pointer border-b border-border/40 transition-colors last:border-0 hover:bg-accent/50"
+                    onClick={() => setSelected(e)}
+                  >
+                    <td className="px-4 py-3">
+                      <div className="font-medium">{e.leadName}</div>
+                      <div className="text-xs text-muted-foreground">{e.recipient || "no email"}</div>
+                    </td>
+                    <td className="max-w-[280px] truncate px-4 py-3">{e.subject || "—"}</td>
+                    <td className="px-4 py-3">
+                      <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{e.template}</code>
+                    </td>
+                    <td className="px-4 py-3">
+                      <StatusBadge status={e.status} />
+                      {e.status === "failed" && e.error && (
+                        <div className="mt-1 max-w-[200px] truncate text-xs text-red-400" title={e.error}>
+                          {e.error}
+                        </div>
+                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                      {fmt(e.sentAt || e.scheduledAt || e.createdAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="grid gap-2 md:hidden">
+            {sent.rows.map((e) => (
+              <button
+                key={e.id}
+                className="rounded-lg border border-border/60 bg-card p-3 text-left transition-colors hover:bg-accent/50"
+                onClick={() => setSelected(e)}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{e.leadName}</div>
+                    <div className="truncate text-xs text-muted-foreground">{e.recipient || "no email"}</div>
+                  </div>
+                  <StatusBadge status={e.status} />
+                </div>
+                <div className="mt-1.5 truncate text-sm text-muted-foreground">{e.subject || "—"}</div>
+                <div className="mt-1 flex items-center gap-2 text-[11px] text-muted-foreground">
+                  <Clock className="h-3 w-3" />
+                  {fmt(e.sentAt || e.scheduledAt || e.createdAt)}
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <Pager
+            page={sent.page}
+            pageCount={sent.pageCount}
+            pageSize={sent.pageSize}
+            total={sent.total}
+            makeHref={makeHref}
+          />
+        </>
+      )}
+
       <EmailDetailDialog email={selected} onClose={() => setSelected(null)} />
-    </>
+    </div>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Replies
+// ─────────────────────────────────────────────────────────────────────────────
 
 function ReplyCard({
   reply,
@@ -517,9 +527,15 @@ function ReplyCard({
               Suggested response {alreadySent ? "(sent)" : "(draft — not sent)"}
             </div>
             <div className="text-sm font-medium">{reply.draftResponse.subject}</div>
-            <pre className="mt-1 whitespace-pre-wrap break-words font-sans text-sm text-muted-foreground">
-              {reply.draftResponse.text}
-            </pre>
+            {reply.draftResponse.html ? (
+              <div className="mt-2">
+                <EmailPreviewFrame html={reply.draftResponse.html} minHeight={280} title="Reply draft preview" />
+              </div>
+            ) : (
+              <pre className="mt-1 whitespace-pre-wrap break-words font-sans text-sm text-muted-foreground">
+                {reply.draftResponse.text}
+              </pre>
+            )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               {alreadySent ? (
                 <span className="inline-flex items-center gap-1.5 text-xs text-emerald-500">
@@ -589,6 +605,10 @@ function RepliesTab({
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Page shell
+// ─────────────────────────────────────────────────────────────────────────────
+
 export function OutreachDashboard({ initialData }: { initialData: OutreachDashboardData }) {
   const [replies, setReplies] = React.useState<ReplyRow[]>(initialData.replies);
 
@@ -604,32 +624,36 @@ export function OutreachDashboard({ initialData }: { initialData: OutreachDashbo
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Outreach</h1>
-        <p className="text-sm text-muted-foreground">
-          Who we emailed, exactly what each email said, where every prospect sits, and their
-          replies.
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Emails</h1>
+          <p className="text-sm text-muted-foreground">
+            Every outreach email — who we contacted, exactly what they saw, and their replies.
+          </p>
+        </div>
+        <Link
+          href="/admin/lead-engine"
+          className="inline-flex items-center gap-1 text-sm text-primary hover:underline"
+        >
+          Pipeline view → Recruiting Pipeline
+          <ArrowUpRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
 
-      <FunnelHeader
-        funnel={initialData.funnel}
-        stageDetails={initialData.stageDetails}
-        inboundConfigured={initialData.inboundConfigured}
-      />
+      <StatChips stats={initialData.emailStats} />
 
       <Tabs defaultValue="sent">
-        <TabsList aria-label="Outreach views">
+        <TabsList aria-label="Email views">
           <TabsTrigger value="sent">
-            Sent emails ({initialData.sentEmails.length})
+            Emails ({initialData.sent.total.toLocaleString()})
           </TabsTrigger>
           <TabsTrigger value="replies">
-            Replies ({replies.length}
+            Replies ({initialData.repliesTotal.toLocaleString()}
             {pendingDrafts > 0 ? `, ${pendingDrafts} to answer` : ""})
           </TabsTrigger>
         </TabsList>
         <TabsContent value="sent">
-          <SentEmailsTab emails={initialData.sentEmails} />
+          <SentEmailsTab data={initialData} />
         </TabsContent>
         <TabsContent value="replies">
           <RepliesTab
@@ -640,6 +664,11 @@ export function OutreachDashboard({ initialData }: { initialData: OutreachDashbo
           />
         </TabsContent>
       </Tabs>
+
+      <p className="text-[11px] text-muted-foreground">
+        Note: until RESEND_FROM_EMAIL is set to a verified twinmile.com sender in Resend, real
+        inboxes show the sender as onboarding@resend.dev.
+      </p>
     </div>
   );
 }

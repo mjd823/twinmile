@@ -1,269 +1,275 @@
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
-import { LeadEngineV2, type PipelineStats } from "@/components/admin/LeadEngineV2";
+import {
+  getPipelineCounts,
+  getQuoteStageCounts,
+  stageForProspect,
+  ENGAGED_SESSION_FILTER,
+} from "@/lib/pipeline-stages";
+import { paginatedList, parsePage } from "@/lib/paginate";
+import {
+  RecruitingPipeline,
+  type PipelineTab,
+  type ProspectRow,
+  type EngagedRow,
+  type ActivityRow,
+} from "@/components/admin/RecruitingPipeline";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Lead Engine - Twin Mile Admin",
+  title: "Recruiting Pipeline - Twin Mile Admin",
   robots: { index: false, follow: false },
 };
 
-// Serialize MongoDB docs so ObjectIds and Dates become plain strings.
-// createdAt in outbound_prospects is a string on ~450 legacy docs and a Date
-// on the rest — normalize both without ever throwing on odd values.
-function isoDate(value: any): string {
+/**
+ * Recruiting Pipeline — the ONE pipeline page.
+ * /admin/pipeline, /admin/inbox and /admin/dashboard/recruiting redirect here.
+ *
+ * Every count comes from lib/pipeline-stages.getPipelineCounts (full
+ * collections), every list is paginated newest-first with its REAL total.
+ */
+
+const ACTION_LABELS: Record<string, string> = {
+  outreach_processing: "Processing Outreach Tasks",
+  outreach_cron: "Outreach Task Processed",
+  outreach_cron_summary: "Outreach Run Summary",
+  outreach_summary: "Outreach Summary",
+  outreach_requeue: "Outreach Requeued",
+  fmcsa_prospecting: "FMCSA Carrier Search",
+  outbound_prospecting: "Prospecting Run",
+  web_prospecting: "Web Search Prospecting",
+  browser_prospecting: "Browser Research",
+  onboarding_invite: "Onboarding Invitation Sent",
+  auto_onboarding_invite: "Onboarding Invitation Sent",
+  daily_ai_ops: "Daily Operations Review",
+  daily_ops: "Operations Review",
+  daily_sales_review: "Sales Strategy Review",
+  daily_ops_check: "Operations Check",
+  hr_onboarding_review: "HR Onboarding Review",
+  onboarding_link_clicked: "Onboarding Link Clicked",
+  prospect_reply_received: "Prospect Reply Received",
+  prospect_reply_sent: "Prospect Reply Answered",
+  daily_finance_review: "Finance Review",
+  customer_success_check: "Customer Success Check",
+  customer_support: "Customer Support",
+  driver_engagement: "Driver Engagement Check",
+  marketing_analysis: "Marketing Analysis",
+  ceo_strategic_review: "CEO Strategic Review",
+  weekly_review: "Weekly Review",
+  weekly_strategic_review: "Strategic Review",
+  monthly_bi: "Monthly Business Intelligence",
+  monthly_report: "Monthly Report",
+  supervisor_monitoring: "Supervisor Monitoring Check",
+  proactive_trucking_forum_research: "Trucking Forum Research",
+  proactive_fuel_cost_analysis: "Fuel Cost Analysis",
+  proactive_seo_analysis: "SEO Analysis",
+  proactive_strategic_research: "Strategic Research",
+  proactive_compliance_research: "Compliance Research",
+};
+
+function isoDate(value: unknown): string {
   if (!value) return "";
-  const d = value instanceof Date ? value : new Date(value);
+  const d = value instanceof Date ? value : new Date(String(value));
   return Number.isNaN(d.getTime()) ? "" : d.toISOString();
 }
 
-function serialize(docs: any[]) {
-  return docs.map((doc) => ({
-    ...doc,
-    _id: doc._id?.toString?.() ?? doc._id,
-    createdAt: isoDate(doc.createdAt),
-  }));
-}
-
-// Pure server-side lead scoring (no Groq / no browser deps)
-function scoreLead(lead: any, type: 'quote' | 'driver') {
-  let score = 50;
-  let estimatedValue = 0;
-
-  if (type === 'quote') {
-    if (lead.serviceType === 'freight') { score += 20; estimatedValue += 1000; }
-    if (lead.serviceType === 'hotshot') { score += 15; estimatedValue += 800; }
-    if (lead.serviceType === 'flatbed') { score += 15; estimatedValue += 900; }
-    if (lead.serviceType === 'last_mile') { score += 10; estimatedValue += 500; }
-    if (lead.pickupLocation && lead.dropoffLocation) { score += 15; estimatedValue += 500; }
-    if (lead.company) { score += 10; estimatedValue += 300; }
-    if (lead.urgency === 'rush' || lead.urgency === 'urgent') { score += 10; }
-  } else {
-    const years = parseInt(lead.yearsExperience || '0');
-    if (years >= 5) { score += 20; estimatedValue += 5000; }
-    else if (years >= 2) { score += 15; estimatedValue += 3000; }
-    else if (years >= 1) { score += 10; estimatedValue += 2000; }
-    if (lead.truckType === 'power_only') { score += 15; estimatedValue += 2000; }
-    if (lead.truckType === 'hotshot') { score += 10; estimatedValue += 1500; }
-    if (lead.truckType === 'flatbed') { score += 10; estimatedValue += 1500; }
-    if (lead.truckType === 'reefer') { score += 10; estimatedValue += 1800; }
-    if (lead.hasOwnAuthority) { score += 15; estimatedValue += 3000; }
-    if ((lead.endorsements?.length || 0) > 0) { score += 5; estimatedValue += 500; }
-  }
-
-  score = Math.min(score, 100);
-  const quality = score >= 85 ? 'premium' : score >= 70 ? 'high' : score >= 55 ? 'medium' : 'low';
-  const priority = score >= 85 ? 'urgent' : score >= 70 ? 'high' : score >= 55 ? 'medium' : 'low';
-
-  const assignee = quality === 'premium' ? 'owner'
-    : type === 'driver' ? 'recruiting_team'
-    : lead.serviceType === 'freight' ? 'freight_specialist'
-    : lead.serviceType === 'hotshot' ? 'hotshot_team'
-    : 'general_sales';
-
-  return {
-    score, quality, estimatedValue, priority,
-    routing: { shouldAutoRespond: true, shouldNotify: quality !== 'low', shouldEscalate: quality === 'premium', assignee },
-    processingMethod: 'server-scored' as const,
-  };
-}
-
-function processLeads(rawLeads: any[], type: 'quote' | 'driver') {
-  return rawLeads.map((lead) => {
-    const scored = scoreLead(lead, type);
-    return {
-      ...lead,
-      ...scored,
-      name: type === 'driver' ? (lead.fullName || '') : (lead.name || ''),
-      email: lead.email || '',
-      phone: lead.phone || '',
-      timestamp: lead.createdAt || '',
-    };
-  });
-}
-
-function locationString(loc: any): string {
+function locationString(loc: unknown): string {
   if (typeof loc === "string") return loc;
   if (loc && typeof loc === "object") {
-    const city = loc.city || "";
-    const state = loc.state || "";
-    return [city, state].filter(Boolean).join(", ");
+    const o = loc as { city?: string; state?: string };
+    return [o.city, o.state].filter(Boolean).join(", ");
   }
   return "";
 }
 
-/**
- * Mutually exclusive driver-pipeline stage counts over the FULL collections
- * (countDocuments — not the limited page of rows we render below). Every
- * record lands in exactly one stage, so stages sum to the total.
- */
-async function computePipelineStats(db: any): Promise<PipelineStats> {
-  const prospectByStatus: Record<string, number> = {};
-  for (const row of await db
-    .collection("outbound_prospects")
-    .aggregate([{ $group: { _id: { $ifNull: ["$status", "new"] }, count: { $sum: 1 } } }])
-    .toArray()) {
-    prospectByStatus[String(row._id)] = row.count;
-  }
-  const driverLeadByStatus: Record<string, number> = {};
-  for (const row of await db
-    .collection("leads_drivers")
-    .aggregate([
-      { $match: { isArchived: { $ne: true } } },
-      { $group: { _id: { $ifNull: ["$status", "new"] }, count: { $sum: 1 } } },
-    ])
-    .toArray()) {
-    driverLeadByStatus[String(row._id)] = row.count;
-  }
-  const quoteByStatus: Record<string, number> = {};
-  for (const row of await db
-    .collection("leads_quotes")
-    .aggregate([
-      { $match: { isArchived: { $ne: true } } },
-      { $group: { _id: { $ifNull: ["$status", "new"] }, count: { $sum: 1 } } },
-    ])
-    .toArray()) {
-    quoteByStatus[String(row._id)] = row.count;
-  }
-
-  const p = (s: string) => prospectByStatus[s] || 0;
-  const d = (s: string) => driverLeadByStatus[s] || 0;
-  const q = (s: string) => quoteByStatus[s] || 0;
-
-  const driverStages = [
-    { key: "new", label: "New", count: p("new") + d("new") },
-    { key: "qualified", label: "Qualified", count: p("qualified") + p("reviewed") + d("qualified") + d("contacted") },
-    { key: "onboarding", label: "Invited", count: p("onboarding_invited") + p("onboarding") + d("onboarding") + d("compliance_check") },
-    { key: "ready", label: "Ready", count: p("ready_to_dispatch") + d("ready_to_dispatch") },
-    { key: "converted", label: "Hired", count: p("converted") + d("converted") },
-    { key: "rejected", label: "Rejected", count: p("rejected") + p("lost") + d("rejected") + d("lost") },
-  ];
-
-  const quoteStages = [
-    { key: "new", label: "New", count: q("new") },
-    { key: "contacted", label: "Contacted", count: q("contacted") },
-    { key: "qualified", label: "Qualified", count: q("qualified") },
-    { key: "negotiating", label: "Negotiating", count: q("quoted") + q("negotiating") },
-    { key: "converted", label: "Won", count: q("converted") },
-    { key: "lost", label: "Lost", count: q("lost") },
-  ];
-
-  const totalDriverLeads = Object.values(prospectByStatus).reduce((a, b) => a + b, 0)
-    + Object.values(driverLeadByStatus).reduce((a, b) => a + b, 0);
-  const totalQuoteLeads = Object.values(quoteByStatus).reduce((a, b) => a + b, 0);
-
-  return { driverStages, quoteStages, totalDriverLeads, totalQuoteLeads };
+function parseTab(value: unknown): PipelineTab {
+  const v = String(value ?? "prospects");
+  return v === "manual" || v === "engaged" || v === "activity" ? v : "prospects";
 }
 
-export default async function LeadEnginePage() {
+export default async function RecruitingPipelinePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; page?: string }>;
+}) {
   const user = await requireRole("admin");
   if (!user) return null;
 
-  let clientQuotes: any[] = [];
-  let clientDrivers: any[] = [];
-  let stats: PipelineStats | null = null;
-  let loadError: string | null = null;
+  const params = await searchParams;
+  const tab = parseTab(params.tab);
+  const page = parsePage(params.page);
 
   try {
     if (!clientPromise) throw new Error("Database not configured");
     const client = await clientPromise;
     const db = client.db();
 
-    // Fetch real data from database
-    const [quoteLeads, driverLeads, outboundProspects, pipelineStats] = await Promise.all([
-      db
-        .collection("leads_quotes")
-        .find({ isArchived: { $ne: true } })
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .toArray(),
-      db
-        .collection("leads_drivers")
-        .find({ isArchived: { $ne: true } })
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .toArray(),
-      db
-        .collection("outbound_prospects")
-        .find({})
-        // priorityScore first (new-authority/insurance-lapse boosts), then
-        // recency. Docs without priorityScore sort after boosted ones.
-        .sort({ priorityScore: -1, createdAt: -1 })
-        .limit(200)
-        .toArray(),
-      computePipelineStats(db),
-    ]);
-    stats = pipelineStats;
+    const [counts, quotes, prospectsPage, activityTotal, engagedRaw, quoteLeads, driverLeads] =
+      await Promise.all([
+        getPipelineCounts(db),
+        getQuoteStageCounts(db),
+        // Prospects: newest first (safe post 2026-07 date-normalization
+        // migration), REAL total, 50/page.
+        paginatedList(db.collection("outbound_prospects"), {}, {
+          page: tab === "prospects" ? page : 1,
+          sort: { createdAt: -1, _id: -1 },
+        }),
+        db.collection("agent_activity").countDocuments({
+          action: { $nin: ["outreach_processing", "outreach_cron", "outreach_cron_summary"] },
+        }),
+        db
+          .collection("onboarding_sessions")
+          .find(ENGAGED_SESSION_FILTER as never)
+          .sort({ firstClickedAt: -1, createdAt: -1 })
+          .toArray(),
+        db.collection("leads_quotes").find({ isArchived: { $ne: true } }).sort({ createdAt: -1 }).toArray(),
+        db.collection("leads_drivers").find({ isArchived: { $ne: true } }).sort({ createdAt: -1 }).toArray(),
+      ]);
 
-    // Score leads server-side (no Groq needed)
-    const scoredQuotes = processLeads(serialize(quoteLeads), 'quote');
-    const scoredDrivers = processLeads(serialize(driverLeads), 'driver');
+    // Activity: paginated over the FULL collection, sorted by whichever
+    // timestamp field the row actually has (legacy rows use `timestamp`).
+    const activityPage = tab === "activity" ? page : 1;
+    const activityPageSize = 50;
+    const activityPageCount = Math.max(1, Math.ceil(activityTotal / activityPageSize));
+    const boundedActivityPage = Math.min(activityPage, activityPageCount);
+    const rawActivity = await db
+      .collection("agent_activity")
+      .aggregate([
+        { $match: { action: { $nin: ["outreach_processing", "outreach_cron", "outreach_cron_summary"] } } },
+        { $addFields: { _sortTime: { $ifNull: ["$createdAt", "$timestamp"] } } },
+        { $sort: { _sortTime: -1 } },
+        { $skip: (boundedActivityPage - 1) * activityPageSize },
+        { $limit: activityPageSize },
+      ])
+      .toArray();
 
-    // Convert outbound prospects to driver lead format for the pipeline
-    const prospectDrivers = outboundProspects.map((p: any) => {
-      const locStr = locationString(p.location);
+    const prospectRows: ProspectRow[] = prospectsPage.rows.map((p: any) => {
+      const badge = stageForProspect(p);
       return {
-        ...serialize([p])[0],
-        name: p.name || "",
-        fullName: p.name || "",
-        email: p.contact?.email || "",
-        phone: p.contact?.phone || "",
-        truckType: p.equipment || "",
-        yearsExperience: "",
-        hasOwnAuthority: p.authorityStatus === "authorized",
-        score: p.priorityScore || p.aiScore || 0,
+        id: p._id?.toString() || "",
+        name: p.name || p.companyName || "Unknown Prospect",
+        dotNumber: String(p.dotNumber || p.dot_number || ""),
+        location: locationString(p.location),
         aiScore: p.aiScore || 0,
-        priorityScore: p.priorityScore || 0,
-        sourceTag: p.sourceTag || "fmcsa-census",
-        status: p.status === "onboarding_invited" ? "onboarding" : p.status,
-        quality: (p.aiScore || 0) >= 85 ? "premium" : (p.aiScore || 0) >= 70 ? "high" : "medium",
-        estimatedValue: 0,
-        priority: (p.aiScore || 0) >= 85 ? "urgent" : "medium",
-        timestamp: isoDate(p.createdAt),
-        dotNumber: p.dotNumber || p.dot_number || "",
-        location: locStr,
-        state: locStr.split(",")[1]?.trim() || "",
-        powerUnits: p.powerUnits ?? p.power_units ?? 0,
+        status: p.status || "new",
+        stage: { key: badge.key, label: badge.label, hex: badge.hex },
+        source: p.source || "FMCSA",
+        phone: p.contact?.phone || p.phone || "",
+        email: p.contact?.email || p.email || "",
+        equipment: p.equipment || "",
+        powerUnits: p.powerUnits || 0,
+        drivers: p.drivers || 0,
         safetyRating: p.safetyRating || "",
-        source: p.source || "",
+        authorityStatus: p.authorityStatus || "",
+        interestSignals: Array.isArray(p.interestSignals) ? p.interestSignals : [],
+        sourceUrl: p.sourceUrl || "",
+        createdAt: isoDate(p.createdAt),
+        invitedAt: isoDate(p.onboardingInvitedAt),
       };
     });
 
-    // Merge: outbound prospects + leads_drivers
-    const allDriverLeads = [...prospectDrivers, ...scoredDrivers];
+    const engaged: EngagedRow[] = engagedRaw.map((s: any) => ({
+      id: s._id?.toString() || "",
+      leadName: s.name || s.leadName || "Unknown lead",
+      leadEmail: s.email || "",
+      status: s.status || "pending",
+      currentStep: s.currentStep || 1,
+      firstClickedAt: isoDate(s.firstClickedAt),
+      createdAt: isoDate(s.createdAt),
+      onboardingUrl: s.rawToken ? `/onboarding?token=${s.rawToken}` : "",
+    }));
 
-    // Normalize MongoDB Date/ObjectId/nested values before crossing into the client component.
-    clientQuotes = JSON.parse(JSON.stringify(scoredQuotes));
-    clientDrivers = JSON.parse(JSON.stringify(allDriverLeads));
+    const activityRows: ActivityRow[] = rawActivity.map((a: any) => {
+      const rawAction = a.action || a.type || "activity";
+      const result = a.result || a.details || null;
+      const summary =
+        (result && typeof result === "object" && "summary" in result && String((result as any).summary)) ||
+        a.activity ||
+        "";
+      return {
+        id: a._id?.toString() || "",
+        action: rawAction,
+        actionLabel: ACTION_LABELS[rawAction] || String(rawAction).replace(/_/g, " "),
+        agent: typeof a.agent === "string" ? a.agent : a.agent?.name || "System",
+        agentRole: (typeof a.agent === "object" && a.agent?.role) || "Automated",
+        summary,
+        details: result ? JSON.parse(JSON.stringify(result)) : null,
+        success: a.success !== false,
+        timestamp: isoDate(a.createdAt || a.timestamp),
+      };
+    });
+
+    const manualQuoteLeads = quoteLeads.map((l: any) => ({
+      id: String(l._id),
+      name: String(l.name ?? ""),
+      company: String(l.company ?? ""),
+      email: String(l.email ?? ""),
+      phone: String(l.phone ?? ""),
+      pickupLocation: String(l.pickupLocation ?? ""),
+      dropoffLocation: String(l.dropoffLocation ?? ""),
+      serviceType: String(l.serviceType ?? ""),
+      pickupDate: String(l.pickupDate ?? ""),
+      notes: String(l.notes ?? ""),
+      status: (l.status ?? "new") as never,
+      createdAt: isoDate(l.createdAt),
+    }));
+
+    const manualDriverLeads = driverLeads.map((l: any) => ({
+      id: String(l._id),
+      fullName: String(l.fullName ?? ""),
+      email: String(l.email ?? ""),
+      phone: String(l.phone ?? ""),
+      truckType: String(l.truckType ?? ""),
+      yearsExperience: String(l.yearsExperience ?? ""),
+      preferredRoutes: String(l.preferredRoutes ?? ""),
+      startDate: String(l.startDate ?? ""),
+      notes: String(l.notes ?? ""),
+      status: (l.status ?? "new") as never,
+      createdAt: isoDate(l.createdAt),
+    }));
+
+    return (
+      <main className="min-h-screen bg-background">
+        <RecruitingPipeline
+          counts={JSON.parse(JSON.stringify(counts))}
+          quotes={quotes}
+          tab={tab}
+          prospects={{
+            rows: prospectRows,
+            total: prospectsPage.total,
+            page: prospectsPage.page,
+            pageCount: prospectsPage.pageCount,
+            pageSize: prospectsPage.pageSize,
+          }}
+          engaged={engaged}
+          activity={{
+            rows: activityRows,
+            total: activityTotal,
+            page: boundedActivityPage,
+            pageCount: activityPageCount,
+            pageSize: activityPageSize,
+          }}
+          manualQuoteLeads={manualQuoteLeads}
+          manualDriverLeads={manualDriverLeads}
+        />
+      </main>
+    );
   } catch (error) {
-    console.error("[lead-engine] Failed to load data:", error);
-    loadError = error instanceof Error ? error.message : "Unknown error";
-  }
-
-  if (loadError) {
+    console.error("[recruiting-pipeline] Failed to load data:", error);
+    const message = error instanceof Error ? error.message : "Unknown error";
     return (
       <main className="min-h-screen bg-background">
         <div className="mx-auto w-full max-w-2xl px-5 py-12">
           <div className="rounded-xl border border-red-500/30 bg-red-500/5 p-6">
-            <h2 className="text-lg font-semibold text-red-400">Lead Engine data unavailable</h2>
+            <h2 className="text-lg font-semibold text-red-400">Recruiting Pipeline unavailable</h2>
             <p className="mt-2 text-sm text-muted-foreground">
               The database connection dropped — refresh to try again. The rest of the admin keeps working.
             </p>
-            <p className="mt-2 font-mono text-xs text-muted-foreground/70">{loadError.substring(0, 200)}</p>
+            <p className="mt-2 font-mono text-xs text-muted-foreground/70">{message.substring(0, 200)}</p>
           </div>
         </div>
       </main>
     );
   }
-
-  return (
-    <main className="min-h-screen bg-background">
-      <LeadEngineV2
-        quoteLeads={clientQuotes}
-        driverLeads={clientDrivers}
-        stats={stats}
-      />
-    </main>
-  );
 }

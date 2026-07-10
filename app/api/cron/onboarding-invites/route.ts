@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
+import { QUALIFIED_SCORE_THRESHOLD } from "@/lib/pipeline-stages";
 
 /**
  * GET /api/cron/onboarding-invites
@@ -9,11 +10,22 @@ import { checkCronAuth } from "@/lib/cron-auth";
  * Vercel cron port of scripts/auto-onboarding-invite.mjs (previously ran on the
  * owner's laptop agent system and stalled 2026-06-23).
  *
- * Finds qualified outbound prospects (status "reviewed" AND aiScore >= 75),
+ * Finds qualified outbound prospects (status "qualified" AND aiScore >= 75),
  * creates an onboarding session + outreach task for each, and flips the
- * prospect status to "onboarding_invited".
+ * prospect status to "onboarding_invited" (setting onboardingInvitedAt +
+ * onboardingSessionId backlinks).
  *
- * Idempotency: an atomic findOneAndUpdate (status reviewed -> onboarding_invited)
+ * FUNNEL FIX (2026-07): the selector used to be status "reviewed", which
+ * NOTHING sets anymore — prospecting writes "qualified"
+ * (lib/fmcsa-prospecting-core.ts / lib/fmcsa-motus.ts), so new prospects
+ * could never advance. The selector now consumes "qualified" directly.
+ *
+ * SAFETY GATE: like process-outreach, this cron only acts when
+ * process.env.OUTREACH_AUTOMATION === "live". While outreach is paused it
+ * logs a deferred heartbeat and exits — no new invites, no new outreach
+ * tasks.
+ *
+ * Idempotency: an atomic findOneAndUpdate (status qualified -> onboarding_invited)
  * is used as the claim BEFORE creating the session/task, so a prospect can only
  * ever be invited once even if this route runs concurrently with the legacy
  * laptop script.
@@ -68,6 +80,37 @@ export async function GET(request: NextRequest) {
     const client = await clientPromise;
     const db = client.db();
 
+    // PAUSE GATE: no invites (and no new outreach tasks) unless outreach
+    // automation is explicitly live. Logs a heartbeat so the cron monitor
+    // still sees the run.
+    if (process.env.OUTREACH_AUTOMATION !== "live") {
+      await db.collection("agent_activity").insertOne({
+        agent: {
+          name: "Auto Onboarding Processor",
+          role: "Onboarding",
+          department: "Operations",
+        },
+        action: "auto_onboarding_invite",
+        result: {
+          deferred: true,
+          reason: `Outreach automation is paused (OUTREACH_AUTOMATION=${process.env.OUTREACH_AUTOMATION || "unset"}) — no invites created`,
+          qualifiedProspects: 0,
+          sessionsCreated: 0,
+          tasksCreated: 0,
+          skipped: 0,
+        },
+        success: true,
+        createdAt: now,
+        timestamp: now,
+      });
+      return NextResponse.json({
+        ok: true,
+        deferred: true,
+        reason: "Outreach automation paused (OUTREACH_AUTOMATION != live)",
+        report: { invited: 0, skipped: 0, deferred: 0 },
+      });
+    }
+
     // Business-hours gate (America/Chicago). Log the deferred run so the cron
     // monitor still sees a heartbeat -- silent stalls are what went unnoticed
     // for 2 weeks on the laptop cron.
@@ -100,14 +143,15 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Step 1: Qualified prospects -- same criteria as the legacy script,
-    // ordered by priorityScore first (new-authority / insurance-lapse boosts
-    // from /api/cron/prospect-priorities) so the hottest channels get
-    // invited before the plain census pool. Docs without a priorityScore
-    // sort after boosted ones in a descending sort.
+    // Step 1: Qualified prospects (status "qualified" — the status the
+    // prospecting writers actually set — with aiScore >= threshold), ordered
+    // by priorityScore first (new-authority / insurance-lapse boosts from
+    // /api/cron/prospect-priorities) so the hottest channels get invited
+    // before the plain census pool. Docs without a priorityScore sort after
+    // boosted ones in a descending sort.
     const prospects = await db
       .collection("outbound_prospects")
-      .find({ status: "reviewed", aiScore: { $gte: 75 } })
+      .find({ status: "qualified", aiScore: { $gte: QUALIFIED_SCORE_THRESHOLD } })
       .sort({ priorityScore: -1, aiScore: -1 })
       .limit(MAX_PER_RUN)
       .toArray();
@@ -129,12 +173,12 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
-      // Step 3: ATOMIC CLAIM -- flip status reviewed -> onboarding_invited
-      // before creating anything. If another runner (e.g. the legacy laptop
-      // cron) already claimed this prospect, we get null back and do nothing.
+      // Step 3: ATOMIC CLAIM -- flip status qualified -> onboarding_invited
+      // (recording onboardingInvitedAt) before creating anything. If another
+      // runner already claimed this prospect, we get null back and do nothing.
       const claim = await db.collection("outbound_prospects").findOneAndUpdate(
-        { _id: prospect._id, status: "reviewed" },
-        { $set: { status: "onboarding_invited", updatedAt: now } }
+        { _id: prospect._id, status: "qualified" },
+        { $set: { status: "onboarding_invited", onboardingInvitedAt: now, updatedAt: now } }
       );
       if (!claim) {
         deferred++;
@@ -145,7 +189,7 @@ export async function GET(request: NextRequest) {
         // Step 4a: Onboarding session -- same token/expiry scheme as legacy.
         const rawToken = crypto.randomUUID();
         const expiresAt = new Date(now.getTime() + SESSION_EXPIRY_MS);
-        await db.collection("onboarding_sessions").insertOne({
+        const sessionInsert = await db.collection("onboarding_sessions").insertOne({
           name: prospect.name,
           email,
           leadType: "outbound_prospect",
@@ -160,10 +204,20 @@ export async function GET(request: NextRequest) {
           createdAt: now,
         });
 
+        // Backlink the session on the prospect so joins/history render
+        // without email-matching heuristics.
+        await db.collection("outbound_prospects").updateOne(
+          { _id: prospect._id },
+          { $set: { onboardingSessionId: sessionInsert.insertedId } }
+        );
+
         // Step 4b: Outreach task -- same template/shape as legacy. Picked up
-        // by /api/cron/process-outreach.
+        // by /api/cron/process-outreach. personalization.onboardingUrl gives
+        // the first-touch email a tokenized deep link instead of the generic
+        // /drive-with-us page.
         const state = prospect.location?.split(",")[1]?.trim() || "";
         const priority = prospect.aiScore >= 85 ? "urgent" : "high";
+        const onboardingUrl = `https://twinmile.com/onboarding?token=${rawToken}`;
         await db.collection("outreach_tasks").insertOne({
           leadId: prospect._id,
           leadType: "outbound_prospect",
@@ -176,7 +230,7 @@ export async function GET(request: NextRequest) {
           status: "pending",
           attempts: 0,
           maxAttempts: 3,
-          personalization: { name: prospect.name, state },
+          personalization: { name: prospect.name, state, onboardingUrl },
           createdAt: now,
         });
 
@@ -190,7 +244,10 @@ export async function GET(request: NextRequest) {
         try {
           await db.collection("outbound_prospects").updateOne(
             { _id: prospect._id, status: "onboarding_invited" },
-            { $set: { status: "reviewed", updatedAt: new Date() } }
+            {
+              $set: { status: "qualified", updatedAt: new Date() },
+              $unset: { onboardingInvitedAt: "", onboardingSessionId: "" },
+            }
           );
         } catch {
           // leave claimed; surfaced via errors[] and agent_activity

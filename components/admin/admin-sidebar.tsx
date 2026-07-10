@@ -33,11 +33,13 @@ import {
 } from "lucide-react";
 
 const navigation = [
-  { name: "Lead Engine", href: "/admin/lead-engine", icon: Zap },
+  // ONE pipeline page ("Recruiting Pipeline") + ONE email page ("Emails").
+  // /admin/inbox, /admin/pipeline and /admin/dashboard/recruiting redirect to
+  // the Recruiting Pipeline — the old links were three conflicting views of
+  // the same data.
+  { name: "Recruiting Pipeline", href: "/admin/lead-engine", icon: Zap },
+  { name: "Emails", href: "/admin/outreach", icon: Send },
   { name: "Listener", href: "/admin/listener", icon: Ear },
-  { name: "Leads", href: "/admin/inbox", icon: Inbox },
-  { name: "Pipeline Flow", href: "/admin/pipeline", icon: TrendingUp },
-  { name: "Outreach", href: "/admin/outreach", icon: Send },
   { name: "Call Sheet", href: "/admin/call-sheet", icon: Phone },
   { name: "Social Posts", href: "/admin/social", icon: Megaphone },
   { name: "Blog Pipeline", href: "/admin/blog", icon: Newspaper },

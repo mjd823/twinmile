@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
 import { CRON_JOBS, lastActivityFor } from "@/lib/cron-jobs";
+import { getPipelineCounts, QUALIFIED_SCORE_THRESHOLD } from "@/lib/pipeline-stages";
 
 /**
  * GET /api/cron/supervisor-report
@@ -64,30 +65,23 @@ export async function GET(request: NextRequest) {
     const client = await clientPromise;
     const db = client.db();
 
-    // ── Pipeline counts ────────────────────────────────────────────────────
-    const [
-      totalProspects,
-      qualifiedTotal,
-      qualifiedNotInvited,
-      qualifiedAwaitingReview,
-      onboardingInvited,
-      newProspectsToday,
-      sessionsTotal,
-      sessionsCompleted,
-      leaseSigned,
-      newDriverLeads,
-    ] = await Promise.all([
-      db.collection("outbound_prospects").countDocuments(),
-      db.collection("outbound_prospects").countDocuments({ aiScore: { $gte: 75 } }),
-      db.collection("outbound_prospects").countDocuments({ status: "reviewed", aiScore: { $gte: 75 } }),
-      db.collection("outbound_prospects").countDocuments({ status: { $in: ["new", "qualified"] }, aiScore: { $gte: 75 } }),
-      db.collection("outbound_prospects").countDocuments({ status: "onboarding_invited" }),
-      db.collection("outbound_prospects").countDocuments(sinceFilter("createdAt", dayAgo)),
-      db.collection("onboarding_sessions").countDocuments(),
-      db.collection("onboarding_sessions").countDocuments({ status: "completed" }),
-      db.collection("lease_agreements").countDocuments(),
-      db.collection("leads_drivers").countDocuments({ status: "new" }),
-    ]);
+    // ── Pipeline counts — the canonical taxonomy (lib/pipeline-stages) ──────
+    const [pipelineCounts, awaitingInvite, newProspectsToday, leaseSigned, newDriverLeads] =
+      await Promise.all([
+        getPipelineCounts(db),
+        // Status "qualified" + score >= threshold = exactly what the invite
+        // cron consumes ("awaiting invite" — the qualified stage's resting count).
+        db.collection("outbound_prospects").countDocuments({
+          status: "qualified",
+          aiScore: { $gte: QUALIFIED_SCORE_THRESHOLD },
+        }),
+        db.collection("outbound_prospects").countDocuments(sinceFilter("createdAt", dayAgo)),
+        db.collection("lease_agreements").countDocuments(),
+        db.collection("leads_drivers").countDocuments({ status: "new" }),
+      ]);
+    const stageByKey = new Map(pipelineCounts.stages.map((s) => [s.key, s]));
+    const onboardingInvited = stageByKey.get("invited")?.reached ?? 0;
+    const sessionsCompleted = stageByKey.get("completed")?.reached ?? 0;
 
     // ── Outreach queue ─────────────────────────────────────────────────────
     const [outreachPending, outreachSentToday, outreachFailed] = await Promise.all([
@@ -157,17 +151,19 @@ export async function GET(request: NextRequest) {
     // ── Bottleneck detection (deterministic) ───────────────────────────────
     const bottlenecks: { severity: "critical" | "warning"; description: string }[] = [];
 
-    if (qualifiedNotInvited > 0) {
-      const inviteJob = cronJobs.find((j) => j.id === "onboarding-invites");
+    if (pipelineCounts.hasAnomaly) {
+      const flagged = pipelineCounts.stages.filter((s) => s.anomaly).map((s) => s.label);
       bottlenecks.push({
-        severity: inviteJob && inviteJob.status !== "healthy" ? "critical" : "warning",
-        description: `${qualifiedNotInvited} qualified prospect(s) (status "reviewed", aiScore >= 75) awaiting onboarding invites. Invite cron status: ${inviteJob?.status ?? "unknown"}.`,
+        severity: "critical",
+        description: `Funnel count anomaly: stage(s) ${flagged.join(", ")} exceed the previous stage's cumulative count. Counts are NOT clamped — investigate data drift.`,
       });
     }
-    if (qualifiedAwaitingReview > 10) {
+    if (awaitingInvite > 0) {
+      const inviteJob = cronJobs.find((j) => j.id === "onboarding-invites");
+      const paused = process.env.OUTREACH_AUTOMATION !== "live";
       bottlenecks.push({
-        severity: "warning",
-        description: `${qualifiedAwaitingReview} high-score prospects (aiScore >= 75) are still status new/qualified — they must be marked "reviewed" before the invite cron will pick them up.`,
+        severity: !paused && inviteJob && inviteJob.status !== "healthy" ? "critical" : "warning",
+        description: `${awaitingInvite} qualified prospect(s) (status "qualified", aiScore >= ${QUALIFIED_SCORE_THRESHOLD}) awaiting onboarding invites${paused ? " — outreach automation is PAUSED, so this is expected until it goes live" : `. Invite cron status: ${inviteJob?.status ?? "unknown"}.`}`,
       });
     }
     if (trucksInFleet === 0 && (onboardingInvited > 0 || sessionsCompleted > 0)) {
@@ -198,13 +194,20 @@ export async function GET(request: NextRequest) {
     }
 
     const report = {
+      // Canonical funnel: every stage carries BOTH counts, clearly named.
       pipeline: {
-        totalProspects,
-        qualified: qualifiedTotal,
-        qualifiedNotInvited,
-        qualifiedAwaitingReview,
+        stages: pipelineCounts.stages.map((s) => ({
+          key: s.key,
+          label: s.label,
+          reached: s.reached,
+          inStage: s.inStage,
+          anomaly: s.anomaly ?? false,
+        })),
+        offFunnel: pipelineCounts.offFunnel.map((b) => ({ key: b.key, label: b.label, count: b.count })),
+        totals: pipelineCounts.totals,
+        hasAnomaly: pipelineCounts.hasAnomaly,
+        awaitingInvite,
         onboardingInvited,
-        onboardingSessions: sessionsTotal,
         onboardingCompleted: sessionsCompleted,
         leaseAgreements: leaseSigned,
         newProspectsToday,

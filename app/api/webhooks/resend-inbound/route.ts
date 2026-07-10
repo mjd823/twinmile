@@ -253,7 +253,7 @@ export async function POST(request: NextRequest) {
         await db.collection("outbound_prospects").updateOne(
           {
             _id: matchedProspectId,
-            status: { $in: ["new", "reviewed", "contacted", "onboarding_invited"] },
+            status: { $in: ["new", "qualified", "reviewed", "contacted", "onboarding_invited"] },
           },
           { $set: { status: "replied" } }
         );
