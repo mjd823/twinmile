@@ -8,6 +8,7 @@ import {
   type Lead,
   type Personalization,
 } from "@/lib/outreach-templates";
+import { getSendAllowance, bulkSenderHeaders, unsubscribeUrlFor } from "@/lib/sending-policy";
 
 /**
  * GET /api/cron/process-outreach
@@ -129,15 +130,14 @@ export async function GET(request: NextRequest) {
     const client = await clientPromise;
     const db = client.db();
 
-    // Daily send cap: protects the Resend quota and, more importantly, the
-    // sending domain's reputation — a fresh domain mass-blasting hundreds of
-    // cold emails in one day is how you end up in spam folders forever.
-    const DAILY_CAP = Math.max(0, parseInt(process.env.OUTREACH_DAILY_CAP || "100", 10) || 100);
-    const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const sentLast24h = await db
-      .collection("outreach_tasks")
-      .countDocuments({ status: "sent", sentAt: { $gte: dayAgo } });
-    const capRemaining = Math.max(0, DAILY_CAP - sentLast24h);
+    // Daily send cap, derived from real send history rather than a static env
+    // var (lib/sending-policy.ts). The old default was 100/day; sustained
+    // ceilings that survive on a cold domain are 25-40/day, ramped over weeks.
+    // The ramp advances by itself and env config can only lower it.
+    const allowance = await getSendAllowance(db);
+    const DAILY_CAP = allowance.dailyCap;
+    const sentLast24h = allowance.sentLast24h;
+    const capRemaining = allowance.remaining;
     const runLimit = Math.min(MAX_TASKS_PER_RUN, capRemaining);
 
     // Due tasks: pending/retrying and scheduled in the past, plus stale
@@ -279,6 +279,30 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      // Suppression list: someone who unsubscribed must never be mailed again,
+      // by any template or sequence. Checked per send rather than only at
+      // queue time, because tasks are queued days before they go out.
+      const taskEmail = typeof task.leadEmail === "string" ? task.leadEmail : "";
+      if (taskEmail) {
+        const suppressed = await db
+          .collection("suppressions")
+          .findOne({ email: taskEmail.toLowerCase() });
+        if (suppressed) {
+          await db.collection("outreach_tasks").updateOne(
+            { _id: task._id },
+            {
+              $set: {
+                status: "cancelled",
+                cancelledReason: `recipient suppressed (${suppressed.reason || "unsubscribed"})`,
+                updatedAt: new Date(),
+              },
+            }
+          );
+          skipped++;
+          continue;
+        }
+      }
+
       // Per-prospect duplicate guard: never send the same template to the
       // same lead twice (requeues + legacy/new task overlap make this real).
       const dupe = await db.collection("outreach_tasks").findOne({
@@ -372,6 +396,10 @@ export async function GET(request: NextRequest) {
           // layout (header/logo/CTA/footer). renderedHtml persists the FULL
           // document so the admin preview is byte-identical to the send.
           const t = composeOutreachEmail(task.template, { ...lead, name: leadName }, p);
+          // RFC 8058 one-click unsubscribe. Mandatory under the Gmail/Yahoo
+          // bulk-sender rules, must work without a login, and must be honored
+          // within 2 days — see app/unsubscribe and /api/unsubscribe.
+          const unsubToken = String(p.token || task._id);
           const { data, error } = await resend.emails.send({
             from: FROM,
             to: leadEmail,
@@ -379,6 +407,7 @@ export async function GET(request: NextRequest) {
             replyTo: REPLY_TO,
             html: t.html,
             text: t.text,
+            headers: bulkSenderHeaders(unsubscribeUrlFor(unsubToken)),
           });
           if (error) throw new Error(error.message || "Resend send failed");
           sendResult = { success: true, id: data?.id };

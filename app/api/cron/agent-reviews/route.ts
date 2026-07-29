@@ -2,45 +2,76 @@ import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
 import { chicagoWeekday } from "@/lib/cron-jobs";
+import { getOperatingPicture, type OperatingPicture } from "@/lib/business-context";
+import { runAgentReasoning } from "@/lib/agent-reasoner";
+import { AGENT_CHARTERS, type AgentKey } from "@/lib/agent-charters";
 
 /**
  * GET /api/cron/agent-reviews
  *
- * Consolidated Vercel cron port of the laptop per-agent daily review jobs:
+ * The daily reasoning pass for the department agents:
  *
- *   Marcus Chen      — Sales Review        (action: daily_sales_review)
- *   David Kumar      — Ops Check           (action: daily_ops_check)
- *   Jennifer Foster  — HR Review           (action: hr_onboarding_review)
- *   Robert Chang     — Finance Review      (action: daily_finance_review)
- *   Emily Watson     — Customer Success    (action: customer_success_check)
- *   Isabella Martinez — Marketing, MONDAYS (action: marketing_analysis)
- *   Alexandra Sterling — CEO, MONDAYS      (action: ceo_strategic_review)
+ *   Marcus Chen        — Sales              (action: daily_sales_review)
+ *   David Kumar        — Ops                (action: daily_ops_check)
+ *   Jennifer Foster    — HR / Onboarding    (action: hr_onboarding_review)
+ *   Robert Chang       — Finance            (action: daily_finance_review)
+ *   Emily Watson       — Customer Success   (action: customer_success_check)
+ *   Isabella Martinez  — Marketing, MONDAYS (action: marketing_analysis)
+ *   Alexandra Sterling — CEO, MONDAYS       (action: ceo_strategic_review)
  *
- * Unlike the old jobs these are NOT LLM calls -- each review is a cheap,
- * deterministic Mongo aggregation logged to agent_activity under the same
- * action names the admin cron monitor and timesheet already watch, so the
- * dashboards keep working with real numbers instead of persona chatter.
+ * WHAT CHANGED AND WHY
+ * These reviews used to be template literals over countDocuments — each agent
+ * printed its own numbers and stopped. That is why the company ran for a month
+ * with every agent reporting "healthy" while the only metric that matters sat
+ * at zero: a string cannot notice a trend, cannot see another department, and
+ * cannot ask anyone a question.
  *
- * Weekly agents (Isabella, Alexandra) match their old Monday-only shifts
- * (see SHIFTS in app/api/admin/timesheet/route.ts), evaluated in
- * America/Chicago.
+ * Now each agent receives the SAME operating picture (one shared computation,
+ * so two departments can no longer disagree about arithmetic), plus its own
+ * charter and its inbox of memos from colleagues, and reasons about it. Output
+ * is schema-validated; memos and blockers are persisted so the next agent
+ * actually reads them.
+ *
+ * The agent_activity contract (action / agent / activity / result / success) is
+ * unchanged, so cron monitoring and the ops center keep working.
+ *
+ * DEGRADED MODE: if the LLM is unavailable, each agent still writes a factual
+ * heartbeat built from the operating picture. Losing reasoning must never look
+ * like a dead cron — a missing heartbeat is how a stall hides.
  *
  * Schedule (vercel.json): "0 16 * * *" UTC = 11AM CDT / 10AM CST.
  */
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
-interface ReviewEntry {
-  agent: { name: string; role: string; department: string };
-  action: string;
-  summary: string;
-  metrics: Record<string, unknown>;
-}
+const DAILY_AGENTS: AgentKey[] = ["marcus", "jennifer", "david", "robert", "emily"];
+const WEEKLY_AGENTS: AgentKey[] = ["isabella", "alexandra"];
 
-/** Match createdAt stored as either Date or ISO string (both exist in this DB). */
-function sinceFilter(field: string, since: Date) {
-  return { $or: [{ [field]: { $gte: since } }, { [field]: { $gte: since.toISOString() } }] };
+/**
+ * Factual one-liner used when reasoning is unavailable. Built from the shared
+ * picture so it can never contradict the reasoning path.
+ */
+function fallbackSummary(agent: AgentKey, p: OperatingPicture): string {
+  const goal = `Goal: ${p.goal.current}/${p.goal.target} active drivers.`;
+  switch (agent) {
+    case "marcus":
+      return `${goal} Outreach: ${p.outreach.sentLast24h} sent in 24h, ${p.outreach.pending} pending, ${p.outreach.failed} failed. Mode: ${p.outreach.automationMode}.`;
+    case "jennifer":
+      return `${goal} Onboarding: ${p.onboarding.everClicked} ever engaged, ${p.onboarding.completed} completed, ${p.onboarding.expiredUnfinished} expired unfinished.`;
+    case "david":
+      return `${goal} Fleet: ${p.fleet.trucks} truck(s), ${p.fleet.loads} load(s), ${p.fleet.delivered} delivered.`;
+    case "robert":
+      return `${goal} ${p.fleet.delivered} delivered load(s) to invoice, ${p.fleet.customers} active customer(s).`;
+    case "emily":
+      return `${goal} Outreach health: ${p.outreach.failed} failed task(s), ${p.outreach.orphanedTasks} orphaned, ${p.outreach.repliesReceived} reply/replies.`;
+    case "isabella":
+      return `${goal} Pipeline: ${p.pipeline.totals.prospects} prospects, ${p.pipeline.totals.driverLeads} driver leads.`;
+    case "alexandra":
+      return `${goal} Funnel: ${p.pipeline.stages.map((s) => `${s.shortLabel} ${s.reached}`).join(" -> ")}.`;
+    default:
+      return goal;
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -48,219 +79,76 @@ export async function GET(request: NextRequest) {
   if (authError) return authError;
 
   if (!clientPromise) {
-    return NextResponse.json(
-      { ok: false, error: "Database not configured" },
-      { status: 500 }
-    );
+    return NextResponse.json({ ok: false, error: "Database not configured" }, { status: 500 });
   }
 
   const now = new Date();
-  const dayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-  const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   const isMonday = chicagoWeekday(now) === "Monday";
+  const roster = [...DAILY_AGENTS, ...(isMonday ? WEEKLY_AGENTS : [])];
 
   try {
     const client = await clientPromise;
     const db = client.db();
 
-    // ── Shared metrics, gathered once ──────────────────────────────────────
-    const [
-      prospectsTotal,
-      prospectsQualified,
-      prospectsReviewed,
-      prospectsInvited,
-      prospectsNewToday,
-      outreachSentToday,
-      outreachPending,
-      outreachFailed,
-      quoteLeadsPending,
-      quotesConverted,
-      trucksInFleet,
-      loadsTotal,
-      loadsDelivered,
-      loadsUninvoiced,
-      driverLeadsNew,
-      driverLeadsOnboarding,
-      driverLeadsReady,
-      sessionsPending,
-      sessionsCompleted,
-      activeCustomers,
-      activeContracts,
-      driverUsers,
-    ] = await Promise.all([
-      db.collection("outbound_prospects").countDocuments(),
-      db.collection("outbound_prospects").countDocuments({ aiScore: { $gte: 75 } }),
-      // "Awaiting invite": status "qualified" is what the invite cron consumes
-      // (legacy "reviewed" was migrated to "qualified" in 2026-07).
-      db.collection("outbound_prospects").countDocuments({ status: "qualified", aiScore: { $gte: 75 } }),
-      db.collection("outbound_prospects").countDocuments({ status: "onboarding_invited" }),
-      db.collection("outbound_prospects").countDocuments(sinceFilter("createdAt", dayAgo)),
-      db.collection("outreach_tasks").countDocuments({ status: "sent", sentAt: { $gte: dayAgo } }),
-      db.collection("outreach_tasks").countDocuments({ status: { $in: ["pending", "retrying"] } }),
-      db.collection("outreach_tasks").countDocuments({ status: "failed" }),
-      db.collection("leads_quotes").countDocuments({ status: { $in: ["new", "qualified", "quoted", "negotiating"] } }),
-      db.collection("leads_quotes").countDocuments({ status: "converted" }),
-      db.collection("trucks").countDocuments(),
-      db.collection("loads").countDocuments(),
-      db.collection("loads").countDocuments({ status: "delivered" }),
-      db.collection("loads").countDocuments({ status: "delivered", invoiced: { $ne: true } }),
-      db.collection("leads_drivers").countDocuments({ status: "new" }),
-      db.collection("leads_drivers").countDocuments({ status: { $in: ["onboarding", "compliance_check"] } }),
-      db.collection("leads_drivers").countDocuments({ status: "ready_to_dispatch" }),
-      db.collection("onboarding_sessions").countDocuments({ status: "pending" }),
-      db.collection("onboarding_sessions").countDocuments({ status: "completed" }),
-      db.collection("customers").countDocuments({ status: "active" }),
-      db.collection("contracts").countDocuments({ status: { $nin: ["cancelled", "expired"] } }),
-      db.collection("users").countDocuments({ role: "driver" }),
-    ]);
+    // ONE shared computation, handed to every agent this run.
+    const picture = await getOperatingPicture(db);
 
-    const reviews: ReviewEntry[] = [];
+    const rows: Record<string, unknown>[] = [];
+    const logged: { agent: string; action: string; reasoned: boolean; headline: string }[] = [];
 
-    // ── Marcus Chen — Sales Review (daily) ─────────────────────────────────
-    reviews.push({
-      agent: { name: "Marcus Chen", role: "Sales Director", department: "Sales" },
-      action: "daily_sales_review",
-      summary: `Pipeline: ${prospectsTotal} prospects, ${prospectsQualified} qualified, ${prospectsInvited} invited. ${outreachSentToday} outreach emails sent in the last 24h. ${quoteLeadsPending} quote leads open.`,
-      metrics: {
-        prospectsTotal,
-        prospectsQualified,
-        prospectsReviewed,
-        prospectsInvited,
-        prospectsNewToday,
-        outreachSentLast24h: outreachSentToday,
-        outreachPending,
-        quoteLeadsPending,
-        quotesConverted,
-      },
-    });
+    // Sequential on purpose: agents write memos that later agents read in the
+    // same run, so ordering is what makes the handoffs work.
+    for (const key of roster) {
+      const c = AGENT_CHARTERS[key];
+      let activity: string;
+      let result: Record<string, unknown>;
+      let reasoned = false;
 
-    // ── David Kumar — Ops Check (daily, includes fleet count) ─────────────
-    const opsFlags: string[] = [];
-    if (trucksInFleet === 0) opsFlags.push("0 trucks in fleet — cannot dispatch");
-    if (trucksInFleet < driverLeadsReady + sessionsCompleted) {
-      opsFlags.push(
-        `Fleet (${trucksInFleet}) smaller than driver pipeline (${driverLeadsReady} ready + ${sessionsCompleted} onboarded)`
-      );
-    }
-    reviews.push({
-      agent: { name: "David Kumar", role: "Operations Director", department: "Operations" },
-      action: "daily_ops_check",
-      summary: `Fleet: ${trucksInFleet} trucks. Loads: ${loadsTotal} total, ${loadsDelivered} delivered. Drivers ready to dispatch: ${driverLeadsReady}.${opsFlags.length ? " FLAGS: " + opsFlags.join("; ") : ""}`,
-      metrics: {
-        trucksInFleet,
-        loadsTotal,
-        loadsDelivered,
-        driversReadyToDispatch: driverLeadsReady,
-        driverUsers,
-        flags: opsFlags,
-      },
-    });
+      try {
+        const r = await runAgentReasoning(db, key, picture);
+        reasoned = true;
+        activity = r.headline;
+        result = {
+          summary: r.headline,
+          findings: r.findings,
+          memosSent: r.memos.length,
+          blockersRaised: r.blockers.length,
+          nextActions: r.nextActions,
+          model: r.model,
+          source: "vercel-cron",
+        };
+      } catch (e) {
+        activity = fallbackSummary(key, picture);
+        result = {
+          summary: activity,
+          degraded: true,
+          degradedReason: e instanceof Error ? e.message : String(e),
+          source: "vercel-cron",
+        };
+      }
 
-    // ── Jennifer Foster — HR Review (daily) ────────────────────────────────
-    reviews.push({
-      agent: { name: "Jennifer Foster", role: "HR Director", department: "Human Resources" },
-      action: "hr_onboarding_review",
-      summary: `Onboarding: ${sessionsPending} sessions pending, ${sessionsCompleted} completed. Driver leads: ${driverLeadsNew} new, ${driverLeadsOnboarding} in onboarding/compliance.`,
-      metrics: {
-        onboardingSessionsPending: sessionsPending,
-        onboardingSessionsCompleted: sessionsCompleted,
-        driverLeadsNew,
-        driverLeadsInOnboarding: driverLeadsOnboarding,
-        driverUsers,
-      },
-    });
-
-    // ── Robert Chang — Finance Review (daily) ──────────────────────────────
-    reviews.push({
-      agent: { name: "Robert Chang", role: "Finance Director", department: "Finance" },
-      action: "daily_finance_review",
-      summary: `${loadsUninvoiced} delivered load(s) awaiting invoicing. ${activeContracts} active contracts, ${activeCustomers} active customers.`,
-      metrics: {
-        deliveredNotInvoiced: loadsUninvoiced,
-        loadsDelivered,
-        activeContracts,
-        activeCustomers,
-      },
-    });
-
-    // ── Emily Watson — Customer Success Check (daily) ──────────────────────
-    reviews.push({
-      agent: { name: "Emily Watson", role: "Customer Success Manager", department: "Customer Success" },
-      action: "customer_success_check",
-      summary: `${activeCustomers} active customer account(s), ${driverUsers} driver account(s). Outreach health: ${outreachFailed} failed task(s).`,
-      metrics: {
-        activeCustomers,
-        driverUsers,
-        outreachFailed,
-        outreachPending,
-      },
-    });
-
-    // ── Weekly (Mondays, America/Chicago) ──────────────────────────────────
-    const skippedWeekly: string[] = [];
-    if (isMonday) {
-      // Isabella Martinez — Marketing
-      const bySource = await db
-        .collection("outbound_prospects")
-        .aggregate([
-          { $group: { _id: "$source", count: { $sum: 1 } } },
-          { $sort: { count: -1 } },
-          { $limit: 8 },
-        ])
-        .toArray();
-      const prospectsThisWeek = await db
-        .collection("outbound_prospects")
-        .countDocuments(sinceFilter("createdAt", weekAgo));
-      reviews.push({
-        agent: { name: "Isabella Martinez", role: "Marketing Director", department: "Marketing" },
-        action: "marketing_analysis",
-        summary: `Weekly lead-source review: ${prospectsThisWeek} prospects added this week across ${bySource.length} source(s). Top source: ${bySource[0]?._id ?? "n/a"} (${bySource[0]?.count ?? 0}).`,
-        metrics: {
-          prospectsThisWeek,
-          prospectsBySource: bySource.map((s) => ({ source: s._id ?? "unknown", count: s.count })),
-        },
-      });
-
-      // Alexandra Sterling — CEO strategic review
-      reviews.push({
-        agent: { name: "Alexandra Sterling", role: "Chief Executive Officer", department: "Executive" },
-        action: "ceo_strategic_review",
-        summary: `Weekly funnel: ${prospectsTotal} prospects → ${prospectsQualified} qualified → ${prospectsInvited} invited → ${sessionsCompleted} onboarded. Fleet: ${trucksInFleet} trucks, ${loadsTotal} loads. ${activeCustomers} active customers.`,
-        metrics: {
-          funnel: {
-            prospects: prospectsTotal,
-            qualified: prospectsQualified,
-            invited: prospectsInvited,
-            onboardingCompleted: sessionsCompleted,
-          },
-          trucksInFleet,
-          loadsTotal,
-          activeCustomers,
-          quotesConverted,
-        },
-      });
-    } else {
-      skippedWeekly.push("Isabella Martinez (Mondays only)", "Alexandra Sterling (Mondays only)");
-    }
-
-    // ── Write one agent_activity entry per review ──────────────────────────
-    await db.collection("agent_activity").insertMany(
-      reviews.map((r) => ({
-        action: r.action,
-        agent: r.agent,
-        activity: r.summary,
-        result: { summary: r.summary, ...r.metrics, source: "vercel-cron" },
+      rows.push({
+        action: c.action,
+        agent: { name: c.name, role: c.role, department: c.department },
+        activity,
+        result,
         success: true,
         createdAt: now,
         timestamp: now,
-      }))
-    );
+      });
+      logged.push({ agent: c.name, action: c.action, reasoned, headline: activity });
+    }
+
+    if (rows.length) await db.collection("agent_activity").insertMany(rows);
 
     return NextResponse.json({
       ok: true,
       report: {
-        reviewsLogged: reviews.map((r) => ({ agent: r.agent.name, action: r.action, summary: r.summary })),
-        skippedWeekly,
+        goal: picture.goal,
+        reviewsLogged: logged,
+        skippedWeekly: isMonday ? [] : WEEKLY_AGENTS.map((k) => AGENT_CHARTERS[k].action),
+        openBlockers: picture.blockers.length,
+        unavailableMetrics: picture.unavailable,
         chicagoWeekday: chicagoWeekday(now),
       },
     });

@@ -36,9 +36,13 @@ export async function POST(request: NextRequest) {
     const policyExpiration = formData.get('policyExpiration') as string;
     const liabilityCoverage = formData.get('liabilityCoverage') as string;
 
-    // Get documents
+    // Get documents. Only CDL and COI gate submission (see REQUIRED_DOCS in
+    // components/onboarding/OnboardingPortal.tsx); anything missing is tracked
+    // as outstanding so a human can chase it instead of the applicant being
+    // turned away at the door.
+    const ALL_DOC_KEYS = ['cdl', 'coi', 'registration', 'w9', 'dotPhysical', 'mvR', 'eld'];
     const documents: Record<string, any> = {};
-    for (const key of ['cdl', 'coi', 'registration', 'w9', 'dotPhysical', 'mvR', 'eld']) {
+    for (const key of ALL_DOC_KEYS) {
       const file = formData.get(key) as File;
       if (file && file.size > 0) {
         const buffer = Buffer.from(await file.arrayBuffer());
@@ -50,14 +54,41 @@ export async function POST(request: NextRequest) {
         };
       }
     }
+    const outstandingDocuments = ALL_DOC_KEYS.filter((k) => k !== 'eld' && !documents[k]);
 
     const client = await clientPromise;
     const db = client.db();
 
-    // Check if email already exists
+    // The session this submission belongs to. Sent by the portal; we fall back
+    // to an email match so submissions from older clients still close their
+    // session rather than stranding it.
+    const sessionToken = (formData.get('sessionToken') as string) || '';
+    const sessionQuery = sessionToken
+      ? { rawToken: sessionToken }
+      : { email: { $regex: `^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } };
+
+    // Check if email already exists. A driver who resubmits after a partial
+    // failure previously got a hard 400 and had no way forward — the account
+    // existed but their session still said "started", so they were locked out
+    // of a flow they had already finished. Treat it as already-complete and
+    // make sure the session reflects that.
     const existing = await db.collection('users').findOne({ email: email.toLowerCase() });
     if (existing) {
-      return NextResponse.json({ ok: false, error: 'Email already registered' }, { status: 400 });
+      await db.collection('onboarding_sessions').updateOne(sessionQuery, {
+        $set: {
+          status: 'completed',
+          completedAt: existing.onboardingCompletedAt || new Date(),
+          completedUserId: existing._id,
+          updatedAt: new Date(),
+        },
+      });
+      return NextResponse.json({
+        ok: true,
+        alreadyCompleted: true,
+        driverUserId: existing._id.toString(),
+        message:
+          'This application was already submitted. Twin Mile has your information — someone will contact you about next steps.',
+      });
     }
 
     // Create temporary password
@@ -77,6 +108,7 @@ export async function POST(request: NextRequest) {
       authority: { mcNumber, usdotNumber, type: authorityType },
       insurance: { company: insuranceCompany, policyNumber, expiration: new Date(policyExpiration), liabilityCoverage },
       documents,
+      outstandingDocuments,
       role: 'driver' as const,
       passwordSaltBase64: saltBase64,
       passwordHashBase64: hashBase64,
@@ -98,8 +130,38 @@ export async function POST(request: NextRequest) {
       operatorAddress: `${address}, ${city}, ${state} ${zip}`,
       status: 'pending_review',
       documents,
+      outstandingDocuments,
       createdAt: new Date(),
     });
+
+    // Close out the onboarding session.
+    //
+    // THIS IS THE BUG THAT MADE THE FUNNEL UNREADABLE: nothing in the app ever
+    // set a session to "completed", so the last stage of the funnel reported 0
+    // no matter what happened, and every agent reasoned against that 0. A
+    // metric that cannot move is worse than no metric — it looks like evidence.
+    const sessionUpdate = await db.collection('onboarding_sessions').updateOne(sessionQuery, {
+      $set: {
+        status: 'completed',
+        completedAt: new Date(),
+        completedUserId: result.insertedId,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Move the source prospect/lead to the end of the funnel too, so the
+    // pipeline taxonomy and the session agree.
+    if (email) {
+      const emailRegex = { $regex: `^${email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' };
+      await Promise.all([
+        db
+          .collection('outbound_prospects')
+          .updateMany({ email: emailRegex }, { $set: { status: 'ready_to_dispatch', updatedAt: new Date() } }),
+        db
+          .collection('leads_drivers')
+          .updateMany({ email: emailRegex }, { $set: { status: 'ready_to_dispatch', updatedAt: new Date() } }),
+      ]);
+    }
 
     // Log activity
     await db.collection('agent_activity').insertOne({
@@ -107,7 +169,12 @@ export async function POST(request: NextRequest) {
       agent: { name: 'Onboarding Portal', role: 'System' },
       activity: `New driver onboarding completed: ${firstName} ${lastName} (${email})`,
       type: 'onboarding_complete',
-      details: { userId: result.insertedId.toString(), email },
+      details: {
+        userId: result.insertedId.toString(),
+        email,
+        sessionClosed: sessionUpdate.modifiedCount > 0,
+        sessionMatchedBy: sessionToken ? 'token' : 'email',
+      },
     });
 
     return NextResponse.json({

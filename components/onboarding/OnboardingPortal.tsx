@@ -38,15 +38,28 @@ interface Document {
   required: boolean;
 }
 
+/**
+ * Only the two documents a person already carries on their phone gate the
+ * flow. The rest are collected after submission.
+ *
+ * Why: this step asked for six documents up front, including an MVR, which a
+ * driver has to order from the state and cannot produce in a sitting. Every
+ * applicant who reached it stopped there — one had already entered his DOB,
+ * SSN last-4, address and USDOT number before quitting. Blocking a finished
+ * application on paperwork that takes days to obtain loses the driver instead
+ * of collecting the paperwork.
+ */
 const REQUIRED_DOCS: Document[] = [
   { key: "cdl", label: "CDL / Driver's License", accept: ".pdf,.jpg,.jpeg,.png", required: true },
   { key: "coi", label: "Certificate of Insurance (COI)", accept: ".pdf,.jpg,.jpeg,.png", required: true },
-  { key: "registration", label: "Vehicle Registration", accept: ".pdf,.jpg,.jpeg,.png", required: true },
-  { key: "w9", label: "W-9 Form", accept: ".pdf,.jpg,.jpeg,.png", required: true },
-  { key: "dotPhysical", label: "DOT Physical / Medical Card", accept: ".pdf,.jpg,.jpeg,.png", required: true },
-  { key: "mvR", label: "Motor Vehicle Record (MVR)", accept: ".pdf,.jpg,.jpeg,.png", required: true },
+  { key: "registration", label: "Vehicle Registration", accept: ".pdf,.jpg,.jpeg,.png", required: false },
+  { key: "w9", label: "W-9 Form", accept: ".pdf,.jpg,.jpeg,.png", required: false },
+  { key: "dotPhysical", label: "DOT Physical / Medical Card", accept: ".pdf,.jpg,.jpeg,.png", required: false },
+  { key: "mvR", label: "Motor Vehicle Record (MVR)", accept: ".pdf,.jpg,.jpeg,.png", required: false },
   { key: "eld", label: "ELD Certification", accept: ".pdf,.jpg,.jpeg,.png", required: false },
 ];
+
+const GATING_DOC_KEYS = REQUIRED_DOCS.filter((d) => d.required).map((d) => d.key);
 
 export function OnboardingPortal() {
   const [currentStep, setCurrentStep] = React.useState(1);
@@ -214,12 +227,15 @@ export function OnboardingPortal() {
       id: 5,
       key: "documents",
       label: "Upload Documents",
-      description: "Upload all 7 required documents",
+      description: "CDL and insurance now — the rest can follow",
       icon: <FileText className="h-5 w-5" />,
       component: <DocumentsStep documents={documents} setDocuments={setDocuments} />,
-      isComplete: Object.keys(documents).length > 0 && Object.keys(documents).filter(k => REQUIRED_DOCS.find(d => d.key === k)?.required).every(k => documents[k]?.file),
+      // Checks the gating list itself. The old version filtered the keys the
+      // applicant had ALREADY uploaded, so a single file satisfied "every"
+      // and unlocked the step — it validated nothing.
+      isComplete: GATING_DOC_KEYS.every((k) => documents[k]?.file),
       isActive: currentStep === 5,
-      canProceed: Object.keys(documents).filter(k => REQUIRED_DOCS.find(d => d.key === k)?.required).every(k => documents[k]?.file) && Object.keys(documents).length > 0,
+      canProceed: GATING_DOC_KEYS.every((k) => documents[k]?.file),
     },
     {
       id: 6,
@@ -273,6 +289,10 @@ export function OnboardingPortal() {
       Object.entries(documents).forEach(([k, v]) => {
         if (v.file) formPayload.append(k, v.file);
       });
+
+      // Without this the server cannot tell which session was completed, so the
+      // session stays "started" forever and the funnel's last stage reads 0.
+      if (sessionToken) formPayload.append('sessionToken', sessionToken);
 
       const res = await fetch('/api/onboarding/complete', {
         method: 'POST',

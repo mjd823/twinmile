@@ -37,6 +37,15 @@ export interface CronJobDef {
 
 export const CRON_JOBS: CronJobDef[] = [
   {
+    id: "autoheal",
+    name: "Self-Repair Loop",
+    agentName: "AI Supervisor",
+    actions: ["autoheal"],
+    schedule: "20 * * * *",
+    expectedEveryHours: 2,
+    cadence: "sub-daily",
+  },
+  {
     id: "process-outreach",
     name: "Process Outreach Tasks",
     agentName: "Outreach Processor",
