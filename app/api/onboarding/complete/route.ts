@@ -56,6 +56,21 @@ export async function POST(request: NextRequest) {
     }
     const outstandingDocuments = ALL_DOC_KEYS.filter((k) => k !== 'eld' && !documents[k]);
 
+    // Fields the applicant explicitly deferred ("I don't have my MC number
+    // handy", "send me the lease to review"). Recorded rather than enforced:
+    // an application with a known gap is worth vastly more than a person who
+    // hit a required field they could not fill and closed the tab.
+    let deferredItems: Record<string, string> = {};
+    try {
+      const raw = formData.get('deferredItems');
+      if (typeof raw === 'string' && raw) deferredItems = JSON.parse(raw);
+    } catch {
+      deferredItems = {};
+    }
+    const signature = (formData.get('signature') as string) || '';
+    const signedAgreement = formData.get('signedAgreement') === 'true';
+    const leaseSigned = signedAgreement && !!signature && !deferredItems.leaseSignature;
+
     const client = await clientPromise;
     const db = client.db();
 
@@ -109,6 +124,8 @@ export async function POST(request: NextRequest) {
       insurance: { company: insuranceCompany, policyNumber, expiration: new Date(policyExpiration), liabilityCoverage },
       documents,
       outstandingDocuments,
+      deferredItems,
+      followUpNeeded: outstandingDocuments.length > 0 || Object.keys(deferredItems).length > 0,
       role: 'driver' as const,
       passwordSaltBase64: saltBase64,
       passwordHashBase64: hashBase64,
@@ -128,9 +145,15 @@ export async function POST(request: NextRequest) {
       operatorEmail: email,
       operatorPhone: phone,
       operatorAddress: `${address}, ${city}, ${state} ${zip}`,
-      status: 'pending_review',
+      // An unsigned lease is a real state, not a failure. It means "this person
+      // applied and wants to read it first" — which is a call to make, not a
+      // lost applicant.
+      status: leaseSigned ? 'pending_review' : 'awaiting_signature',
+      signature: leaseSigned ? signature : null,
+      signedAt: leaseSigned ? new Date() : null,
       documents,
       outstandingDocuments,
+      deferredItems,
       createdAt: new Date(),
     });
 
@@ -174,6 +197,9 @@ export async function POST(request: NextRequest) {
         email,
         sessionClosed: sessionUpdate.modifiedCount > 0,
         sessionMatchedBy: sessionToken ? 'token' : 'email',
+        leaseSigned,
+        outstandingDocuments,
+        deferredItems: Object.values(deferredItems),
       },
     });
 
@@ -181,6 +207,8 @@ export async function POST(request: NextRequest) {
       ok: true,
       tempPassword,
       driverUserId: result.insertedId.toString(),
+      leaseSigned,
+      followUp: [...Object.values(deferredItems), ...outstandingDocuments],
       message: `Account created. Temporary password: ${tempPassword}`
     });
   } catch (error) {

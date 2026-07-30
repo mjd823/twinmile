@@ -58,7 +58,7 @@ function fallbackSummary(agent: AgentKey, p: OperatingPicture): string {
     case "marcus":
       return `${goal} Outreach: ${p.outreach.sentLast24h} sent in 24h, ${p.outreach.pending} pending, ${p.outreach.failed} failed. Mode: ${p.outreach.automationMode}.`;
     case "jennifer":
-      return `${goal} Onboarding: ${p.onboarding.everClicked} ever engaged, ${p.onboarding.completed} completed, ${p.onboarding.expiredUnfinished} expired unfinished.`;
+      return `${goal} Onboarding: ${p.onboarding.everClicked} ever engaged, ${p.onboarding.completed} completed, ${p.onboarding.expiredUnfinished} expired unfinished. Follow-ups: ${p.onboarding.needingFollowUp} applicant(s), ${p.onboarding.awaitingSignature} awaiting lease signature.`;
     case "david":
       return `${goal} Fleet: ${p.fleet.trucks} truck(s), ${p.fleet.loads} load(s), ${p.fleet.delivered} delivered.`;
     case "robert":

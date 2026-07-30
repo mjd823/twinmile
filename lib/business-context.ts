@@ -52,6 +52,15 @@ export interface OnboardingHealth {
   /** True when the app has no code path that marks a session complete. */
   completionRecordingBroken: boolean;
   activeDrivers: number;
+  /**
+   * Applicants who finished but could not supply something on the day (lease
+   * unsigned, MC number not to hand, a document still coming). These are the
+   * highest-value calls in the business — a person who applied and is waiting
+   * on one item, not a cold prospect.
+   */
+  awaitingSignature: number;
+  needingFollowUp: number;
+  followUpItems: { item: string; count: number }[];
 }
 
 export interface AgentHealth {
@@ -192,8 +201,17 @@ async function outreachHealth(db: Db): Promise<OutreachHealth> {
 
 async function onboardingHealth(db: Db): Promise<OnboardingHealth> {
   const sessions = db.collection("onboarding_sessions");
-  const [totalSessions, everClicked, completed, expiredUnfinished, activeDrivers, stepRows] =
-    await Promise.all([
+  const [
+    totalSessions,
+    everClicked,
+    completed,
+    expiredUnfinished,
+    activeDrivers,
+    stepRows,
+    awaitingSignature,
+    needingFollowUp,
+    followUpRows,
+  ] = await Promise.all([
       sessions.countDocuments({}),
       sessions.countDocuments({ firstClickedAt: { $exists: true } }),
       sessions.countDocuments({ status: "completed" }),
@@ -202,13 +220,37 @@ async function onboardingHealth(db: Db): Promise<OnboardingHealth> {
         expiresAt: { $lt: new Date() },
       }),
       db.collection("users").countDocuments({ role: "driver" }),
-      sessions
-        .aggregate([
-          { $match: { currentStep: { $gte: 1 } } },
-          { $group: { _id: "$currentStep", count: { $sum: 1 } } },
-        ])
-        .toArray(),
-    ]);
+    sessions
+      .aggregate([
+        { $match: { currentStep: { $gte: 1 } } },
+        { $group: { _id: "$currentStep", count: { $sum: 1 } } },
+      ])
+      .toArray(),
+    db.collection("lease_agreements").countDocuments({ status: "awaiting_signature" }),
+    db.collection("users").countDocuments({ role: "driver", followUpNeeded: true }),
+    // What people are actually waiting on, so the follow-up is a specific ask
+    // ("we need your COI") rather than a vague check-in.
+    db
+      .collection("users")
+      .aggregate([
+        { $match: { role: "driver", followUpNeeded: true } },
+        {
+          $project: {
+            items: {
+              $concatArrays: [
+                { $ifNull: ["$outstandingDocuments", []] },
+                { $map: { input: { $objectToArray: { $ifNull: ["$deferredItems", {}] } }, as: "d", in: "$$d.v" } },
+              ],
+            },
+          },
+        },
+        { $unwind: "$items" },
+        { $group: { _id: "$items", count: { $sum: 1 } } },
+        { $sort: { count: -1 } },
+        { $limit: 10 },
+      ])
+      .toArray(),
+  ]);
 
   const stalledByStep = new Map<number, number>();
   for (const r of stepRows) stalledByStep.set(Number(r._id), r.count as number);
@@ -230,6 +272,9 @@ async function onboardingHealth(db: Db): Promise<OnboardingHealth> {
     completionRecordingBroken:
       completed === 0 && (await db.collection("lease_agreements").countDocuments()) === 0 && everClicked > 0,
     activeDrivers,
+    awaitingSignature,
+    needingFollowUp,
+    followUpItems: followUpRows.map((r) => ({ item: String(r._id), count: r.count as number })),
   };
 }
 

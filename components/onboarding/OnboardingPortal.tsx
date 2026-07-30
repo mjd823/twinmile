@@ -87,10 +87,34 @@ export function OnboardingPortal() {
     mcNumber: "",
     usdotNumber: "",
     authorityType: "own",
+    // Lease agreement. Previously held in ESignStep's local state, so a
+    // signature was discarded on submit and every lease record was unsigned.
+    signature: "",
+    signedAgreement: false,
     // Documents
     documents: {} as Record<string, { file: File; preview: string }>,
   });
   const [documents, setDocuments] = React.useState<Record<string, { file: File; preview: string }>>({});
+
+  /**
+   * Items the applicant does not have to hand right now, keyed by field.
+   *
+   * Every hard requirement in this flow was a place to lose someone. A driver
+   * who cannot produce one number in one sitting is not a driver we should
+   * turn away — he is a driver someone needs to call. Deferring keeps the
+   * application alive and hands the gap to a human instead of discarding
+   * everything already entered.
+   */
+  const [deferred, setDeferred] = React.useState<Record<string, string>>({});
+  const defer = (key: string, label: string) =>
+    setDeferred((prev) => {
+      if (prev[key]) {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      }
+      return { ...prev, [key]: label };
+    });
   const [status, setStatus] = React.useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = React.useState("");
 
@@ -196,10 +220,12 @@ export function OnboardingPortal() {
       label: "FMCSA Verification",
       description: "Verify your operating authority and safety record",
       icon: <Shield className="h-5 w-5" />,
-      component: <FMCAStep formData={formData} setFormData={setFormData} />,
+      component: (
+        <FMCAStep formData={formData} setFormData={setFormData} deferred={deferred} defer={defer} />
+      ),
       isComplete: false,
       isActive: currentStep === 2,
-      canProceed: !!formData.mcNumber || !!formData.usdotNumber,
+      canProceed: !!formData.mcNumber || !!formData.usdotNumber || !!deferred.authorityNumbers,
     },
     {
       id: 3,
@@ -218,10 +244,17 @@ export function OnboardingPortal() {
       label: "E-Sign Agreement",
       description: "Review and electronically sign the Lease-On Agreement",
       icon: <Signature className="h-5 w-5" />,
-      component: <ESignStep formData={formData} setFormData={setFormData} />,
+      component: (
+        <ESignStep formData={formData} setFormData={setFormData} deferred={deferred} defer={defer} />
+      ),
       isComplete: false,
       isActive: currentStep === 4,
-      canProceed: true,
+      // Sign now, or ask for it to review — but say which. This step used to
+      // pass unconditionally, so someone could walk past it and a lease record
+      // was created with no signature and no explanation. Both outcomes are
+      // fine; not knowing which one happened is not.
+      canProceed:
+        (!!formData.signedAgreement && !!formData.signature) || !!deferred.leaseSignature,
     },
     {
       id: 5,
@@ -293,6 +326,11 @@ export function OnboardingPortal() {
       // Without this the server cannot tell which session was completed, so the
       // session stays "started" forever and the funnel's last stage reads 0.
       if (sessionToken) formPayload.append('sessionToken', sessionToken);
+
+      // What the applicant could not supply today. Submitted with the
+      // application so a human gets a specific follow-up list instead of the
+      // application simply not existing.
+      formPayload.append('deferredItems', JSON.stringify(deferred));
 
       const res = await fetch('/api/onboarding/complete', {
         method: 'POST',
@@ -583,17 +621,28 @@ function IdentityStep({ formData, setFormData }: { formData: any; setFormData: a
   );
 }
 
-function FMCAStep({ formData, setFormData }: { formData: any; setFormData: any }) {
+function FMCAStep({
+  formData,
+  setFormData,
+  deferred,
+  defer,
+}: {
+  formData: any;
+  setFormData: any;
+  deferred: Record<string, string>;
+  defer: (key: string, label: string) => void;
+}) {
+  const skipped = !!deferred.authorityNumbers;
   return (
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="grid gap-2">
-          <label className="text-sm font-medium">MC Number *</label>
-          <Input value={formData.mcNumber} onChange={e => setFormData({...formData, mcNumber: e.target.value})} placeholder="MC-123456" />
+          <label className="text-sm font-medium">MC Number</label>
+          <Input value={formData.mcNumber} onChange={e => setFormData({...formData, mcNumber: e.target.value})} placeholder="MC-123456" disabled={skipped} />
         </div>
         <div className="grid gap-2">
-          <label className="text-sm font-medium">USDOT Number *</label>
-          <Input value={formData.usdotNumber} onChange={e => setFormData({...formData, usdotNumber: e.target.value})} placeholder="1234567" />
+          <label className="text-sm font-medium">USDOT Number</label>
+          <Input value={formData.usdotNumber} onChange={e => setFormData({...formData, usdotNumber: e.target.value})} placeholder="1234567" disabled={skipped} />
         </div>
         <div className="grid gap-2 sm:col-span-2">
           <label className="text-sm font-medium">Authority Type *</label>
@@ -603,10 +652,16 @@ function FMCAStep({ formData, setFormData }: { formData: any; setFormData: any }
           </select>
         </div>
       </div>
+      <DeferOption
+        itemKey="authorityNumbers"
+        label="I don't have my MC/USDOT numbers handy"
+        checked={skipped}
+        onToggle={defer}
+      />
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4">
         <p className="text-sm text-muted-foreground">
-          We'll verify your authority status with FMCSA. If you're leasing onto Twin Mile,
-          you'll operate under our MC1790263 authority.
+          We&apos;ll verify your authority status with FMCSA. If you&apos;re leasing onto Twin Mile,
+          you&apos;ll operate under our MC1790263 authority.
         </p>
       </div>
     </div>
@@ -647,9 +702,25 @@ function BackgroundStep({ formData, setFormData }: { formData: any; setFormData:
   );
 }
 
-function ESignStep({ formData, setFormData }: { formData: any; setFormData: any }) {
-  const [signed, setSigned] = React.useState(false);
-  const [signature, setSignature] = React.useState("");
+function ESignStep({
+  formData,
+  setFormData,
+  deferred,
+  defer,
+}: {
+  formData: any;
+  setFormData: any;
+  deferred: Record<string, string>;
+  defer: (key: string, label: string) => void;
+}) {
+  // Signature and consent live in formData, not local state. They used to be
+  // component state, so a driver who actually signed had their signature
+  // silently discarded on submit — the lease record was created unsigned.
+  const signature = formData.signature || "";
+  const signed = !!formData.signedAgreement;
+  const setSignature = (v: string) => setFormData({ ...formData, signature: v });
+  const setSigned = (v: boolean) => setFormData({ ...formData, signedAgreement: v });
+  const signLater = !!deferred.leaseSignature;
   const [showFullAgreement, setShowFullAgreement] = React.useState(false);
 
   return (
@@ -757,22 +828,67 @@ function ESignStep({ formData, setFormData }: { formData: any; setFormData: any 
           onChange={e => setSignature(e.target.value)}
           placeholder="Type your full legal name to sign"
           className="font-medium"
+          disabled={signLater}
         />
         <div className="flex items-start gap-3">
           <input
             type="checkbox"
             id="esign-consent"
             checked={signed}
+            disabled={signLater}
             onChange={e => setSigned(e.target.checked)}
-            className="w-4 h-4 mt-0.5 rounded border-border/80 text-primary focus:ring-primary"
+            className="w-4 h-4 mt-0.5 rounded border-border/80 text-primary focus:ring-primary disabled:opacity-50"
           />
           <label htmlFor="esign-consent" className="text-sm leading-relaxed">
             I agree to all terms above and provide my electronic signature.
             I certify the information provided is accurate and I authorize Twin Mile LLC to verify my credentials.
           </label>
         </div>
+
+        {/*
+          The real drop-off point. This is where an applicant who has already
+          given his DOB, SSN last-4 and USDOT is asked to sign a lease with a
+          20% fee and a list of penalties, on a phone. Signing is a decision
+          people want to sleep on or run past someone — and until now, sleeping
+          on it meant abandoning the whole application.
+        */}
+        <DeferOption
+          itemKey="leaseSignature"
+          label="Send me the agreement to review before I sign"
+          checked={signLater}
+          onToggle={defer}
+        />
       </div>
     </div>
+  );
+}
+
+/**
+ * The "I don't have this yet" control. Deliberately quiet — it is an escape
+ * hatch, not an invitation, so it sits under the fields rather than beside the
+ * primary action.
+ */
+function DeferOption({
+  itemKey,
+  label,
+  checked,
+  onToggle,
+}: {
+  itemKey: string;
+  label: string;
+  checked: boolean;
+  onToggle: (key: string, label: string) => void;
+}) {
+  return (
+    <label className="flex items-start gap-2 text-sm text-muted-foreground cursor-pointer">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={() => onToggle(itemKey, label)}
+        className="w-4 h-4 mt-0.5 rounded border-border/80 text-primary focus:ring-primary"
+      />
+      <span>{label} — we&apos;ll follow up</span>
+    </label>
   );
 }
 
