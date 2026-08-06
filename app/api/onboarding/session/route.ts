@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import clientPromise from "@/lib/mongodb";
 
+/** How far a self-renewal pushes the expiry out — matches lib/autoheal.ts. */
+const SESSION_RENEWAL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Beyond this age from creation, a click no longer silently reopens the session.
+ * Not a security boundary (the token only unlocks the holder's own prefilled
+ * data) — it stops an ancient link from being resurrected years later against
+ * terms and pay figures that have since changed.
+ */
+const SELF_RENEW_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+
 /**
  * GET /api/onboarding/session?token=XXX
  *
@@ -75,12 +86,47 @@ export async function GET(request: NextRequest) {
       { $set: updateData }
     );
 
-    // Check if expired
-    if (session.expiresAt && new Date(session.expiresAt) < new Date()) {
-      return NextResponse.json(
-        { ok: false, error: "This onboarding link has expired. Please contact us for a new link.", expired: true },
-        { status: 410 }
-      );
+    // EXPIRED — but recoverable.
+    //
+    // This branch used to be a terminal 410 ("contact us for a new link"), which
+    // is a wall in front of the most valuable event this funnel has: a prospect
+    // who finally clicked. 956 of 962 invitees were behind it. lib/autoheal.ts
+    // already renews any session that has been clicked, to 30 days — so the only
+    // thing the wall accomplished was making the person wait up to an hour for a
+    // cron to do what we can do right here, at the moment of engagement.
+    //
+    // The SAME session and the SAME token are extended rather than rotated: the
+    // link lives in an email we cannot edit, and rotating would break the copy
+    // the prospect is holding. The expiry is not a security control here — the
+    // token only unlocks the prospect's own prefilled data — but self-renewal is
+    // still bounded, so a token cannot be resurrected indefinitely.
+    if (session.expiresAt && new Date(session.expiresAt) < now) {
+      const createdAt = session.createdAt ? new Date(session.createdAt) : null;
+      const ageMs = createdAt ? now.getTime() - createdAt.getTime() : Number.POSITIVE_INFINITY;
+
+      if (ageMs <= SELF_RENEW_MAX_AGE_MS) {
+        await db.collection("onboarding_sessions").updateOne(
+          { _id: session._id },
+          {
+            $set: {
+              expiresAt: new Date(now.getTime() + SESSION_RENEWAL_MS),
+              renewedAt: now,
+              renewedBy: "self-click",
+              updatedAt: now,
+            },
+          }
+        );
+      } else {
+        return NextResponse.json(
+          {
+            ok: false,
+            error:
+              "This onboarding link is too old to reopen. Call (281) 710-7787 or reply to your invitation email and we will send a fresh one — nothing you entered is lost.",
+            expired: true,
+          },
+          { status: 410 }
+        );
+      }
     }
 
     // Check if already completed

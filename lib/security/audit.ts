@@ -11,6 +11,9 @@ export type AuditEventName =
   | "admin.driver.reset_password"
   | "admin.driver.delete"
   | "admin.driver.update"
+  // Money leaving the company. The only record that a settlement was actually
+  // paid rather than merely computed.
+  | "admin.settlement.paid"
   | "driver.profile.update"
   | "driver.load.accepted"
   | "driver.load.picked_up"

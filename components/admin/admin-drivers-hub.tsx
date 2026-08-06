@@ -10,6 +10,8 @@ import {
   createDriverUserAction,
   deleteDriverUserAction,
   getDriverOverviewAction,
+  getDriverSettlementsSummaryAction,
+  markSettlementPaidAction,
   resetDriverPasswordAction,
   updateDriverUserAction,
 } from "@/app/actions/admin";
@@ -49,6 +51,13 @@ function money(n: any) {
   return `$${Math.round(v).toLocaleString()}`;
 }
 
+type Settlements = {
+  settlements: any[];
+  currentWeekTotal: number;
+  ytdTotal: number;
+  allTimeTotal: number;
+};
+
 export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
   const router = useRouter();
 
@@ -65,6 +74,17 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
 
   const [editDraft, setEditDraft] = React.useState({ firstName: "", lastName: "", isOwnerOperator: false });
   const [saveStatus, setSaveStatus] = React.useState<string | null>(null);
+
+  /**
+   * Settlements. The summary action existed but had NO caller anywhere in the
+   * repo, and there was no way at all to record that a driver had been paid —
+   * settlements were created "pending" on delivery and stayed pending forever
+   * while the site promised weekly direct deposit. Payment happens off-platform;
+   * this is where it gets written down.
+   */
+  const [settlements, setSettlements] = React.useState<Settlements | null>(null);
+  const [payDraft, setPayDraft] = React.useState<Record<string, string>>({});
+  const [payStatus, setPayStatus] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     setRows(drivers);
@@ -87,6 +107,9 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
     async function load() {
       setStatus(null);
       setOverview(null);
+      setSettlements(null);
+      setPayStatus(null);
+      setPayDraft({});
       try {
         if (ac.signal.aborted) return;
         const data = await getDriverOverviewAction(id);
@@ -95,6 +118,9 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
           return;
         }
         setOverview(data as Overview);
+
+        const pay = await getDriverSettlementsSummaryAction(id);
+        if (!ac.signal.aborted && pay.ok) setSettlements(pay as Settlements);
       } catch {
         // ignore
       }
@@ -251,6 +277,33 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
       router.refresh();
     } catch {
       setStatus("Unable to delete driver.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function markPaid(settlementId: string) {
+    const reference = String(payDraft[settlementId] ?? "").trim();
+    if (!reference) {
+      setPayStatus("Enter the check number or transfer id first — “paid” with nothing to point at is not a record.");
+      return;
+    }
+    setBusy(true);
+    setPayStatus(null);
+    try {
+      const result = await markSettlementPaidAction({ settlementId, reference });
+      if (!result.ok) {
+        setPayStatus(result.error ?? "Unable to mark paid.");
+        return;
+      }
+      setPayStatus("Marked paid.");
+      setPayDraft((p) => ({ ...p, [settlementId]: "" }));
+      if (selectedId) {
+        const pay = await getDriverSettlementsSummaryAction(selectedId);
+        if (pay.ok) setSettlements(pay as Settlements);
+      }
+    } catch {
+      setPayStatus("Unable to mark paid.");
     } finally {
       setBusy(false);
     }
@@ -427,6 +480,67 @@ export function AdminDriversHub({ drivers }: { drivers: DriverListItem[] }) {
                     {(overview?.routeEvents ?? []).length === 0 ? (
                       <div className="text-sm text-muted-foreground">No events yet.</div>
                     ) : null}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border/60 bg-background/20 p-4 lg:col-span-2">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="text-sm font-semibold tracking-tight">Settlements</div>
+                    <div className="text-xs text-muted-foreground">
+                      Paid all time {money(settlements?.allTimeTotal)} · this week {money(settlements?.currentWeekTotal)}
+                    </div>
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Payment is made outside this app. Marking paid records the reference so the driver&apos;s earnings
+                    tab stops showing it as awaiting payment.
+                  </p>
+                  <div className="mt-3 grid gap-2">
+                    {(settlements?.settlements ?? []).length === 0 ? (
+                      <div className="text-sm text-muted-foreground">No settlements yet.</div>
+                    ) : (
+                      (settlements?.settlements ?? []).map((s: any) => {
+                        const id = String(s._id ?? s.id);
+                        const paid = String(s.status ?? "pending") === "paid";
+                        return (
+                          <div key={id} className="rounded-md border border-border/60 bg-background/30 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="font-medium">{money(s.driverPayout)}</span>
+                                <span className="text-xs text-muted-foreground">of {money(s.revenueUsd)} gross</span>
+                                <Badge variant={paid ? "outline" : "destructive"}>
+                                  {paid ? "Paid" : "Awaiting payment"}
+                                </Badge>
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {s.weekStart ? `week of ${String(s.weekStart).slice(0, 10)}` : ""}
+                              </div>
+                            </div>
+                            {paid ? (
+                              <div className="mt-1 text-xs text-muted-foreground">
+                                {s.paidAt ? `Paid ${String(s.paidAt).slice(0, 10)}` : "Paid"}
+                                {s.paymentReference ? ` · ref ${String(s.paymentReference)}` : ""}
+                              </div>
+                            ) : (
+                              <div className="mt-2 flex flex-wrap items-center gap-2">
+                                <Input
+                                  className="max-w-xs"
+                                  placeholder="Check no. / transfer id"
+                                  value={payDraft[id] ?? ""}
+                                  onChange={(e) => {
+                                    const v = (e.target as HTMLInputElement | null)?.value ?? "";
+                                    setPayDraft((p) => ({ ...p, [id]: v }));
+                                  }}
+                                />
+                                <Button type="button" size="sm" disabled={busy} onClick={() => markPaid(id)}>
+                                  Mark paid
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                    {payStatus ? <div className="text-sm text-muted-foreground">{payStatus}</div> : null}
                   </div>
                 </div>
 

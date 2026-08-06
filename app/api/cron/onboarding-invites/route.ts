@@ -45,7 +45,18 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const MAX_PER_RUN = 50;
-const SESSION_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days, same as legacy script
+/**
+ * 30 days, raised from the legacy script's 7.
+ *
+ * 7 days was shorter than the reply latency of this audience: 956 of 962 invited
+ * prospects were holding an expired link, and /api/onboarding/session answered
+ * every late click with a 410 wall. lib/autoheal.ts already extends engaged
+ * sessions to 30 days, so 7 was never the real window — it was a window that
+ * only applied to people who had not yet clicked, i.e. exactly the people we
+ * still want to hear from. A prospect who finally opens the email three weeks
+ * later is the single most valuable event in this funnel.
+ */
+const SESSION_EXPIRY_MS = 30 * 24 * 60 * 60 * 1000;
 const BUSINESS_HOURS_START = 8; // 8am CT
 const BUSINESS_HOURS_END = 20; // 8pm CT (exclusive)
 

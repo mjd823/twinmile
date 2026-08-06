@@ -20,8 +20,12 @@ export const SITE_CONFIG = {
   email: process.env.NEXT_PUBLIC_ADMIN_EMAIL || "admin@twinmile.com",
   notifyEmail: process.env.RESEND_NOTIFY_TO || "admin@twinmile.com",
 
-  // Email
-  fromEmail: process.env.RESEND_FROM_EMAIL || "Twin Mile <alerts@contact.twinmile.com>",
+  // Email. The local-part is deliberately NOT alerts@/noreply@ — a robot
+  // mailbox is one of the stacked signals that files mail in Promotions, and it
+  // suppresses replies on its own. lib/sending-policy.ts humanizeSender()
+  // enforces this at send time too, so an env var still set to alerts@ cannot
+  // reintroduce it.
+  fromEmail: process.env.RESEND_FROM_EMAIL || "Twin Mile <team@contact.twinmile.com>",
 
   // URLs
   appUrl: process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://twinmile.com",

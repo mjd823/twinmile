@@ -2147,6 +2147,82 @@ export async function getDriverSettlementsSummaryAction(
   };
 }
 
+const MarkSettlementPaidSchema = z.object({
+  settlementId: z.string().regex(/^[0-9a-fA-F]{24}$/),
+  /** Check number, ACH trace, Zelle confirmation — whatever proves it moved. */
+  reference: z.string().trim().min(1).max(120),
+});
+
+/**
+ * Move a settlement from "pending" to "paid".
+ *
+ * WHY THIS EXISTS (2026-08-06): app/actions/driver.ts auto-creates a settlement
+ * with status "pending" the moment a load is delivered, and NOTHING in the repo
+ * ever moved it off "pending" — grep for paid|markPaid|payout|ACH returned only
+ * marketing copy. Meanwhile /drive-with-us and the lease itself both promise
+ * "weekly direct deposit by Tuesday". So the system could compute what a driver
+ * is owed forever and had no way to record that he was paid.
+ *
+ * Payment itself stays MANUAL and off-platform — that is honest, and provisioning
+ * a payments rail is not this fix. What was not honest was a schema with no
+ * terminal state, and a driver dashboard that summed pending money as "This
+ * Week". A reference is required, not optional: "paid" with nothing to point at
+ * is the same unverifiable claim as "pending".
+ *
+ * No settlements exist yet (zero loads), so nobody has been shorted. This lands
+ * before the first delivery, not after.
+ */
+export async function markSettlementPaidAction(
+  input: unknown
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const sameOrigin = await isSameOriginFromHeaders();
+  if (!sameOrigin) return { ok: false, error: "Forbidden." };
+
+  const auth = await requireAdminOrError();
+  if (!auth.ok) return auth;
+  if (!clientPromise) return { ok: false, error: "Database not configured." };
+
+  const parsed = MarkSettlementPaidSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "A payment reference (check number / transfer id) is required." };
+  }
+
+  const client = await clientPromise;
+  const db = client.db();
+  const now = new Date();
+
+  // Status guard is in the FILTER, so a double-click cannot overwrite an existing
+  // paidAt/reference with a second one.
+  const result = await db.collection("settlements").updateOne(
+    { _id: new ObjectId(parsed.data.settlementId), status: "pending" },
+    {
+      $set: {
+        status: "paid",
+        paidAt: now,
+        paymentReference: parsed.data.reference,
+        paidByUserId: String(auth.admin._id),
+        updatedAt: now,
+      },
+    }
+  );
+
+  if (result.matchedCount === 0) {
+    return { ok: false, error: "That settlement is not pending — it may already be marked paid." };
+  }
+
+  await writeAuditEvent({
+    name: "admin.settlement.paid",
+    at: now,
+    ip: await getClientIpFromHeaders(),
+    userAgent: await getUserAgentFromHeaders(),
+    actorUserId: String(auth.admin._id),
+    actorRole: "admin",
+    meta: { settlementId: parsed.data.settlementId, reference: parsed.data.reference },
+  });
+
+  return { ok: true };
+}
+
 // ── Document Expiration Tracking ─────────────────────────────────────
 
 const SetDocExpirationSchema = z.object({

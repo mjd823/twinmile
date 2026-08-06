@@ -8,8 +8,14 @@ import {
   type Lead,
   type Personalization,
 } from "@/lib/outreach-templates";
-import { getSendAllowance, bulkSenderHeaders, unsubscribeUrlFor } from "@/lib/sending-policy";
+import {
+  getSendAllowance,
+  bulkSenderHeaders,
+  humanizeSender,
+  unsubscribeUrlFor,
+} from "@/lib/sending-policy";
 import { leadCollectionFor, resolveLead } from "@/lib/outreach-lead-resolver";
+import { SITE_CONFIG } from "@/lib/site-config";
 
 /**
  * GET /api/cron/process-outreach
@@ -269,7 +275,17 @@ export async function GET(request: NextRequest) {
       );
     }
     const resend = new Resend(RESEND_API_KEY);
-    const FROM = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev";
+    // humanizeSender rewrites a robot local-part (alerts@, noreply@) — one of the
+    // three stacked signals that file this mail in Promotions, and one that
+    // suppresses replies on its own. lib/sending-policy.ts shipped the detector
+    // for this months ago with zero callers while the live From was
+    // alerts@contact.twinmile.com, which its own regex matches.
+    //
+    // SITE_CONFIG.fromEmail replaces the old "onboarding@resend.dev" fallback:
+    // contact.twinmile.com is DNS-verified, so falling back to Resend's SHARED
+    // test domain could only break DMARC alignment for twinmile.com and land cold
+    // mail in spam if the env var were ever cleared.
+    const FROM = humanizeSender(SITE_CONFIG.fromEmail);
     // Explicit reply-to for outreach. Point OUTREACH_REPLY_TO at an address on
     // a Resend-receiving domain (e.g. reply@contact.twinmile.com) so replies
     // flow into /api/webhooks/resend-inbound and show up on /admin/outreach.

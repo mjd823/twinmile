@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { hashPassword } from '@/lib/auth/crypto';
 import { randomToken } from '@/lib/auth/crypto';
-import { notifyOnboardingComplete } from '@/lib/email';
+import {
+  notifyOnboardingComplete,
+  sendDriverWelcome,
+  sendLeaseAgreementForReview,
+} from '@/lib/email';
+import { LEASE_TERMS_VERSION } from '@/lib/lease-terms';
 
 export async function POST(request: NextRequest) {
   try {
@@ -139,7 +144,14 @@ export async function POST(request: NextRequest) {
 
     const result = await db.collection('users').insertOne(userDoc);
 
-    // Create lease agreement record
+    // Create lease agreement record.
+    //
+    // signingToken is the capability that makes the deferral real. An applicant
+    // who asked to read the agreement first gets it emailed with a link keyed to
+    // THIS lease record, so his signature lands on his own row. Minted only when
+    // there is something left to sign — an already-signed lease must not carry a
+    // live signing link.
+    const signingToken = leaseSigned ? null : randomToken(32);
     await db.collection('lease_agreements').insertOne({
       userId: result.insertedId,
       operatorName: `${firstName} ${lastName}`,
@@ -152,6 +164,10 @@ export async function POST(request: NextRequest) {
       status: leaseSigned ? 'pending_review' : 'awaiting_signature',
       signature: leaseSigned ? signature : null,
       signedAt: leaseSigned ? new Date() : null,
+      signingToken,
+      // Which wording was accepted. Without this a signature cannot be traced to
+      // the terms it agreed to once lib/lease-terms.ts changes.
+      termsVersion: leaseSigned ? LEASE_TERMS_VERSION : null,
       documents,
       outstandingDocuments,
       deferredItems,
@@ -204,29 +220,59 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Tell a human, in-request. AWAITED deliberately: Vercel freezes the lambda
-    // the moment the response is returned, so a fire-and-forget send here would
-    // be killed mid-flight and lose exactly the alert that matters most. A
-    // completed application that nobody hears about is how 962 sessions produced
-    // no follow-up. notifyOnboardingComplete never throws, so a mail outage can
-    // never fail a submission the driver already finished.
+    // ── Email, all AWAITED, after every write has landed ────────────────────
+    //
+    // AWAITED deliberately: Vercel freezes the lambda the moment the response is
+    // returned, so a fire-and-forget send here would be killed mid-flight and
+    // lose exactly the messages that matter most. Every sender below swallows its
+    // own failures and returns a boolean, so a mail outage can never fail a
+    // submission the driver already finished — he would see an error, assume his
+    // application vanished, and his retry would hit the already-completed path.
+    //
+    // Sent AFTER the DB writes rather than inline with them: if the invocation
+    // dies mid-send, the application still exists, the session is still closed
+    // and a human still has the record. The reverse order can lose the record.
+    const fullName = `${firstName} ${lastName}`.trim();
+    const [welcomeEmailSent, agreementEmailSent] = await Promise.all([
+      sendDriverWelcome({ fullName, email, tempPassword }),
+      // Keeps the promise printed on the deferral checkbox. Guarded because a
+      // driver who already signed must not be sent a live signing link.
+      signingToken
+        ? sendLeaseAgreementForReview({ fullName, email, signingToken })
+        : Promise.resolve(true),
+    ]);
+
+    // Owner alert last, so it can report whether the applicant's own emails
+    // actually left. A failed credentials email means a driver is holding an
+    // account he cannot enter and does not know it — only a phone call fixes
+    // that, and only if somebody is told.
     await notifyOnboardingComplete({
-      fullName: `${firstName} ${lastName}`.trim(),
+      fullName,
       email,
       phone: (formData.get('phone') as string) || undefined,
       leaseSigned,
       deferredItems: Object.values(deferredItems),
       outstandingDocuments,
       driverUserId: result.insertedId.toString(),
+      welcomeEmailSent,
+      agreementEmailSent,
     });
 
+    // tempPassword is deliberately NOT returned. It is a credential, and the
+    // browser has no use for it: the portal discarded it anyway, and the only
+    // durable delivery is the email above. Returning it put a live password in a
+    // JSON body for any extension or proxy log to read.
     return NextResponse.json({
       ok: true,
-      tempPassword,
       driverUserId: result.insertedId.toString(),
       leaseSigned,
+      credentialsEmailed: welcomeEmailSent,
+      agreementEmailed: signingToken ? agreementEmailSent : false,
+      email,
       followUp: [...Object.values(deferredItems), ...outstandingDocuments],
-      message: `Account created. Temporary password: ${tempPassword}`
+      message: welcomeEmailSent
+        ? `Account created. Your login details were emailed to ${email}.`
+        : 'Account created. We could not email your login details — Twin Mile will call you.',
     });
   } catch (error) {
     console.error('[api/onboarding/complete] error:', error);

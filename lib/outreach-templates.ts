@@ -10,6 +10,7 @@
  */
 
 import { renderEmailLayout } from "@/lib/email-layout";
+import { SITE_CONFIG } from "@/lib/site-config";
 
 // Leads come from heterogeneous collections (leads_quotes, leads_drivers,
 // outbound_prospects) with different shapes -- same loose typing as the
@@ -103,19 +104,36 @@ export const EMAIL_TEMPLATES: Record<
     text: (lead: Lead, p: Personalization) => string;
   }
 > = {
+  /*
+   * QUOTE TEMPLATES — both of these used to end after "thank you for requesting
+   * a quote", with no rate, no callback and no ask. An email that thanks somebody
+   * for a quote request without a quote or a commitment is a receipt, and a
+   * receipt is why the only shipper who ever raised a hand here went nowhere.
+   *
+   * We cannot put a rate in an automated template — the rate depends on weight,
+   * dimensions and pickup window nobody has yet. So the next step is the ask that
+   * gets those, plus a number the shipper can dial himself. Nothing is promised
+   * that a person is not expected to do.
+   */
   quote_initial: {
     subject: (lead) => `Your ${lead.serviceType || "freight"} quote request -- Twin Mile`,
     html: (lead) =>
-      `<p>Hi ${lead.name},</p><p>Thank you for requesting a quote for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.</p>`,
+      `<p>Hi ${lead.name},</p><p>Thank you for requesting a quote for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.</p>` +
+      `<p><strong>Next step:</strong> a Twin Mile dispatcher will follow up within one business day. To move faster, reply with the weight, dimensions and pickup window and you will get a firm number on the first call — or call ${SITE_CONFIG.phone} now.</p>`,
     text: (lead) =>
-      `Hi ${lead.name},\n\nThank you for requesting a quote for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.`,
+      `Hi ${lead.name},\n\nThank you for requesting a quote for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.\n\n` +
+      `Next step: a Twin Mile dispatcher will follow up within one business day.\nTo move faster, reply with the weight, dimensions and pickup window and you will get a firm number on the first call — or call ${SITE_CONFIG.phone} now.`,
   },
   quote_followup: {
     subject: (lead) => `Following up: Your ${lead.serviceType || "freight"} quote`,
     html: (lead) =>
-      `<p>Hi ${lead.name},</p><p>Following up on your quote request for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.</p>`,
+      `<p>Hi ${lead.name},</p><p>Following up on your quote request for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.</p>` +
+      `<p>To price this properly we need three things: weight, dimensions, and the pickup window. Reply with those and you will have a firm rate the same day. If it is easier to say out loud, call ${SITE_CONFIG.phone} and ask for dispatch.</p>` +
+      `<p>If the load is already covered, reply "covered" and we will close it out — no follow-ups.</p>`,
     text: (lead) =>
-      `Hi ${lead.name},\n\nFollowing up on your quote request for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.`,
+      `Hi ${lead.name},\n\nFollowing up on your quote request for ${lead.serviceType || "freight"} from ${lead.pickupLocation || "your location"} to ${lead.dropoffLocation || "destination"}.\n\n` +
+      `To price this properly we need three things: weight, dimensions, and the pickup window. Reply with those and you will have a firm rate the same day. If it is easier to say out loud, call ${SITE_CONFIG.phone} and ask for dispatch.\n\n` +
+      `If the load is already covered, reply "covered" and we will close it out — no follow-ups.`,
   },
   driver_welcome: {
     subject: (lead) => `Welcome to Twin Mile -- Your ${lead.truckType || "driving"} application`,

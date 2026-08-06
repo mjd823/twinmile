@@ -56,10 +56,18 @@ export function DriverDashboard() {
   const [note, setNote] = React.useState("");
   const [statusMsg, setStatusMsg] = React.useState<string | null>(null);
   const [loadHistory, setLoadHistory] = React.useState<any[] | null>(null);
+  // Paid and pending are tracked separately on purpose — see
+  // getDriverSettlementsAction. A settlement is created automatically on delivery
+  // and nothing has moved until an admin marks it paid with a reference, so
+  // reporting the two as one "earnings" figure told the driver he had been paid
+  // money that had not left the company.
   const [settlements, setSettlements] = React.useState<{
     list: any[];
     weekTotal: number;
+    weekPaid: number;
     ytdTotal: number;
+    ytdPaid: number;
+    pendingTotal: number;
   } | null>(null);
 
   async function reload() {
@@ -81,7 +89,7 @@ export function DriverDashboard() {
     }
     if (tab === "earnings" && !settlements) {
       getDriverSettlementsAction().then((r) => {
-        if (r.ok) setSettlements({ list: r.settlements, weekTotal: r.currentWeekTotal, ytdTotal: r.ytdTotal });
+        if (r.ok) setSettlements({ list: r.settlements, weekTotal: r.currentWeekTotal, weekPaid: r.currentWeekPaid, ytdTotal: r.ytdTotal, ytdPaid: r.ytdPaid, pendingTotal: r.pendingTotal });
       }).catch(() => {});
     }
   }, [tab, loadHistory, settlements]);
@@ -104,7 +112,7 @@ export function DriverDashboard() {
       }
       if (tab === "earnings") {
         getDriverSettlementsAction().then((r) => {
-          if (r.ok) setSettlements({ list: r.settlements, weekTotal: r.currentWeekTotal, ytdTotal: r.ytdTotal });
+          if (r.ok) setSettlements({ list: r.settlements, weekTotal: r.currentWeekTotal, weekPaid: r.currentWeekPaid, ytdTotal: r.ytdTotal, ytdPaid: r.ytdPaid, pendingTotal: r.pendingTotal });
         }).catch(() => {});
       }
     } else {
@@ -314,20 +322,31 @@ export function DriverDashboard() {
       {/* Tab: Earnings */}
       {tab === "earnings" && (
         <div className="space-y-6">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="rounded-2xl border border-primary/30 bg-primary/5 p-5">
-              <div className="text-xs font-semibold text-muted-foreground">This Week</div>
+              <div className="text-xs font-semibold text-muted-foreground">Paid This Week</div>
               <div className="mt-2 text-3xl font-semibold tracking-tight text-primary">
-                {settlements ? money(settlements.weekTotal) : "…"}
+                {settlements ? money(settlements.weekPaid) : "…"}
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">80% gross to you</div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {settlements && settlements.weekTotal > settlements.weekPaid
+                  ? `${money(settlements.weekTotal - settlements.weekPaid)} calculated, not yet paid`
+                  : "80% gross to you"}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-5">
+              <div className="text-xs font-semibold text-muted-foreground">Awaiting Payment</div>
+              <div className="mt-2 text-3xl font-semibold tracking-tight text-amber-600 dark:text-amber-400">
+                {settlements ? money(settlements.pendingTotal) : "…"}
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">Calculated, not yet deposited</div>
             </div>
             <div className="rounded-2xl border border-border/60 bg-card p-5">
-              <div className="text-xs font-semibold text-muted-foreground">Year to Date</div>
+              <div className="text-xs font-semibold text-muted-foreground">Paid Year to Date</div>
               <div className="mt-2 text-3xl font-semibold tracking-tight">
-                {settlements ? money(settlements.ytdTotal) : "…"}
+                {settlements ? money(settlements.ytdPaid) : "…"}
               </div>
-              <div className="mt-1 text-xs text-muted-foreground">{new Date().getFullYear()} total earnings</div>
+              <div className="mt-1 text-xs text-muted-foreground">{new Date().getFullYear()} deposited to you</div>
             </div>
           </div>
 
@@ -339,17 +358,35 @@ export function DriverDashboard() {
               <div className="mt-4 text-sm text-muted-foreground">No settlements yet. Complete deliveries to see earnings.</div>
             ) : (
               <div className="mt-4 grid gap-2">
-                {settlements.list.map((s: any) => (
-                  <div key={String(s._id ?? s.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="font-medium text-primary">{money(s.driverPayout)}</span>
-                      <span className="text-xs text-muted-foreground">of {money(s.revenueUsd)} gross</span>
+                {settlements.list.map((s: any) => {
+                  const paid = String(s.status ?? "pending") === "paid";
+                  return (
+                    <div key={String(s._id ?? s.id)} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/30 px-3 py-2 text-sm">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className={`font-medium ${paid ? "text-primary" : "text-amber-600 dark:text-amber-400"}`}>
+                          {money(s.driverPayout)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">of {money(s.revenueUsd)} gross</span>
+                        {/* Status is shown per row, not just in the totals — a
+                            driver reading his history has to be able to tell which
+                            of these lines is money he actually received. */}
+                        <Badge variant="outline" className="text-[10px]">
+                          {paid ? "Paid" : "Awaiting payment"}
+                        </Badge>
+                        {paid && s.paymentReference ? (
+                          <span className="text-xs text-muted-foreground">ref {String(s.paymentReference)}</span>
+                        ) : null}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {paid && s.paidAt
+                          ? `paid ${String(s.paidAt).slice(0, 10)}`
+                          : s.createdAt
+                            ? String(s.createdAt).slice(0, 10)
+                            : ""}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {s.createdAt ? String(s.createdAt).slice(0, 10) : ""}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

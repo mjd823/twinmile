@@ -323,12 +323,26 @@ export async function getDriverLoadHistoryAction(): Promise<
 
 // ── Driver Settlements ──────────────────────────────────────────────
 
+/**
+ * A driver's settlements, with PAID money reported separately from money that has
+ * only been calculated.
+ *
+ * WHY THE SPLIT (2026-08-06): these totals used to sum driverPayout regardless of
+ * status, so a settlement sitting at "pending" — computed automatically on
+ * delivery, with no payment behind it — was shown to the driver as "This Week"
+ * earnings. The site promises weekly direct deposit by Tuesday; showing unpaid
+ * money as earnings against that promise is the fastest way to lose a driver's
+ * trust in every other number on the page.
+ */
 export async function getDriverSettlementsAction(): Promise<
   | {
       ok: true;
       settlements: any[];
       currentWeekTotal: number;
+      currentWeekPaid: number;
       ytdTotal: number;
+      ytdPaid: number;
+      pendingTotal: number;
     }
   | { ok: false; error: string }
 > {
@@ -353,7 +367,9 @@ export async function getDriverSettlementsAction(): Promise<
   // YTD start
   const ytdStart = new Date(now.getUTCFullYear(), 0, 1);
 
-  const [settlements, currentWeekAgg, ytdAgg] = await Promise.all([
+  // Each window is grouped BY STATUS so paid and pending never merge into one
+  // number by accident again.
+  const [settlements, currentWeekAgg, ytdAgg, pendingAgg] = await Promise.all([
     db
       .collection("settlements")
       .find({ driverUserId }, { sort: { createdAt: -1 }, limit: 100 })
@@ -362,23 +378,37 @@ export async function getDriverSettlementsAction(): Promise<
       .collection("settlements")
       .aggregate([
         { $match: { driverUserId, weekStart: { $gte: weekStart } } },
-        { $group: { _id: null, total: { $sum: "$driverPayout" } } },
+        { $group: { _id: "$status", total: { $sum: "$driverPayout" } } },
       ])
       .toArray(),
     db
       .collection("settlements")
       .aggregate([
         { $match: { driverUserId, createdAt: { $gte: ytdStart } } },
+        { $group: { _id: "$status", total: { $sum: "$driverPayout" } } },
+      ])
+      .toArray(),
+    db
+      .collection("settlements")
+      .aggregate([
+        { $match: { driverUserId, status: { $ne: "paid" } } },
         { $group: { _id: null, total: { $sum: "$driverPayout" } } },
       ])
       .toArray(),
   ]);
 
+  const sumAll = (rows: any[]) => rows.reduce((n, r) => n + Number(r.total || 0), 0);
+  const sumPaid = (rows: any[]) =>
+    rows.filter((r) => r._id === "paid").reduce((n, r) => n + Number(r.total || 0), 0);
+
   return {
     ok: true,
     settlements: toPlain(settlements),
-    currentWeekTotal: currentWeekAgg[0]?.total ?? 0,
-    ytdTotal: ytdAgg[0]?.total ?? 0,
+    currentWeekTotal: sumAll(currentWeekAgg),
+    currentWeekPaid: sumPaid(currentWeekAgg),
+    ytdTotal: sumAll(ytdAgg),
+    ytdPaid: sumPaid(ytdAgg),
+    pendingTotal: pendingAgg[0]?.total ?? 0,
   };
 }
 

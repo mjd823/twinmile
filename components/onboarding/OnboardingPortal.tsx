@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LeaseFullAgreement, LeaseTermsSummary } from "@/components/lease/lease-terms-view";
 
 interface OnboardingStep {
   id: number;
@@ -117,6 +118,14 @@ export function OnboardingPortal() {
     });
   const [status, setStatus] = React.useState<"idle" | "submitting" | "success" | "error">("idle");
   const [errorMessage, setErrorMessage] = React.useState("");
+
+  /** What the server actually did, so the last screen can say it truthfully. */
+  const [submitResult, setSubmitResult] = React.useState<{
+    email: string;
+    credentialsEmailed: boolean;
+    agreementEmailed: boolean;
+    leaseSigned: boolean;
+  } | null>(null);
 
   // Token-based session validation and resume
   const [sessionToken, setSessionToken] = React.useState<string | null>(null);
@@ -287,7 +296,7 @@ export function OnboardingPortal() {
       label: "Account Created",
       description: "Your account is ready. Welcome to Twin Mile!",
       icon: <CheckCircle2 className="h-5 w-5" />,
-      component: <CompleteStep />,
+      component: <CompleteStep result={submitResult} />,
       isComplete: currentStep === 7, // Only complete when actually on this step
       isActive: currentStep === 7,
       canProceed: false,
@@ -340,11 +349,21 @@ export function OnboardingPortal() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to submit");
 
+      // Kept so the final screen can state what ACTUALLY happened rather than a
+      // fixed promise. The old code read only data.error and discarded the rest,
+      // including the temporary password it had just promised to send.
+      setSubmitResult({
+        email: String(data.email || formData.email || ""),
+        credentialsEmailed: data.credentialsEmailed !== false,
+        agreementEmailed: !!data.agreementEmailed,
+        leaseSigned: !!data.leaseSigned,
+      });
       setStatus("success");
       setCurrentStep(7);
 
     } catch (error) {
       console.error(error);
+      setErrorMessage(error instanceof Error ? error.message : "");
       setStatus("error");
     }
   };
@@ -734,43 +753,14 @@ function ESignStep({
           Review the agreement below. Your electronic signature constitutes legal acceptance.
         </p>
 
-        {/* Summary Terms */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
-          <div className="rounded-lg border border-border/60 bg-background p-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Payment Structure</p>
-            <div className="text-sm space-y-1">
-              <div className="flex justify-between"><span>MC Usage Fee:</span> <strong>10%</strong></div>
-              <div className="flex justify-between"><span>Factoring Fee:</span> <strong>3%</strong></div>
-              <div className="flex justify-between"><span>Dispatching Fee:</span> <strong>7%</strong></div>
-              <div className="flex justify-between border-t pt-1 mt-1"><span className="font-semibold">Total Sign-On:</span> <strong className="text-primary">20%</strong></div>
-              <div className="text-xs text-muted-foreground mt-1">Weekly direct deposit by Tuesday</div>
-            </div>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-background p-3">
-            <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Requirements</p>
-            <div className="text-xs space-y-1 text-muted-foreground">
-              <div>• Valid CDL with endorsements</div>
-              <div>• DOT Medical Examiner Certificate</div>
-              <div>• Annual DOT truck inspection</div>
-              <div>• COI with Twin Mile as certificate holder</div>
-              <div>• ELD compliance (FMCSA regs)</div>
-              <div>• Clean MVR on request</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Penalties Warning */}
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 mb-4">
-          <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 uppercase mb-2">⚠ Penalties & Termination</p>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-1 text-xs text-muted-foreground">
-            <div>• Failed DOT inspection: $1,000 fine + termination</div>
-            <div>• Unreported DOT inspection: $1,000 fine</div>
-            <div>• Unauthorized MC use: $1,000 + termination</div>
-            <div>• Double brokering: $2,000 + termination</div>
-            <div>• Driver change without notice: $500</div>
-            <div>• 7-day written termination notice</div>
-          </div>
-        </div>
+        {/*
+          Terms render from lib/lease-terms.ts via the shared view, NOT from
+          literals here. They used to be hardcoded in this file, which is why an
+          applicant who asked for the agreement by email could not be sent one —
+          the document existed only as JSX. Three surfaces now read one source
+          (this step, the emailed copy, /lease/sign) so they cannot drift.
+        */}
+        <LeaseTermsSummary />
 
         {/* Full Agreement Toggle */}
         <button
@@ -782,41 +772,9 @@ function ESignStep({
         </button>
 
         {showFullAgreement && (
-          <div className="rounded-lg border border-border/60 bg-background p-4 max-h-80 overflow-y-auto text-sm space-y-3">
-            <p className="font-semibold">This Lease-On Agreement is made between <strong>Twin Mile LLC</strong> (Carrier, MC-1790263, Houston, TX) and <strong>{formData.firstName || "[Owner-Operator]"} {formData.lastName || ""}</strong> (Owner-Operator).</p>
-            <div>
-              <p className="font-semibold mb-1">1. Purpose</p>
-              <p className="text-xs text-muted-foreground">Carrier leases Owner-Operator's vehicle(s) for interstate property transportation under Carrier's FMCSA authority.</p>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">2. Term</p>
-              <p className="text-xs text-muted-foreground">Commences on signing. 7-day termination notice. Renewable by written agreement.</p>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">3. Compliance</p>
-              <p className="text-xs text-muted-foreground">DOT physical, annual inspection, CDL, HOS, ELD, MVR. Report violations immediately.</p>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">4. Financial Terms</p>
-              <p className="text-xs text-muted-foreground">20% total (10% MC + 3% factoring + 7% dispatch). Weekly payout by Tuesday. Expedited payment TBD.</p>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">5. Liability</p>
-              <p className="text-xs text-muted-foreground">Owner-Operator insurance is primary. At-fault accident may result in termination.</p>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">6. Termination</p>
-              <p className="text-xs text-muted-foreground">7-day notice, material breach, or automatic for violations per Section 4.</p>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">7. Dispute Resolution</p>
-              <p className="text-xs text-muted-foreground">Harris County, Texas law applies.</p>
-            </div>
-            <div>
-              <p className="font-semibold mb-1">8. Miscellaneous</p>
-              <p className="text-xs text-muted-foreground">Texas governing law. Entire agreement. Written amendments only.</p>
-            </div>
-          </div>
+          <LeaseFullAgreement
+            operatorName={`${formData.firstName || ""} ${formData.lastName || ""}`.trim()}
+          />
         )}
       </div>
 
@@ -1037,30 +995,50 @@ function InsuranceStep({ formData, setFormData }: { formData: any; setFormData: 
   );
 }
 
-function CompleteStep() {
+/**
+ * The last thing an applicant sees.
+ *
+ * Everything here is now reported from the server response instead of promised.
+ * The old copy said "you'll receive an email with your temporary login
+ * credentials within 24 hours" — no such email existed anywhere in the codebase,
+ * and the password the server generated was thrown away by this component. It
+ * also offered a "View Dashboard" button pointing at /dashboard, which 404s
+ * (there is no such route; the driver surface is /driver). A 404 as the final
+ * interaction of a completed application is the worst possible place for one.
+ */
+function CompleteStep({
+  result,
+}: {
+  result: {
+    email: string;
+    credentialsEmailed: boolean;
+    agreementEmailed: boolean;
+    leaseSigned: boolean;
+  } | null;
+}) {
+  const to = result?.email ? ` to ${result.email}` : "";
   return (
     <div className="text-center py-12">
       <CheckCircle2 className="mx-auto h-16 w-16 text-green-500 mb-4" />
       <h2 className="text-2xl font-bold mb-2">Onboarding Complete!</h2>
       <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-        Your account has been created successfully. You'll receive an email with your
-        temporary login credentials within 24 hours.
+        {result && !result.credentialsEmailed
+          ? "Your account is created. We could not email your login details — Twin Mile will call you with them."
+          : `Your account is created. Your login details were just emailed${to}.`}
       </p>
       <div className="rounded-lg border border-border/60 bg-muted/30 p-4 max-w-md mx-auto text-left">
         <h3 className="font-medium mb-2">What happens next:</h3>
         <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-5">
-          <li>Admin reviews your submission (1-2 business days)</li>
-          <li>Temporary password emailed to you</li>
-          <li>Log in at <code>/driver/login</code></li>
-          <li>Access dispatch board, settlements, and documents</li>
+          {result?.credentialsEmailed !== false && <li>Check your email for your temporary password</li>}
+          <li>Log in at <code>/driver/login</code> and set your own password</li>
+          {result?.agreementEmailed && <li>Sign the Lease-On Agreement — the link is in your email</li>}
+          <li>Twin Mile reviews your submission (1-2 business days)</li>
+          <li>Dispatch board, settlements and documents unlock on approval</li>
         </ul>
       </div>
-      <div className="mt-6 flex justify-center gap-3">
+      <div className="mt-6 flex justify-center">
         <Button size="lg" onClick={() => window.location.href = "/driver/login"}>
           Go to Driver Portal
-        </Button>
-        <Button variant="outline" onClick={() => window.location.href = "/dashboard"}>
-          View Dashboard
         </Button>
       </div>
     </div>

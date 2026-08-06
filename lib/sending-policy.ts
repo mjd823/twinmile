@@ -131,3 +131,45 @@ export function isRobotSender(from: string): boolean {
   const addr = from.match(/<([^>]+)>/)?.[1] || from;
   return /^(no-?reply|alerts?|notifications?|do-?not-?reply|mailer|automated|system)@/i.test(addr.trim());
 }
+
+/**
+ * Local-part used in place of a robot one. Deliberately a function, not a
+ * person: inventing a mailbox for a named individual who does not read it is
+ * the same lie as noreply@, just better disguised.
+ */
+const HUMAN_LOCAL_PART = "team";
+
+/**
+ * Rewrite a robot From into a human one, keeping the display name and the
+ * (already DNS-verified) domain.
+ *
+ * WHY THIS IS A CODE FIX AND NOT A DASHBOARD ONE: isRobotSender() shipped with
+ * the rest of this module and had ZERO callers, while Twin Mile's actual From
+ * was "Twin Mile <alerts@contact.twinmile.com>" — which its own detector
+ * matches. A detector nobody calls is a comment. Resend allows any local-part
+ * on a verified domain, and contact.twinmile.com is verified (SPF + DKIM), so
+ * this needs no DNS change and no env change: the rewrite happens in the send
+ * path, which means it holds even when RESEND_FROM_EMAIL is still set to
+ * alerts@ in Vercel.
+ *
+ * Safe because every send path sets an explicit replyTo (admin@twinmile.com for
+ * transactional, OUTREACH_REPLY_TO for cold outreach), so the From local-part
+ * never has to receive mail. It only has to stop announcing that nobody is home.
+ */
+export function humanizeSender(from: string): string {
+  const raw = (from || "").trim();
+  if (!raw || !isRobotSender(raw)) return raw;
+
+  const match = raw.match(/^(.*?)<([^>]+)>\s*$/);
+  const display = match ? match[1].trim() : "";
+  const addr = (match ? match[2] : raw).trim();
+  const domain = addr.split("@")[1] || "";
+  if (!domain) return raw;
+
+  const rewritten = `${HUMAN_LOCAL_PART}@${domain}`;
+  console.warn(
+    `[sending-policy] From address "${addr}" is a robot mailbox — sending as "${rewritten}" instead. ` +
+      "Set RESEND_FROM_EMAIL to a human local-part to silence this."
+  );
+  return display ? `${display} <${rewritten}>` : rewritten;
+}

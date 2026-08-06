@@ -1,6 +1,8 @@
 import type { Db } from "mongodb";
 import { raiseBlocker, resolveBlocker, writeMemo } from "./agent-coordination";
 import { resolveLead } from "./outreach-lead-resolver";
+import { notifyStalledOnboarding, sendOnboardingResumeNudge } from "./email";
+import { getOnboardingUrl } from "./site-config";
 
 /**
  * AUTO-HEAL — the agents' hands.
@@ -28,6 +30,15 @@ import { resolveLead } from "./outreach-lead-resolver";
  *                    no error.
  *   5. CIRCUIT-BROKEN — two consecutive failures disable the action and open a
  *                    blocker instead of retrying into the void.
+ *
+ * One action (follow_up_stalled_onboarding) also SENDS MAIL, which is the only
+ * outbound side effect in this registry. It is allowed because the alternative is
+ * a repair that fixes the data and still lets the person it is about go
+ * uncontacted — which is how a step-4 applicant sat for 37 days behind a link
+ * this module had already renewed for him. It is made safe the same way every
+ * other action is: a stamp on the record (followUpSentAt) so it fires once, a
+ * hard cap per run, and a measurement that shrinks only when rows actually leave
+ * the selector.
  *
  * What agents may NOT do here: write or deploy application code. Every repair
  * is a named, reviewed, idempotent data/config operation from this registry.
@@ -295,7 +306,115 @@ const ACTIONS: HealAction[] = [
       return { affected: r.modifiedCount, detail: "engaged-but-expired links extended 30 days" };
     },
   },
+
+  {
+    key: "follow_up_stalled_onboarding",
+    title: "Email + escalate applicants who stopped mid-application",
+    failureClass: "deterministic",
+    cap: 25,
+    /*
+     * THE OTHER HALF OF THE FUNNEL LEAK.
+     *
+     * notifyOnboardingComplete only fires on SUBMISSION. Someone who quits at the
+     * signature step never submits, so he produces no deferredItems record, no
+     * completion alert, and no email — he is invisible to every alert this system
+     * has. A real applicant sat at step 4 for 37 days having already entered his
+     * DOB, SSN last-4, address, truck VIN and USDOT number, and nothing ever
+     * contacted him. His link was even renewed by the action above, so it still
+     * worked; nobody told him.
+     *
+     * Selector: got past the first couple of screens (currentStep >= 3), has been
+     * quiet 48h, never completed, never nudged. followUpSentAt makes it send once
+     * — a daily "you didn't finish" email is how a warm lead becomes a spam
+     * complaint. That stamp is also what makes this action VERIFIABLE: the
+     * measurement shrinks because the rows leave the selector, not because a
+     * counter moved.
+     *
+     * NOT gated on OUTREACH_AUTOMATION. That flag pauses cold prospecting; this is
+     * a named person in the middle of an application he started.
+     */
+    measure: async (db) => db.collection("onboarding_sessions").countDocuments(stalledSessionFilter()),
+    repair: async (db) => {
+      const sessions = await db
+        .collection("onboarding_sessions")
+        .find(stalledSessionFilter())
+        .sort({ lastActiveAt: 1 })
+        .limit(25)
+        .toArray();
+      if (!sessions.length) return { affected: 0, detail: "no stalled applications" };
+
+      const now = new Date();
+      const escalate: {
+        name: string;
+        email: string;
+        phone?: string;
+        currentStep: number;
+        idleDays: number;
+      }[] = [];
+      let emailed = 0;
+
+      for (const s of sessions) {
+        const email = String(s.formData?.email || s.email || "").trim();
+        const name = String(s.formData?.firstName || s.name || "").trim();
+        const step = Number(s.currentStep || 1);
+        const lastActive = s.lastActiveAt ? new Date(s.lastActiveAt) : now;
+        const idleDays = Math.floor((now.getTime() - lastActive.getTime()) / 86400_000);
+
+        // The resume link WORKS for a non-completed session — session/route.ts
+        // returns currentStep for exactly this purpose, and now self-renews an
+        // expired one on click. No token means no usable link, so we escalate to
+        // the owner and send nothing rather than mail out a dead URL.
+        const rawToken = String(s.rawToken || "").trim();
+        const sent =
+          email && rawToken
+            ? await sendOnboardingResumeNudge({
+                name,
+                email,
+                resumeUrl: getOnboardingUrl(rawToken),
+                currentStep: step,
+              })
+            : false;
+        if (sent) emailed++;
+
+        escalate.push({
+          name,
+          email,
+          phone: String(s.formData?.phone || s.metadata?.phone || "").trim() || undefined,
+          currentStep: step,
+          idleDays,
+        });
+
+        // Stamped even when the send failed, so a permanently bad address does
+        // not re-enter this loop hourly forever. The owner alert below carries
+        // the person either way, which is the outcome that actually matters.
+        await db.collection("onboarding_sessions").updateOne(
+          { _id: s._id },
+          { $set: { followUpSentAt: now, followUpEmailed: sent, updatedAt: now } }
+        );
+      }
+
+      // The email is the automated half. This is the half that matters more:
+      // these people left a phone number.
+      await notifyStalledOnboarding(escalate);
+
+      return {
+        affected: sessions.length,
+        detail: `${escalate.length} stalled applicant(s) escalated to the owner, ${emailed} resume email(s) sent`,
+      };
+    },
+  },
 ];
+
+/** Started, got somewhere real, went quiet, never nudged. */
+function stalledSessionFilter() {
+  return {
+    status: "started",
+    currentStep: { $gte: 3 },
+    completedAt: { $exists: false },
+    followUpSentAt: { $exists: false },
+    lastActiveAt: { $lt: new Date(Date.now() - 48 * 3600_000) },
+  };
+}
 
 export const HEAL_ACTION_KEYS = ACTIONS.map((a) => a.key);
 
