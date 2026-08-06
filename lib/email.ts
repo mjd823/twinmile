@@ -142,6 +142,81 @@ export async function notifyNewDriverLead(lead: {
 }
 
 /**
+ * A driver finished onboarding.
+ *
+ * WHY THIS EXISTS (2026-08-06): /api/onboarding/complete created the user, closed
+ * the session, attached the documents, recorded what the applicant deferred, and
+ * wrote an agent_activity row — then told nobody. Seeing a completed application
+ * depended on somebody opening the admin panel. Across 962 onboarding sessions
+ * not one completion had ever been announced, and the owner was onboarding real
+ * drivers the same day this shipped.
+ *
+ * The deferral list is the point. A driver who ticked "send me the agreement to
+ * review before I sign" has NOT signed, and that is a phone call to make today —
+ * not a record to discover next week. Same for outstanding documents.
+ *
+ * Never throws: a failed alert must not fail a submission the driver already
+ * completed. They would see an error and reasonably assume their application
+ * vanished, and the retry would hit the already-completed path.
+ */
+export async function notifyOnboardingComplete(app: {
+  fullName: string;
+  email: string;
+  phone?: string;
+  leaseSigned: boolean;
+  deferredItems: string[];
+  outstandingDocuments: string[];
+  driverUserId: string;
+}): Promise<boolean> {
+  try {
+    const needsFollowUp = [...app.deferredItems, ...app.outstandingDocuments];
+    const signLabel = app.leaseSigned
+      ? "Signed"
+      : "NOT SIGNED — applicant asked to review it first";
+
+    const html = renderEmailLayout({
+      preheader: `${app.fullName} completed onboarding${app.leaseSigned ? "" : " (lease unsigned)"}`,
+      eyebrow: "Onboarding",
+      title: `${app.fullName} completed onboarding`,
+      subtitle: app.leaseSigned
+        ? "Application complete and the lease is signed."
+        : "Application complete, but the lease still needs a signature.",
+      bodyHtml: `
+        <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+          ${detailRow("Name", app.fullName)}
+          ${detailRow("Email", app.email)}
+          ${app.phone ? detailRow("Phone", app.phone) : ""}
+          ${detailRow("Lease agreement", signLabel)}
+          ${
+            needsFollowUp.length
+              ? detailRow("Needs follow-up", needsFollowUp.join(", "))
+              : detailRow("Needs follow-up", "Nothing outstanding")
+          }
+        </table>
+      `,
+      primaryCta: { label: "Open Driver Record", href: `${APP_URL}/admin/drivers` },
+    });
+
+    return await sendEmail({
+      to: NOTIFY_TO,
+      subject: app.leaseSigned
+        ? `Onboarding complete: ${app.fullName}`
+        : `Onboarding complete (LEASE UNSIGNED): ${app.fullName}`,
+      text:
+        `${app.fullName} completed driver onboarding.\n` +
+        `Email: ${app.email}\n${app.phone ? `Phone: ${app.phone}\n` : ""}` +
+        `Lease agreement: ${signLabel}\n` +
+        `Needs follow-up: ${needsFollowUp.length ? needsFollowUp.join(", ") : "nothing outstanding"}\n` +
+        `Driver record: ${APP_URL}/admin/drivers`,
+      html,
+    });
+  } catch (err) {
+    console.error("[email] notifyOnboardingComplete failed:", err);
+    return false;
+  }
+}
+
+/**
  * A prospect replied. THIS is the notification that did not exist: the inbound
  * webhook wrote outreach_replies, stamped repliedAt, logged agent_activity and
  * generated a draft — and told nobody. Seeing a reply depended entirely on

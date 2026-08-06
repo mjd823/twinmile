@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import clientPromise from '@/lib/mongodb';
 import { hashPassword } from '@/lib/auth/crypto';
 import { randomToken } from '@/lib/auth/crypto';
+import { notifyOnboardingComplete } from '@/lib/email';
 
 export async function POST(request: NextRequest) {
   try {
@@ -201,6 +202,22 @@ export async function POST(request: NextRequest) {
         outstandingDocuments,
         deferredItems: Object.values(deferredItems),
       },
+    });
+
+    // Tell a human, in-request. AWAITED deliberately: Vercel freezes the lambda
+    // the moment the response is returned, so a fire-and-forget send here would
+    // be killed mid-flight and lose exactly the alert that matters most. A
+    // completed application that nobody hears about is how 962 sessions produced
+    // no follow-up. notifyOnboardingComplete never throws, so a mail outage can
+    // never fail a submission the driver already finished.
+    await notifyOnboardingComplete({
+      fullName: `${firstName} ${lastName}`.trim(),
+      email,
+      phone: (formData.get('phone') as string) || undefined,
+      leaseSigned,
+      deferredItems: Object.values(deferredItems),
+      outstandingDocuments,
+      driverUserId: result.insertedId.toString(),
     });
 
     return NextResponse.json({
