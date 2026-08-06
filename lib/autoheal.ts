@@ -1,5 +1,6 @@
 import type { Db } from "mongodb";
 import { raiseBlocker, resolveBlocker, writeMemo } from "./agent-coordination";
+import { resolveLead } from "./outreach-lead-resolver";
 
 /**
  * AUTO-HEAL — the agents' hands.
@@ -115,24 +116,26 @@ const ACTIONS: HealAction[] = [
       const tasks = db.collection("outreach_tasks");
       const candidates = await tasks
         .find({ status: "failed", error: /lead not found/i })
-        .project({ _id: 1, leadId: 1 })
+        .project({ _id: 1, leadId: 1, leadEmail: 1, leadType: 1, leadCollection: 1 })
         .limit(1000)
         .toArray();
       if (!candidates.length) return { affected: 0, detail: "nothing to quarantine" };
 
-      // Prove the lead is actually gone before touching anything. A task whose
-      // lead DOES exist was misclassified upstream and must be requeued, not
-      // buried — the two outcomes are opposite, so guessing is not acceptable.
-      const ids = candidates.map((c) => c.leadId).filter(Boolean);
-      const alive = await db
-        .collection("outbound_prospects")
-        .find({ _id: { $in: ids as never[] } })
-        .project({ _id: 1 })
-        .toArray();
-      const aliveSet = new Set(alive.map((a) => String(a._id)));
-
-      const trulyOrphaned = candidates.filter((c) => !aliveSet.has(String(c.leadId))).map((c) => c._id);
-      const recoverable = candidates.filter((c) => aliveSet.has(String(c.leadId))).map((c) => c._id);
+      // Prove the lead is actually gone before touching anything, using the
+      // SENDER's resolver (lib/outreach-lead-resolver.ts) rather than a local
+      // _id-only probe. The old probe matched _id against outbound_prospects
+      // only; the sender also falls back to leadEmail. That gap is why 59
+      // reachable prospects were written off as "lead record no longer
+      // exists — permanent" while the sender finds every one of them by email.
+      // A task whose lead DOES exist was misclassified upstream and must be
+      // requeued, not buried — the two outcomes are opposite, so guessing is
+      // not acceptable.
+      const trulyOrphaned: unknown[] = [];
+      const recoverable: unknown[] = [];
+      for (const c of candidates) {
+        const lead = await resolveLead(db, c);
+        (lead ? recoverable : trulyOrphaned).push(c._id);
+      }
 
       let affected = 0;
       if (trulyOrphaned.length) {
@@ -151,7 +154,16 @@ const ACTIONS: HealAction[] = [
       if (recoverable.length) {
         const r = await tasks.updateMany(
           { _id: { $in: recoverable as never[] } },
-          { $set: { status: "pending", attempts: 0, error: null, scheduledAt: new Date() } }
+          {
+            $set: { status: "pending", attempts: 0, error: null, scheduledAt: new Date() },
+            // RETIRE the duplicate counter, do not just zero `attempts`.
+            // reconcile_attempt_counters is the very next action in this same
+            // loop and copies `attempt` -> `attempts` whenever attempt is
+            // higher — so a requeue that left attempt=2 behind had its reset
+            // undone ~150ms later, parking every task one attempt from
+            // permanent death. Unsetting makes the two actions unable to fight.
+            $unset: { attempt: "" },
+          }
         );
         affected += r.modifiedCount;
       }
@@ -168,16 +180,25 @@ const ACTIONS: HealAction[] = [
     failureClass: "deterministic",
     cap: 5000,
     // Two fields track the same thing: `attempts` (what the due-filter and
-    // maxAttempts check read) and `attempt` (what the requeue path writes).
-    // Tasks with attempt > attempts are invisible to the retry ceiling.
+    // maxAttempts check read) and `attempt` (a fossil the retired laptop script
+    // wrote). Tasks with attempt > attempts are invisible to the retry ceiling.
+    //
+    // pending/sending are EXCLUDED on purpose: a task freshly requeued by
+    // quarantine_orphaned_outreach_tasks / requeue_transient_failures is
+    // deliberately back at attempts:0, and this action running immediately
+    // afterwards in the same loop used to shove it straight back up.
     measure: async (db) =>
-      db.collection("outreach_tasks").countDocuments({ $expr: { $gt: ["$attempt", "$attempts"] } }),
+      db.collection("outreach_tasks").countDocuments({
+        status: { $nin: ["pending", "sending"] },
+        $expr: { $gt: ["$attempt", "$attempts"] },
+      }),
     repair: async (db) => {
       const r = await db
         .collection("outreach_tasks")
-        .updateMany({ $expr: { $gt: ["$attempt", "$attempts"] } }, [
-          { $set: { attempts: "$attempt" } },
-        ]);
+        .updateMany(
+          { status: { $nin: ["pending", "sending"] }, $expr: { $gt: ["$attempt", "$attempts"] } },
+          [{ $set: { attempts: "$attempt" } }]
+        );
       return {
         affected: r.modifiedCount,
         detail: "attempts synced to the higher attempt value so the retry ceiling applies",
@@ -209,7 +230,12 @@ const ACTIONS: HealAction[] = [
       if (!retryable.length) return { affected: 0, detail: "no transient failures" };
       const r = await tasks.updateMany(
         { _id: { $in: retryable as never[] } },
-        { $set: { status: "pending", attempts: 0, scheduledAt: new Date(), requeuedReason: "autoheal:transient" } }
+        {
+          $set: { status: "pending", attempts: 0, scheduledAt: new Date(), requeuedReason: "autoheal:transient" },
+          // Same reason as the quarantine action: zeroing `attempts` while
+          // leaving `attempt` behind gets reverted by reconcile_attempt_counters.
+          $unset: { attempt: "" },
+        }
       );
       return { affected: r.modifiedCount, detail: "transient-only requeue (deterministic failures untouched)" };
     },

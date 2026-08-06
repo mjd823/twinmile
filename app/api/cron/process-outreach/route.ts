@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ObjectId, type Document } from "mongodb";
+import { type Document } from "mongodb";
 import { Resend } from "resend";
 import clientPromise from "@/lib/mongodb";
 import { checkCronAuth } from "@/lib/cron-auth";
@@ -9,6 +9,7 @@ import {
   type Personalization,
 } from "@/lib/outreach-templates";
 import { getSendAllowance, bulkSenderHeaders, unsubscribeUrlFor } from "@/lib/sending-policy";
+import { leadCollectionFor, resolveLead } from "@/lib/outreach-lead-resolver";
 
 /**
  * GET /api/cron/process-outreach
@@ -28,7 +29,22 @@ import { getSendAllowance, bulkSenderHeaders, unsubscribeUrlFor } from "@/lib/se
  * dry-run mode -- it reports what WOULD send but claims nothing and sends
  * nothing.
  *
- * Schedule (vercel.json): every 15 minutes.
+ * SINGLE SEND PATH: this route is now the ONLY sender. The two laptop scripts
+ * (scripts/process-outreach-cron.mjs / .js) refuse to run unless
+ * ALLOW_LAPTOP_OUTREACH_SENDER=yes, because they bypassed the business-hours
+ * gate, the RFC 8058 unsubscribe headers, rendered-field bookkeeping, AND set
+ * replyTo to admin@twinmile.com instead of OUTREACH_REPLY_TO — which silently
+ * routed every reply away from /api/webhooks/resend-inbound.
+ *
+ * Schedule (vercel.json): every 15 minutes between 13:00-23:59 UTC. That band
+ * is the only time the cold-template window below (Mon-Fri 08:00-18:00
+ * America/Chicago) can ever be open under either DST offset; running every 15
+ * minutes around the clock made ~60% of invocations structurally guaranteed
+ * no-ops, which made a real stall indistinguishable from a scheduled defer.
+ * The band deliberately still covers weekends: non-cold templates (quote and
+ * driver confirmations) send any time, and stranding one until Monday would be
+ * a worse bug than the log noise. The in-route gate below remains the
+ * authority — a UTC cron expression cannot handle DST.
  */
 
 export const dynamic = "force-dynamic";
@@ -54,31 +70,10 @@ function calculateBackoff(attempt: number) {
   return BASE_BACKOFF_MS * Math.pow(2, attempt) + Math.random() * 1000;
 }
 
-function leadCollectionFor(task: any): string {
-  if (task.leadType === "quote") return "leads_quotes";
-  if (task.leadType === "outbound_prospect") return "outbound_prospects";
-  if (task.leadCollection === "outbound_prospects") return "outbound_prospects";
-  return "leads_drivers";
-}
-
-async function resolveLead(db: any, task: any): Promise<Lead | null> {
-  const coll = leadCollectionFor(task);
-  // leadId may be stored as string or ObjectId -- try both
-  let lead = await db.collection(coll).findOne({ _id: task.leadId });
-  if (!lead && typeof task.leadId === "string") {
-    try {
-      lead = await db.collection(coll).findOne({ _id: new ObjectId(task.leadId) });
-    } catch {
-      // not a valid ObjectId string
-    }
-  }
-  if (!lead && task.leadEmail) {
-    lead = await db
-      .collection(coll)
-      .findOne({ $or: [{ "contact.email": task.leadEmail }, { email: task.leadEmail }] });
-  }
-  return lead;
-}
+// leadCollectionFor / resolveLead now live in lib/outreach-lead-resolver.ts —
+// lib/autoheal.ts imports the SAME functions so its "is this lead gone?" check
+// can never be weaker than this route's actual lookup (it was, and it buried 59
+// reachable prospects as permanently orphaned).
 
 async function logActivity(db: any, task: any, lead: Lead, result: any, status: string) {
   await db.collection("agent_activity").insertOne({
@@ -157,23 +152,28 @@ export async function GET(request: NextRequest) {
       ],
     };
 
+    // TRUE backlog size, measured before the run limit is applied. Reporting
+    // tasks.length as "due" was an 8x under-count (5 fetched vs 41 overdue)
+    // because runLimit collapses to the warmup ramp's 5/day — which is exactly
+    // how a frozen queue read as "5 due, nothing urgent" for 26 days.
+    const dueTotal = await db.collection("outreach_tasks").countDocuments(dueTaskFilter);
+
     if (runLimit === 0) {
       // Cap-full early exit still counts as a run: log the heartbeat so the
       // timesheet reflects that this invocation executed rather than stalled.
-      const dueCount = await db.collection("outreach_tasks").countDocuments(dueTaskFilter);
       const note = `Daily cap reached (${sentLast24h}/${DAILY_CAP} sent in last 24h) — resuming when the window rolls.`;
       await db.collection("agent_activity").insertOne({
         agent: "Outreach Processor",
         action: "outreach_cron_summary",
-        activity: `Outreach run: 0 sent, 0 failed, 0 skipped, ${dueCount} deferred of ${dueCount} due (daily cap reached)`,
+        activity: `Outreach run: 0 sent, 0 failed, 0 skipped, ${dueTotal} deferred of ${dueTotal} due (daily cap reached)`,
         type: "outreach",
         details: {
           dryRun: !live,
-          dueTasks: dueCount,
+          dueTasks: dueTotal,
           sent: 0,
           failed: 0,
           skipped: 0,
-          deferred: dueCount,
+          deferred: dueTotal,
           reason: "daily_cap_reached",
           capStatus: { sentLast24h, dailyCap: DAILY_CAP },
           source: "vercel-cron",
@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         ok: true,
         report: {
-          dueTasks: dueCount, sent: 0, failed: 0, skipped: 0, deferred: dueCount,
+          dueTasks: dueTotal, sent: 0, failed: 0, skipped: 0, deferred: dueTotal,
           note,
         },
       });
@@ -224,10 +224,21 @@ export async function GET(request: NextRequest) {
       await db.collection("agent_activity").insertOne({
         agent: "Outreach Processor",
         action: "outreach_cron_summary",
-        activity: `Outreach dry-run: ${tasks.length} due task(s), nothing sent (OUTREACH_AUTOMATION != "live")`,
+        activity: `Outreach dry-run: ${dueTotal} due task(s) (${tasks.length} fetched this run), nothing sent (OUTREACH_AUTOMATION != "live")`,
         type: "outreach",
-        details: { dryRun: true, dueTasks: tasks.length, wouldSend, source: "vercel-cron" },
-        success: true,
+        details: {
+          dryRun: true,
+          dueTasks: dueTotal,
+          fetchedThisRun: tasks.length,
+          dailyCap: DAILY_CAP,
+          capRemaining,
+          wouldSend,
+          source: "vercel-cron",
+        },
+        // A dry run with due work is NOT a success. Hardcoded success:true is
+        // what let 671 consecutive no-op runs read as 671 green runs while
+        // zero mail left the building.
+        success: dueTotal === 0,
         createdAt: now,
         timestamp: now,
       });
@@ -235,7 +246,17 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         ok: true,
         dryRun: true,
-        report: { dueTasks: tasks.length, sent: 0, failed: 0, skipped, deferred: 0, wouldSend },
+        report: {
+          dueTasks: dueTotal,
+          fetchedThisRun: tasks.length,
+          dailyCap: DAILY_CAP,
+          capRemaining,
+          sent: 0,
+          failed: 0,
+          skipped,
+          deferred: 0,
+          wouldSend,
+        },
       });
     }
 
@@ -428,6 +449,15 @@ export async function GET(request: NextRequest) {
           throw new Error(`Unknown channel: ${task.channel}`);
         }
 
+        // Stale-pointer heal: if the lead was only found via the email
+        // fallback, write the corrected _id back. Otherwise every future run
+        // repeats the expensive email scan, and autoheal keeps seeing a task
+        // whose leadId points at nothing.
+        const healedId =
+          String(lead._id) !== String(task.leadId)
+            ? { leadId: lead._id, leadIdHealedFrom: task.leadId, leadIdHealedAt: new Date() }
+            : {};
+
         // Only mark sent AFTER the provider confirmed success.
         await db.collection("outreach_tasks").updateOne(
           { _id: task._id },
@@ -437,6 +467,7 @@ export async function GET(request: NextRequest) {
               sentAt: new Date(),
               updatedAt: new Date(),
               error: null,
+              ...healedId,
               ...renderedFields,
             },
             $inc: { attempts: 1 },
@@ -482,9 +513,21 @@ export async function GET(request: NextRequest) {
     await db.collection("agent_activity").insertOne({
       agent: "Outreach Processor",
       action: "outreach_cron_summary",
-      activity: `Outreach run: ${sent} sent, ${failed} failed, ${skipped} skipped, ${deferred} deferred of ${tasks.length} due`,
+      activity: `Outreach run: ${sent} sent, ${failed} failed, ${skipped} skipped, ${deferred} deferred of ${dueTotal} due (${tasks.length} fetched this run)`,
       type: "outreach",
-      details: { dryRun: false, dueTasks: tasks.length, sent, failed, skipped, deferred, errors, source: "vercel-cron" },
+      details: {
+        dryRun: false,
+        dueTasks: dueTotal,
+        fetchedThisRun: tasks.length,
+        dailyCap: DAILY_CAP,
+        capRemaining,
+        sent,
+        failed,
+        skipped,
+        deferred,
+        errors,
+        source: "vercel-cron",
+      },
       success: failed === 0,
       createdAt: now,
       timestamp: now,
@@ -493,7 +536,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       dryRun: false,
-      report: { dueTasks: tasks.length, sent, failed, skipped, deferred, errors },
+      report: {
+        dueTasks: dueTotal,
+        fetchedThisRun: tasks.length,
+        dailyCap: DAILY_CAP,
+        capRemaining,
+        sent,
+        failed,
+        skipped,
+        deferred,
+        errors,
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -525,9 +578,14 @@ export async function GET(request: NextRequest) {
 /**
  * POST — maintenance actions (cron-secret gated).
  * { "action": "requeue_failed", "errorMatch": "Lead not found", "limit": 1000 }
- * Flips matching failed tasks back to "pending" (attempts reset) so the
- * regular 15-minute runs re-attempt them under the daily cap. Used to revive
- * the ~955 legacy laptop-era tasks that failed with bare "Lead not found".
+ * Flips matching failed OR abandoned tasks back to "pending" (attempts reset)
+ * so the regular 15-minute runs re-attempt them under the daily cap. Used to
+ * revive the legacy laptop-era tasks that failed with bare "Lead not found".
+ *
+ * "abandoned" is included deliberately: autoheal quarantined 59 tasks as
+ * permanently orphaned using an _id-only aliveness check, but this route's
+ * resolver finds all 59 by email. A status this route cannot reach is a status
+ * those prospects can never come back from.
  */
 export async function POST(request: NextRequest) {
   const authError = checkCronAuth(request);
@@ -556,9 +614,10 @@ export async function POST(request: NextRequest) {
 
   // Escape regex metacharacters so errorMatch is treated as a literal prefix.
   const escaped = errorMatch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const revivable = { $in: ["failed", "abandoned"] };
   const candidates = await db
     .collection("outreach_tasks")
-    .find({ status: "failed", error: { $regex: escaped } })
+    .find({ status: revivable, error: { $regex: escaped } })
     .project({ _id: 1 })
     .limit(limit)
     .toArray();
@@ -566,7 +625,7 @@ export async function POST(request: NextRequest) {
   const ids = candidates.map((c: any) => c._id);
   const result = ids.length
     ? await db.collection("outreach_tasks").updateMany(
-        { _id: { $in: ids }, status: "failed" },
+        { _id: { $in: ids }, status: revivable },
         {
           $set: {
             status: "pending",
@@ -576,6 +635,11 @@ export async function POST(request: NextRequest) {
             requeuedAt: new Date(),
             requeuedReason: `requeue_failed:${errorMatch}`,
           },
+          // Retire the fossil `attempt` counter and the quarantine stamps.
+          // Leaving `attempt` behind is what let autoheal's
+          // reconcile_attempt_counters push attempts straight back to 2
+          // ~150ms after a requeue reset it to 0.
+          $unset: { attempt: "", abandonedAt: "", abandonedReason: "" },
         }
       )
     : { modifiedCount: 0 };

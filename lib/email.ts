@@ -20,17 +20,23 @@ type SendInput = {
   html: string;
 };
 
-async function sendEmail(input: SendInput) {
+/**
+ * Never throws — a failed notification must not fail the request that triggered
+ * it. Returns whether the provider actually accepted the message: callers that
+ * record "we told a human" (or that suppress a repeat alert for 24h) must not
+ * treat an unconfigured key or a provider error as delivered.
+ */
+async function sendEmail(input: SendInput): Promise<boolean> {
   if (!resend) {
     console.error(
       `[email] RESEND_API_KEY is not configured — email NOT sent (to: ${input.to}, subject: "${input.subject}"). ` +
         "Set RESEND_API_KEY in the environment to enable lead notifications and confirmations."
     );
-    return;
+    return false;
   }
 
   try {
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: FROM,
       to: input.to,
       subject: input.subject,
@@ -38,8 +44,14 @@ async function sendEmail(input: SendInput) {
       text: input.text,
       html: input.html,
     });
+    if (error) {
+      console.error("[email] Resend rejected the message:", error);
+      return false;
+    }
+    return true;
   } catch (err) {
     console.error("[email] Failed to send email:", err);
+    return false;
   }
 }
 
@@ -125,6 +137,104 @@ export async function notifyNewDriverLead(lead: {
       `Truck type: ${lead.truckType}\n` +
       `${lead.yearsExperience ? `Experience: ${lead.yearsExperience}\n` : ""}` +
       `Admin inbox: ${APP_URL}/admin/inbox`,
+    html,
+  });
+}
+
+/**
+ * A prospect replied. THIS is the notification that did not exist: the inbound
+ * webhook wrote outreach_replies, stamped repliedAt, logged agent_activity and
+ * generated a draft — and told nobody. Seeing a reply depended entirely on
+ * somebody happening to open /admin/outreach. A reply is the only outcome the
+ * whole cold-outreach machine exists to produce; it cannot sit in a collection
+ * waiting to be noticed.
+ *
+ * Costs nothing extra (same Resend account already used for sending) and never
+ * throws — an alert failure must not fail the webhook, because Resend would
+ * then retry and the idempotent upsert would take the duplicate path, meaning
+ * the retry alerts nobody either.
+ */
+export async function notifyProspectReply(reply: {
+  fromEmail: string;
+  fromName?: string | null;
+  subject?: string | null;
+  snippet?: string | null;
+  matchedName?: string | null;
+  matchedCollection?: string | null;
+  verified?: boolean;
+}): Promise<boolean> {
+  const who = reply.matchedName || reply.fromName || reply.fromEmail;
+  const subject = reply.subject?.trim() || "(no subject)";
+  const html = renderEmailLayout({
+    preheader: `Reply from ${who}: ${subject}`,
+    eyebrow: "Outreach Reply",
+    title: `${who} replied`,
+    subtitle: "A prospect answered a Twin Mile outreach email. Reply from the admin outreach page.",
+    bodyHtml: `
+      <table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:12px;">
+        ${detailRow("From", reply.fromEmail)}
+        ${detailRow("Subject", subject)}
+        ${detailRow("Matched", reply.matchedCollection || "no matching prospect/lead record")}
+        ${detailRow("Signed", reply.verified ? "yes (webhook signature verified)" : "NO — webhook secret not configured")}
+      </table>
+      <p style="margin:14px 0 0;font-size:14px;line-height:1.6;color:#374151;white-space:pre-wrap;">${esc(reply.snippet || "(no body captured)")}</p>
+    `,
+    primaryCta: { label: "Open Outreach Replies", href: `${APP_URL}/admin/outreach` },
+  });
+
+  return sendEmail({
+    to: NOTIFY_TO,
+    subject: `Outreach REPLY from ${who}: ${subject}`.slice(0, 180),
+    text:
+      `${who} replied to a Twin Mile outreach email.\n` +
+      `From: ${reply.fromEmail}\nSubject: ${subject}\n` +
+      `Matched: ${reply.matchedCollection || "no matching prospect/lead record"}\n` +
+      `Signature verified: ${reply.verified ? "yes" : "no"}\n\n` +
+      `${reply.snippet || "(no body captured)"}\n\n` +
+      `Respond here: ${APP_URL}/admin/outreach`,
+    html,
+  });
+}
+
+/**
+ * A critical blocker only a human can clear has been open too long.
+ *
+ * The blockers registry was working correctly — outreach_paused has carried an
+ * honest firstRaisedAt since 2026-07-29 — but nothing ESCALATED it. An hourly
+ * lastSeenAt bump and a routedAroundCount counter are not an alarm, so a
+ * critical item sat open for over a week while sending stayed dark. This is the
+ * one path that reaches the owner's phone.
+ */
+export async function notifyStaleBlockers(
+  blockers: { key: string; title: string; humanAction?: string; ageHours: number }[]
+): Promise<boolean> {
+  if (!blockers.length) return false;
+  const rows = blockers
+    .map(
+      (b) =>
+        `<tr><td style="padding:8px 0;border-top:1px solid #e5e7eb;"><div style="font-size:14px;font-weight:700;color:#111827;">${esc(b.title)} <span style="font-weight:400;color:#6b7280;">(${Math.floor(b.ageHours / 24)}d open)</span></div><div style="font-size:13px;line-height:1.5;color:#4b5563;">${esc(b.humanAction || "No human action recorded on this blocker.")}</div></td></tr>`
+    )
+    .join("");
+
+  const html = renderEmailLayout({
+    preheader: `${blockers.length} critical blocker(s) waiting on you`,
+    eyebrow: "Needs A Human",
+    title: `${blockers.length} critical blocker(s) open past 72 hours`,
+    subtitle: "The agents have been routing around these. They cannot clear them.",
+    bodyHtml: `<table role="presentation" cellspacing="0" cellpadding="0" style="width:100%;border-collapse:collapse;">${rows}</table>`,
+    primaryCta: { label: "Open Admin", href: `${APP_URL}/admin` },
+  });
+
+  return sendEmail({
+    to: NOTIFY_TO,
+    subject: `${blockers.length} critical Twin Mile blocker(s) open past 72h`,
+    text:
+      blockers
+        .map(
+          (b) =>
+            `${b.title} — open ${Math.floor(b.ageHours / 24)} day(s)\n  ${b.humanAction || "No human action recorded."}`
+        )
+        .join("\n\n") + `\n\nAdmin: ${APP_URL}/admin`,
     html,
   });
 }

@@ -3,15 +3,17 @@ import crypto from "crypto";
 import { Resend } from "resend";
 import clientPromise from "@/lib/mongodb";
 import { renderReplyDraft } from "@/lib/outreach-templates";
+import { notifyProspectReply } from "@/lib/email";
 
 /**
  * POST /api/webhooks/resend-inbound
  *
  * Resend inbound-email webhook receiver ("email.received" events). Captures
  * prospect replies to outreach emails into the `outreach_replies` collection,
- * marks the matching prospect as replied, and (OUTREACH_AUTOREPLY=draft,
- * the default) prepares a suggested response that an admin can one-click send
- * from /admin/outreach.
+ * marks the matching prospect as replied, EMAILS RESEND_NOTIFY_TO so a human
+ * finds out within seconds, and (OUTREACH_AUTOREPLY=draft, the default)
+ * prepares a suggested response that an admin can one-click send from
+ * /admin/outreach.
  *
  * ============================ ONE-TIME SETUP ============================
  * Resend can only receive mail on a domain whose MX records point at Resend.
@@ -282,6 +284,32 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // ---------------- tell a human, immediately ----------------
+    // Sent BEFORE the draft step on purpose: renderReplyDraft /
+    // ensureOnboardingUrl throwing would return 500, Resend would retry, and
+    // the retry hits the duplicate short-circuit above — so an alert placed
+    // after the draft could be lost entirely. Alerting for unmatched senders
+    // too: a reply from an address we cannot match is still a live human.
+    let notified = false;
+    try {
+      notified = await notifyProspectReply({
+        fromEmail,
+        fromName,
+        subject: data.subject || null,
+        snippet,
+        matchedName: matchedDoc?.name || null,
+        matchedCollection,
+        verified,
+      });
+    } catch (err) {
+      // notifyProspectReply already swallows send errors; this is belt-and-braces
+      // so nothing about alerting can ever cost us the captured reply.
+      console.error("[webhooks/resend-inbound] Reply notification failed:", err);
+    }
+    await db
+      .collection("outreach_replies")
+      .updateOne({ _id: replyId }, { $set: { notifiedAt: notified ? new Date() : null } });
+
     // ---------------- auto-draft (default) / auto-send (live) ----------------
     const autoreplyMode = (process.env.OUTREACH_AUTOREPLY || "draft").toLowerCase();
     let drafted = false;
@@ -366,6 +394,7 @@ export async function POST(request: NextRequest) {
       matched: Boolean(matchedProspectId),
       matchedCollection,
       verified,
+      notified,
       drafted,
       autoSent,
     });

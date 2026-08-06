@@ -1,12 +1,35 @@
 #!/usr/bin/env node
 /**
- * Outreach Processing Cron Script
+ * Outreach Processing Cron Script — RETIRED AS A SENDER.
  *
- * Processes pending outreach tasks (emails/SMS) that are due for sending.
- * Runs every 15 minutes via cron job.
+ * app/api/cron/process-outreach/route.ts is the single send path. This script
+ * ran on the owner's laptop and, judging by the send record, is what actually
+ * mailed the June/July waves — 1,703 tasks marked sent with no replyTo field
+ * recorded, versus the 99 stamped reply@contact.twinmile.com by the Vercel
+ * route on 2026-07-08.
+ *
+ * Why it must not run:
+ *   - replyTo went to RESEND_NOTIFY_TO (admin@twinmile.com), NOT
+ *     OUTREACH_REPLY_TO, so replies never reached the Resend receiving domain
+ *     and never reached /api/webhooks/resend-inbound. Silent reply loss.
+ *   - No business-hours gate: cold mail could go out at 3am on a Sunday.
+ *   - No RFC 8058 one-click unsubscribe headers (mandatory for bulk senders).
+ *   - No rendered subject/body persisted, so /admin/outreach cannot show what
+ *     a recipient actually received.
+ *   - No suppression check, no duplicate guard, no daily warmup cap.
+ *
+ * Kept for reference / emergency manual use only. Set
+ * ALLOW_LAPTOP_OUTREACH_SENDER=yes to override — expect every problem above.
  */
 import dotenv from 'dotenv'
 dotenv.config({ path: '.env.local' })
+
+if (process.env.ALLOW_LAPTOP_OUTREACH_SENDER !== 'yes') {
+  console.error('[process-outreach-cron] RETIRED. The Vercel cron route /api/cron/process-outreach is the only send path.')
+  console.error('[process-outreach-cron] This script loses replies (wrong replyTo), skips business hours and skips one-click unsubscribe headers.')
+  console.error('[process-outreach-cron] Set ALLOW_LAPTOP_OUTREACH_SENDER=yes only if you accept all of that.')
+  process.exit(1)
+}
 
 import { MongoClient, ObjectId } from 'mongodb'
 import { Resend } from 'resend'
@@ -14,7 +37,10 @@ import { Resend } from 'resend'
 const MONGODB_URI = process.env.MONGODB_URI
 const RESEND_API_KEY = process.env.RESEND_API_KEY
 const RESEND_FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev'
-const RESEND_NOTIFY_TO = process.env.RESEND_NOTIFY_TO || 'admin@twinmile.com'
+// Replies MUST land on the Resend receiving domain or the inbound webhook never
+// fires. OUTREACH_REPLY_TO first — RESEND_NOTIFY_TO alone was the reply leak.
+const OUTREACH_REPLY_TO =
+  process.env.OUTREACH_REPLY_TO || process.env.RESEND_NOTIFY_TO || 'admin@twinmile.com'
 
 const MAX_TASKS_PER_RUN = 50
 const MAX_ATTEMPTS = 3
@@ -74,7 +100,7 @@ function getTemplate(name, lead, p) { const t = EMAIL_TEMPLATES[name]; if (!t) t
 
 async function sendEmailViaResend(to, subject, html, text) {
   if (!resend) { console.log(`[MOCK EMAIL] To: ${to} | Subject: ${subject}`); return { success: true, mock: true } }
-  try { const r = await resend.emails.send({ from: RESEND_FROM_EMAIL, to, subject, replyTo: RESEND_NOTIFY_TO, html, text }); return { success: true, id: r.id } }
+  try { const r = await resend.emails.send({ from: RESEND_FROM_EMAIL, to, subject, replyTo: OUTREACH_REPLY_TO, html, text }); return { success: true, id: r.id } }
   catch (e) { console.error(`[Resend] Failed:`, e.message); return { success: false, error: e.message } }
 }
 

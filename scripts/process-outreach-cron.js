@@ -1,6 +1,17 @@
 /**
- * Outreach Processing Cron Script
- * 
+ * Outreach Processing Cron Script — RETIRED AS A SENDER.
+ *
+ * app/api/cron/process-outreach/route.ts is the single send path. This is the
+ * oldest of the three senders and the one that hardcoded
+ * replyTo: 'admin@twinmile.com' (see sendOutreachEmail below), so replies to
+ * anything it sent never reached the Resend receiving domain or the inbound
+ * webhook. It also resolves leads by _id ONLY, with no email fallback and no
+ * detail in the error string — which is exactly the signature of the 59 bare
+ * "Lead not found" failures that autoheal later buried as permanently orphaned
+ * even though every one of those prospects is still reachable by email.
+ *
+ * Kept for reference only. Set ALLOW_LAPTOP_OUTREACH_SENDER=yes to override.
+ *
  * 1. Finds all pending outreach tasks that are due (scheduledAt <= now)
  * 2. Loads the associated lead data
  * 3. Sends personalized emails via Resend (and SMS placeholder)
@@ -13,6 +24,14 @@
  */
 
 require('dotenv').config({ path: '.env.local' });
+
+if (process.env.ALLOW_LAPTOP_OUTREACH_SENDER !== 'yes') {
+  console.error('❌ RETIRED. /api/cron/process-outreach on Vercel is the only send path.');
+  console.error('   This script hardcodes replyTo: admin@twinmile.com (replies are lost), has no');
+  console.error('   business-hours gate, no one-click unsubscribe headers and no email fallback on');
+  console.error('   lead lookup. Set ALLOW_LAPTOP_OUTREACH_SENDER=yes only if you accept all of that.');
+  process.exit(1);
+}
 
 const { MongoClient } = require('mongodb');
 const { Resend } = require('resend');
@@ -249,7 +268,9 @@ async function sendOutreachEmail(task, lead) {
     from: FROM_EMAIL,
     to,
     subject,
-    replyTo: 'admin@twinmile.com',
+    // Must be an address on the Resend RECEIVING domain or replies vanish.
+    replyTo:
+      process.env.OUTREACH_REPLY_TO || process.env.RESEND_NOTIFY_TO || 'admin@twinmile.com',
     text,
     html,
   });
