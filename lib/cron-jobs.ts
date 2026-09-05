@@ -42,7 +42,12 @@ export const CRON_JOBS: CronJobDef[] = [
     agentName: "AI Supervisor",
     actions: ["autoheal"],
     schedule: "20 * * * *",
-    expectedEveryHours: 2,
+    // The route runs hourly but only WRITES an agent_activity row every ~20h
+    // during a clean streak (see the "HEARTBEAT DIET" comment in
+    // app/api/cron/autoheal/route.ts) -- the freshness window here has to
+    // track that logging cadence, not the raw execution schedule, or every
+    // clean streak past 4h falsely reads as "missed its schedule".
+    expectedEveryHours: 22,
     cadence: "sub-daily",
   },
   {
