@@ -4,6 +4,9 @@ import clientPromise from "@/lib/mongodb";
 import { QuoteLeadSchema } from "@/lib/leads";
 import { getClientIp } from "@/lib/security/request";
 import { rateLimit } from "@/lib/security/rate-limit";
+import { saveQuoteIntake, drainQuoteIntake } from "@/lib/quote-intake";
+
+export const maxDuration = 60;
 
 export async function POST(req: Request) {
   const ip = getClientIp(req);
@@ -39,18 +42,8 @@ export async function POST(req: Request) {
   const client = await clientPromise;
   const db = client.db();
 
-  await db.collection("leads_quotes").insertOne({
-    ...parsed.data,
-    hp: undefined,
-    status: "new",
-    notes: [],
-    nextFollowUpAt: null,
-    ownerUserId: null,
-    convertedAt: null,
-    conversion: null,
-    createdAt: new Date(),
-    source: "web",
-  });
+  const saved = await saveQuoteIntake(db, parsed.data, false);
+  await drainQuoteIntake(db, { quoteId: saved.id }).catch(() => console.error("[quote] Delivery remains queued"));
 
   return NextResponse.json({ ok: true }, { status: 200 });
 }

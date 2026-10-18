@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+export const maxDuration = 60;
 
 import Link from "next/link";
 import { JsonLd } from "@/components/seo/json-ld";

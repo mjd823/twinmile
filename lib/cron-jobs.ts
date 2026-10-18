@@ -37,6 +37,10 @@ export interface CronJobDef {
 
 export const CRON_JOBS: CronJobDef[] = [
   {
+    id: "quote-intake", name: "Quote Intake Recovery", agentName: "Quote Intake",
+    actions: ["quote_intake_recovery"], schedule: "*/15 * * * *", expectedEveryHours: 1, cadence: "sub-daily",
+  },
+  {
     id: "autoheal",
     name: "Self-Repair Loop",
     agentName: "AI Supervisor",

@@ -77,11 +77,8 @@ function detailRow(label: string, value: string) {
   return `<tr><td style="padding:6px 10px 6px 0;font-size:13px;font-weight:700;color:#111827;vertical-align:top;white-space:nowrap;">${esc(label)}</td><td style="padding:6px 0;font-size:14px;line-height:1.5;color:#374151;">${esc(value || "—")}</td></tr>`;
 }
 
-/**
- * Fire-and-forget lead notification email.
- * Never throws — logs errors so form submission is never blocked.
- */
-export async function notifyNewQuoteLead(lead: {
+/** Freeze the exact owner notification before its first delivery attempt. */
+export function buildQuoteOwnerEmail(lead: {
   name: string;
   company?: string;
   email: string;
@@ -89,6 +86,8 @@ export async function notifyNewQuoteLead(lead: {
   pickupLocation: string;
   dropoffLocation: string;
   serviceType: string;
+  pickupDate?: string;
+  notes?: string;
 }) {
   const html = renderEmailLayout({
     preheader: `New quote lead: ${lead.name}`,
@@ -104,12 +103,16 @@ export async function notifyNewQuoteLead(lead: {
         ${detailRow("Pickup", lead.pickupLocation)}
         ${detailRow("Drop-off", lead.dropoffLocation)}
         ${detailRow("Service", lead.serviceType)}
+        ${lead.pickupDate ? detailRow("Pickup date", lead.pickupDate) : ""}
+        ${lead.notes ? detailRow("Customer notes", lead.notes) : ""}
       </table>
     `,
     primaryCta: { label: "Open Admin Inbox", href: `${APP_URL}/admin/inbox` },
   });
 
-  await sendEmail({
+  return {
+    from: FROM,
+    replyTo: REPLY_TO,
     to: NOTIFY_TO,
     subject: `New Quote Lead: ${lead.name}`,
     text:
@@ -117,9 +120,20 @@ export async function notifyNewQuoteLead(lead: {
       `Email: ${lead.email}\nPhone: ${lead.phone}\n` +
       `Pickup: ${lead.pickupLocation}\nDrop-off: ${lead.dropoffLocation}\n` +
       `Service: ${lead.serviceType}\n` +
+      `Pickup date: ${lead.pickupDate || "Not specified"}\nNotes: ${lead.notes || "None"}\n` +
       `Admin inbox: ${APP_URL}/admin/inbox`,
     html,
-  });
+  };
+}
+
+export async function notifyNewQuoteLead(lead: Parameters<typeof buildQuoteOwnerEmail>[0]) {
+  return sendEmail(buildQuoteOwnerEmail(lead));
+}
+
+export async function sendQuoteOwnerEmail(payload: ReturnType<typeof buildQuoteOwnerEmail>, idempotencyKey: string) {
+  if (!resend) return { ok: false, reason: "email-not-configured" };
+  const result = await resend.emails.send(payload, { idempotencyKey, signal: AbortSignal.timeout(8000) } as import("resend").CreateEmailRequestOptions & { signal: AbortSignal });
+  return result.data?.id ? { ok: true, providerId: result.data.id } : { ok: false, reason: result.error?.name || "provider-acceptance-unknown" };
 }
 
 export async function notifyNewDriverLead(lead: {
@@ -387,7 +401,7 @@ export async function sendQuoteLeadConfirmation(lead: {
     secondaryCta: { label: "Explore Services", href: `${APP_URL}/services` },
   });
 
-  await sendEmail({
+  return sendEmail({
     to: lead.email,
     subject: "We received your quote request — Twin Mile",
     text:

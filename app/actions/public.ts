@@ -6,24 +6,11 @@ import { rateLimit } from "@/lib/security/rate-limit";
 
 import { getClientIpFromHeaders } from "@/app/actions/_request";
 import {
-  notifyNewQuoteLead,
   notifyNewDriverLead,
   sendQuoteLeadConfirmation,
   sendDriverLeadConfirmation,
 } from "@/lib/email";
-
-/**
- * Next business day, same clock time. Weekend submissions must not schedule a
- * "one business day" follow-up onto a Saturday — the email promises a business
- * day and the queue has to mean it.
- */
-function nextBusinessDay(from: Date): Date {
-  const d = new Date(from.getTime() + 24 * 60 * 60 * 1000);
-  while (d.getUTCDay() === 0 || d.getUTCDay() === 6) {
-    d.setUTCDate(d.getUTCDate() + 1);
-  }
-  return d;
-}
+import { saveQuoteIntake, drainQuoteIntake } from "@/lib/quote-intake";
 
 export async function submitQuoteLeadAction(
   input: unknown
@@ -49,66 +36,19 @@ export async function submitQuoteLeadAction(
       return { ok: true };
     }
 
-    console.log("[submitQuoteLeadAction] Connecting to database...");
     const client = await clientPromise;
     const db = client.db();
-    console.log("[submitQuoteLeadAction] Database connected, inserting lead...");
-
-    // nextFollowUpAt is set, not null. The only shipper lead in company history
-    // was inserted with nextFollowUpAt:null and then sat untouched for 91 days —
-    // a follow-up date that is always null is a queue that is always empty.
-    const now = new Date();
-    const followUpAt = nextBusinessDay(now);
-
-    const insertResult = await db.collection("leads_quotes").insertOne({
-      ...parsed.data,
-      hp: undefined,
-      status: "new",
-      notes: [],
-      nextFollowUpAt: followUpAt,
-      ownerUserId: null,
-      convertedAt: null,
-      conversion: null,
-      createdAt: now,
-      source: "web",
-    });
-    console.log("[submitQuoteLeadAction] Lead inserted successfully:", insertResult.insertedId);
-
-    // Queue the follow-up the confirmation email promises. leadType "quote"
-    // resolves to leads_quotes via lib/outreach-lead-resolver.ts and is picked up
-    // by /api/cron/process-outreach — which IS gated on OUTREACH_AUTOMATION, and
-    // that is correct for a sequence. The instant confirmation below is not
-    // gated, because a receipt for something the shipper just did himself is
-    // transactional, not outreach.
-    //
-    // Template is quote_followup, not quote_initial: quote_initial says the same
-    // thing as the confirmation that goes out seconds from now, so queueing it
-    // would mail the shipper the same paragraph twice.
-    await db.collection("outreach_tasks").insertOne({
-      leadId: insertResult.insertedId,
-      leadType: "quote",
-      leadCollection: "leads_quotes",
-      leadEmail: parsed.data.email,
-      leadName: parsed.data.name,
-      template: "quote_followup",
-      channel: "email",
-      priority: "high",
-      scheduledAt: followUpAt,
-      status: "pending",
-      attempts: 0,
-      maxAttempts: 3,
-      personalization: { name: parsed.data.name },
-      createdAt: now,
-    });
-
-    // AWAITED. These are server actions on Vercel, where the lambda is frozen the
-    // moment the response returns — a fire-and-forget send here is killed
-    // mid-flight, which is the exact bug fixed in /api/onboarding/complete.
-    // sendEmail() never throws and returns a boolean, so awaiting cannot fail the
-    // submission, and the lead is already inserted above regardless.
+    const saved = await saveQuoteIntake(db, parsed.data, true);
+    // A persisted request must remain successful if an integration is down.
+    // Only a newly-created form submission sends the existing customer receipt;
+    // the recovery worker never sends customer confirmations or outreach.
     await Promise.all([
-      notifyNewQuoteLead(parsed.data).catch((err) => console.error("[submitQuoteLeadAction] Email notification failed:", err)),
-      sendQuoteLeadConfirmation(parsed.data).catch((err) => console.error("[submitQuoteLeadAction] Confirmation email failed:", err)),
+      drainQuoteIntake(db, { quoteId: saved.id }).catch(() => console.error("[submitQuoteLeadAction] Saved delivery will be retried")),
+      saved.created ? sendQuoteLeadConfirmation(parsed.data).then(async accepted => {
+        await db.collection("leads_quotes").updateOne({ _id: saved.id }, { $set: {
+          customerConfirmation: { status: accepted ? "accepted" : "not-accepted", checkedAt: new Date() },
+        } });
+      }).catch(() => console.error("[submitQuoteLeadAction] Customer receipt outcome unavailable")) : Promise.resolve(),
     ]);
 
     return { ok: true };
