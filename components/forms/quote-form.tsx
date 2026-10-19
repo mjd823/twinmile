@@ -69,7 +69,7 @@ export function QuoteForm() {
   }
 
   return (
-    <form onSubmit={onSubmit} onChange={() => { if (status.state !== "submitting") submissionId.current = null; }} className="grid gap-4">
+    <form onSubmit={onSubmit} onChange={() => { submissionId.current = null; }} className="grid gap-4">
       <div className="grid gap-2">
         <label className="text-sm font-semibold text-foreground/95" htmlFor="name">
           Name
