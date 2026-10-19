@@ -51,6 +51,7 @@ function stageMatches(stageKey: string, status: string): boolean {
 type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "lost";
 
 type QuoteLeadRow = {
+  delivery?: { operator: string; gvai: string };
   id: string;
   name: string;
   company: string;
@@ -498,6 +499,10 @@ export function AdminInbox({
                 {selected.kind === "quotes" && selectedQuote ? (
                   <div className="grid gap-2 rounded-lg border border-border/60 bg-card/40 p-4 text-sm">
                     <div className="font-medium">Quote details</div>
+                    {selectedQuote.delivery && <div className="text-muted-foreground">
+                      Operator alert: {selectedQuote.delivery.operator === "accepted" ? "Provider accepted" : selectedQuote.delivery.operator}.
+                      {" "}GVAI dashboard: {selectedQuote.delivery.gvai === "accepted" ? "Recorded" : selectedQuote.delivery.gvai}.
+                    </div>}
                     <div className="text-muted-foreground">Company: {selectedQuote.company || "—"}</div>
                     <div className="text-muted-foreground">Phone: {selectedQuote.phone || "—"}</div>
                     <div className="text-muted-foreground">Service type: {selectedQuote.serviceType || "—"}</div>
@@ -507,7 +512,7 @@ export function AdminInbox({
                     {selectedQuote.notes ? (
                       <div className="mt-2 rounded border border-border/40 bg-background/40 p-2 text-xs text-muted-foreground">
                         <div className="font-medium text-foreground">Notes:</div>
-                        <div className="mt-1 whitespace-pre-wrap">{selectedQuote.notes}</div>
+                        <div className="mt-1 whitespace-pre-wrap break-words">{selectedQuote.notes}</div>
                       </div>
                     ) : null}
                   </div>

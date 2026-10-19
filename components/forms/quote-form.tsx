@@ -16,6 +16,7 @@ type Status =
 
 export function QuoteForm() {
   const [status, setStatus] = React.useState<Status>({ state: "idle" });
+  const submissionId = React.useRef<string | null>(null);
   const fieldClassName =
     "h-10 border-border/80 bg-background/70 text-foreground placeholder:text-foreground/55 transition-shadow focus-visible:border-primary/60 focus-visible:ring-primary/70 focus-visible:shadow-[0_0_0_3px_rgba(59,130,246,0.18)]";
   const selectClassName =
@@ -31,12 +32,19 @@ export function QuoteForm() {
     const form = e.currentTarget;
     const formData = new FormData(form);
     const payload: Record<string, unknown> = Object.fromEntries(formData.entries());
+    payload.submissionId = submissionId.current ??= crypto.randomUUID();
     const utm = getUtm();
     if (utm) payload.utm = utm;
 
     setStatus({ state: "submitting" });
 
-    const result = await submitQuoteLeadAction(payload);
+    let result: Awaited<ReturnType<typeof submitQuoteLeadAction>>;
+    try {
+      result = await submitQuoteLeadAction(payload);
+    } catch {
+      setStatus({ state: "error", message: "Connection interrupted. Please try again; your request will not be duplicated." });
+      return;
+    }
 
     if (!result.ok) {
       setStatus({ state: "error", message: result.error || "Something went wrong. Please try again." });
@@ -57,10 +65,11 @@ export function QuoteForm() {
 
     setStatus({ state: "success" });
     form.reset();
+    submissionId.current = null;
   }
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-4">
+    <form onSubmit={onSubmit} onChange={() => { submissionId.current = null; }} className="grid gap-4">
       <div className="grid gap-2">
         <label className="text-sm font-semibold text-foreground/95" htmlFor="name">
           Name
@@ -153,7 +162,7 @@ export function QuoteForm() {
       ) : null}
 
       {status.state === "error" ? (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+        <div role="alert" className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {status.message}
         </div>
       ) : null}

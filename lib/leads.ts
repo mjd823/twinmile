@@ -11,9 +11,10 @@ const UtmSchema = z
   .optional();
 
 export const QuoteLeadSchema = z.object({
+  submissionId: z.string().uuid().optional(),
   name: z.string().min(1).max(120),
   company: z.string().max(200).optional().or(z.literal("")),
-  email: z.string().email(),
+  email: z.string().email().max(254),
   phone: z.string().min(7).max(30),
   pickupLocation: z.string().min(2).max(200),
   dropoffLocation: z.string().min(2).max(200),

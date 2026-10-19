@@ -92,6 +92,7 @@ const NOISE_ACTIONS = [
   "outreach_cron_summary",
   "outreach", // legacy per-email row (type only)
   "outreach_task_failed", // legacy per-email failure row (type only)
+  "quote_intake_recovery",
 ];
 
 const ACTIVITY_NOISE_FILTER = {
@@ -254,7 +255,11 @@ export default async function RecruitingPipelinePage({
       dropoffLocation: String(l.dropoffLocation ?? ""),
       serviceType: String(l.serviceType ?? ""),
       pickupDate: String(l.pickupDate ?? ""),
-      notes: String(l.notes ?? ""),
+      notes: String(l.customerNotes || (typeof l.notes === "string" ? l.notes : "")),
+      delivery: {
+        operator: String(l.quoteDelivery?.owner?.status || "not-recorded"),
+        gvai: String(l.quoteDelivery?.gvai?.status || "not-recorded"),
+      },
       status: (l.status ?? "new") as never,
       createdAt: isoDate(l.createdAt),
     }));
