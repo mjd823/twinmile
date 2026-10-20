@@ -11,7 +11,7 @@ import { captureUtm, getUtm } from "@/lib/utm";
 type Status =
   | { state: "idle" }
   | { state: "submitting" }
-  | { state: "success" }
+  | { state: "success"; hasUnsubmittedChanges: boolean }
   | { state: "error"; message: string };
 
 export function QuoteForm() {
@@ -63,9 +63,12 @@ export function QuoteForm() {
       // Analytics must never block the success state.
     }
 
-    setStatus({ state: "success" });
-    form.reset();
-    submissionId.current = null;
+    const hasUnsubmittedChanges = submissionId.current !== payload.submissionId;
+    setStatus({ state: "success", hasUnsubmittedChanges });
+    if (!hasUnsubmittedChanges) {
+      form.reset();
+      submissionId.current = null;
+    }
   }
 
   return (
@@ -156,8 +159,10 @@ export function QuoteForm() {
       </Button>
 
       {status.state === "success" ? (
-        <div className="rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-sm text-foreground/90">
-          Thanks — we received your request. We’ll reach out shortly.
+        <div role="status" className="rounded-lg border border-primary/35 bg-primary/10 px-3 py-2 text-sm text-foreground/90">
+          {status.hasUnsubmittedChanges
+            ? "We received your original request. Your changes are still in the form and have not been submitted."
+            : "Thanks — we received your request. We’ll reach out shortly."}
         </div>
       ) : null}
 
