@@ -105,6 +105,10 @@ function isoDate(value: unknown): string {
   return Number.isNaN(d.getTime()) ? "" : d.toISOString();
 }
 
+function boundedDeliveryReason(value: unknown): string {
+  return typeof value === "string" ? value.slice(0, 300).replace(/\s+/g, " ").trim() : "";
+}
+
 function locationString(loc: unknown): string {
   if (typeof loc === "string") return loc;
   if (loc && typeof loc === "object") {
@@ -259,6 +263,8 @@ export default async function RecruitingPipelinePage({
       delivery: {
         operator: String(l.quoteDelivery?.owner?.status || "not-recorded"),
         gvai: String(l.quoteDelivery?.gvai?.status || "not-recorded"),
+        operatorReason: boundedDeliveryReason(l.quoteDelivery?.owner?.reason),
+        gvaiReason: boundedDeliveryReason(l.quoteDelivery?.gvai?.reason),
       },
       status: (l.status ?? "new") as never,
       createdAt: isoDate(l.createdAt),
