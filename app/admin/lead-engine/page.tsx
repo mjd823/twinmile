@@ -260,6 +260,11 @@ export default async function RecruitingPipelinePage({
       serviceType: String(l.serviceType ?? ""),
       pickupDate: String(l.pickupDate ?? ""),
       notes: String(l.customerNotes || (typeof l.notes === "string" ? l.notes : "")),
+      noteHistory: Array.isArray(l.notes)
+        ? l.notes.flatMap((note: any) => typeof note?.message === "string"
+          ? [{ at: isoDate(note.at), message: note.message }]
+          : [])
+        : [],
       delivery: {
         operator: String(l.quoteDelivery?.owner?.status || "not-recorded"),
         gvai: String(l.quoteDelivery?.gvai?.status || "not-recorded"),

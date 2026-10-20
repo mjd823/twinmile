@@ -63,6 +63,7 @@ type QuoteLeadRow = {
   serviceType?: string;
   pickupDate?: string;
   notes?: string;
+  noteHistory?: { at: string; message: string }[];
   status: LeadStatus;
   createdAt: string;
 };
@@ -549,6 +550,19 @@ export function AdminInbox({
                       <div className="mt-2 rounded border border-border/40 bg-background/40 p-2 text-xs text-muted-foreground">
                         <div className="font-medium text-foreground">Notes:</div>
                         <div className="mt-1 whitespace-pre-wrap break-words">{selectedQuote.notes}</div>
+                      </div>
+                    ) : null}
+                    {selectedQuote.noteHistory?.length ? (
+                      <div className="mt-2 border-t border-border/40 pt-3 text-xs text-muted-foreground">
+                        <div className="font-medium text-foreground">Note history</div>
+                        <ul className="mt-2 grid gap-3">
+                          {selectedQuote.noteHistory.map((note, index) => (
+                            <li key={`${note.at}:${index}`}>
+                              {note.at ? <time dateTime={note.at}>{formatLocalDate(note.at)}</time> : null}
+                              <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">{note.message}</div>
+                            </li>
+                          ))}
+                        </ul>
                       </div>
                     ) : null}
                   </div>
