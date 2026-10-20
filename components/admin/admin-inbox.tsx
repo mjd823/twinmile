@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +52,7 @@ function stageMatches(stageKey: string, status: string): boolean {
 type LeadStatus = "new" | "contacted" | "qualified" | "converted" | "lost";
 
 type QuoteLeadRow = {
-  delivery?: { operator: string; gvai: string };
+  delivery?: { operator: string; gvai: string; operatorReason?: string; gvaiReason?: string };
   id: string;
   name: string;
   company: string;
@@ -85,6 +86,7 @@ type InboxItem =
       kind: "quotes";
       id: string;
       typeLabel: "Quote lead";
+      handoffWarnings: string[];
       name: string;
       email: string;
       detail: string;
@@ -127,12 +129,17 @@ export function AdminInbox({
   const [stageFilter, setStageFilter] = React.useState<StageFilter>(initialStage);
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
   const [searchQuery, setSearchQuery] = React.useState("");
+  const [attentionOnly, setAttentionOnly] = React.useState(false);
 
   const rows = React.useMemo<InboxItem[]>(() => {
     const q: InboxItem[] = quoteLeads.map((l: QuoteLeadRow) => ({
       kind: "quotes",
       id: l.id,
       typeLabel: "Quote lead",
+      handoffWarnings: [
+        ...(l.delivery?.operator === "attention" ? ["Owner email"] : []),
+        ...(l.delivery?.gvai === "attention" ? ["GVAI dashboard"] : []),
+      ],
       name: l.name || "—",
       email: l.email || "—",
       detail: `${l.company || "—"} • ${l.pickupLocation || ""}${l.dropoffLocation ? ` → ${l.dropoffLocation}` : ""}`.trim(),
@@ -153,6 +160,8 @@ export function AdminInbox({
 
     return [...q, ...d];
   }, [quoteLeads, driverLeads]);
+
+  const attentionCount = rows.filter((r) => r.kind === "quotes" && r.handoffWarnings.length > 0).length;
 
   const selectedItem = React.useMemo(() => {
     if (!selected) return null;
@@ -193,6 +202,7 @@ export function AdminInbox({
     const filtered = rows.filter((r) => {
       if (typeFilter !== "all" && r.kind !== typeFilter) return false;
       if (stageFilter !== "all" && !stageMatches(stageFilter, r.status)) return false;
+      if (attentionOnly && (r.kind !== "quotes" || r.handoffWarnings.length === 0)) return false;
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         return (
@@ -220,7 +230,7 @@ export function AdminInbox({
     });
 
     return sorted;
-  }, [rows, sortMode, stageFilter, typeFilter, searchQuery]);
+  }, [rows, sortMode, stageFilter, typeFilter, searchQuery, attentionOnly]);
 
   const selectedQuote = React.useMemo(() => {
     if (!selected || selected.kind !== "quotes") return null;
@@ -349,7 +359,17 @@ export function AdminInbox({
       <div className="text-sm text-muted-foreground">
         Click headers to sort/filter • {visibleRows.length} of {rows.length} leads
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex cursor-pointer items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={attentionOnly}
+            onChange={(e) => setAttentionOnly(e.currentTarget.checked)}
+            className="h-4 w-4 accent-amber-600"
+          />
+          <TriangleAlert aria-hidden="true" className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" />
+          <span>Quote handoff attention ({attentionCount})</span>
+        </label>
         <Input
           placeholder="Search..."
           value={searchQuery}
@@ -465,6 +485,12 @@ export function AdminInbox({
                 </div>
                 <div className="text-xs text-muted-foreground">{formatLocalDate(r.createdAt)}</div>
               </div>
+              {r.kind === "quotes" && r.handoffWarnings.length > 0 ? (
+                <span className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  <TriangleAlert aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                  <span className="min-w-0 break-words">Handoff attention: {r.handoffWarnings.join(", ")}</span>
+                </span>
+              ) : null}
             </button>
           ))
         )}
@@ -478,7 +504,7 @@ export function AdminInbox({
             aria-label="Close"
             onClick={closeModal}
           />
-          <div className="relative w-full max-w-lg overflow-hidden rounded-2xl border border-border/60 bg-background/70 shadow-2xl shadow-black/20 backdrop-blur">
+          <div className="relative max-h-[calc(100dvh-2rem)] w-full max-w-lg overflow-y-auto rounded-lg border border-border/60 bg-background/70 shadow-2xl shadow-black/20 backdrop-blur">
             <div className="border-b border-border/60 px-6 py-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -500,9 +526,19 @@ export function AdminInbox({
                   <div className="grid gap-2 rounded-lg border border-border/60 bg-card/40 p-4 text-sm">
                     <div className="font-medium">Quote details</div>
                     {selectedQuote.delivery && <div className="text-muted-foreground">
-                      Operator alert: {selectedQuote.delivery.operator === "accepted" ? "Provider accepted" : selectedQuote.delivery.operator}.
+                      Owner email: {selectedQuote.delivery.operator === "accepted" ? "Provider accepted" : selectedQuote.delivery.operator}.
                       {" "}GVAI dashboard: {selectedQuote.delivery.gvai === "accepted" ? "Recorded" : selectedQuote.delivery.gvai}.
                     </div>}
+                    {selectedQuote.delivery?.operator === "attention" ? (
+                      <div className="text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400">
+                        Owner email reason: {selectedQuote.delivery.operatorReason || "No reason recorded."}
+                      </div>
+                    ) : null}
+                    {selectedQuote.delivery?.gvai === "attention" ? (
+                      <div className="text-amber-700 [overflow-wrap:anywhere] dark:text-amber-400">
+                        GVAI dashboard reason: {selectedQuote.delivery.gvaiReason || "No reason recorded."}
+                      </div>
+                    ) : null}
                     <div className="text-muted-foreground">Company: {selectedQuote.company || "—"}</div>
                     <div className="text-muted-foreground">Phone: {selectedQuote.phone || "—"}</div>
                     <div className="text-muted-foreground">Service type: {selectedQuote.serviceType || "—"}</div>
