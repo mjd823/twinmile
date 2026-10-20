@@ -231,3 +231,51 @@ test('legacy reasons are optional and accepted email is not represented as deliv
   empty.toggle(true);
   assert.match(text(empty.render()), /No leads found for current filters/);
 });
+
+test('quote note history survives page mapping and appears in details beside customer notes', async () => {
+  const h = pageHarness({ storedQuotes: [{
+    _id: 'history', name: 'History fixture', customerNotes: 'Customer fixture instructions',
+    notes: [
+      { at: '2026-10-19T12:00:00Z', actorUserId: 'private-actor-id', message: 'First operator fixture note' },
+      { at: '2026-10-20T13:00:00Z', message: '<script>second fixture note</script>\nNext line' },
+    ],
+  }] });
+  const page = await h.page({ tab: 'manual' });
+  const quoteLeads = page.props.children.props.manualQuoteLeads;
+  assert.deepEqual(JSON.parse(JSON.stringify(quoteLeads[0].noteHistory)), [
+    { at: '2026-10-19T12:00:00.000Z', message: 'First operator fixture note' },
+    { at: '2026-10-20T13:00:00.000Z', message: '<script>second fixture note</script>\nNext line' },
+  ]);
+  assert.doesNotMatch(JSON.stringify(quoteLeads), /private-actor-id/);
+  const view = inbox({ quoteLeads });
+  view.rows()[0].props.onClick();
+  const html = renderToStaticMarkup(view.render());
+  assert.match(html, /Customer fixture instructions/);
+  assert.match(html, /Note history/);
+  assert.match(html, /First operator fixture note/);
+  assert.match(html, /&lt;script&gt;second fixture note&lt;\/script&gt;\nNext line/);
+  assert.match(html, /dateTime="2026-10-20T13:00:00.000Z"/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.equal(view.actionCalls(), 0);
+});
+
+test('quote note history keeps legacy customer text and tolerates absent or malformed entries', async () => {
+  const h = pageHarness({ storedQuotes: [
+    { _id: 'legacy', notes: 'Legacy customer fixture text' },
+    { _id: 'absent' },
+    { _id: 'mixed', notes: [null, 'old entry', { message: 42 }, { at: 'bad date', message: 'Undated operator fixture' }] },
+  ] });
+  const page = await h.page({ tab: 'manual' });
+  const quoteLeads = page.props.children.props.manualQuoteLeads;
+  assert.equal(quoteLeads[0].notes, 'Legacy customer fixture text');
+  assert.deepEqual(Array.from(quoteLeads[0].noteHistory), []);
+  assert.deepEqual(Array.from(quoteLeads[1].noteHistory), []);
+  assert.deepEqual(JSON.parse(JSON.stringify(quoteLeads[2].noteHistory)), [
+    { at: '', message: 'Undated operator fixture' },
+  ]);
+  const view = inbox({ quoteLeads });
+  view.rows()[0].props.onClick();
+  assert.match(text(view.render()), /Legacy customer fixture text/);
+  assert.doesNotMatch(text(view.render()), /Note history/);
+  assert.equal(view.actionCalls(), 0);
+});
