@@ -53,10 +53,11 @@ const fixtures = [
   quote('pending', { operator: 'pending', gvai: 'processing' }),
   quote('legacy', undefined),
 ];
-function inbox({ quoteLeads = fixtures, initialType, initialStage } = {}) {
+function inbox({ quoteLeads = fixtures, initialType, initialStage, updateResult } = {}) {
   const hooks = [];
   let cursor = 0;
   let actionCalls = 0;
+  let refreshCalls = 0;
   const { AdminInbox } = load('components/admin/admin-inbox.tsx', {
     react: {
       ...React,
@@ -76,6 +77,7 @@ function inbox({ quoteLeads = fixtures, initialType, initialStage } = {}) {
       useEffect() { cursor++; },
     },
     'lucide-react': { TriangleAlert: props => React.createElement('svg', props) },
+    'next/navigation': { useRouter: () => ({ refresh: () => { refreshCalls++; } }) },
     '@/components/ui/button': { Button: 'button' },
     '@/components/ui/input': { Input: 'input' },
     '@/lib/pipeline-stages': {
@@ -84,7 +86,11 @@ function inbox({ quoteLeads = fixtures, initialType, initialStage } = {}) {
     },
     '@/app/actions/admin': Object.fromEntries([
       'convertDriverLeadAction', 'convertQuoteLeadAction', 'deleteLeadAction', 'updateLeadAction',
-    ].map(name => [name, () => { actionCalls++; throw new Error('Business actions must not run'); }])),
+    ].map(name => [name, async () => {
+      actionCalls++;
+      if (name === 'updateLeadAction' && updateResult !== undefined) return typeof updateResult === 'function' ? updateResult() : updateResult;
+      throw new Error('Business actions must not run');
+    }])),
   });
   const render = () => {
     cursor = 0;
@@ -97,7 +103,35 @@ function inbox({ quoteLeads = fixtures, initialType, initialStage } = {}) {
     .props.onChange({ currentTarget: { checked } });
   const rows = () => nodes(render()).filter(n => n.type === 'button' && /^(quotes|drivers):/.test(n.key || ''));
   const ids = () => rows().map(n => n.key);
-  return { render, toggle, rows, ids, actionCalls: () => actionCalls };
+  return { render, toggle, rows, ids, actionCalls: () => actionCalls, refreshCalls: () => refreshCalls };
+}
+
+for (const status of ['contacted', 'lost']) {
+  test(`saving quote ${status} requests fresh persisted rows and counts without manual reload`, async () => {
+    const h = inbox({ updateResult: { ok: true } });
+    h.rows().find(row => row.key === 'quotes:owner-only').props.onClick();
+    const selector = nodes(h.render()).find(node => node.props.id === 'lead-status');
+    await selector.props.onChange({ currentTarget: { value: status } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.actionCalls(), 1);
+    assert.equal(h.refreshCalls(), 1);
+    assert.doesNotMatch(text(h.render()), /Reload the page to see changes/);
+  });
+}
+
+for (const [label, updateResult] of [
+  ['rejected', { ok: false, error: 'Fixture write rejected' }],
+  ['interrupted', () => { throw new Error('Fixture disconnected'); }],
+]) {
+  test(`${label} quote status save restores the persisted selection instead of displaying a false outcome`, async () => {
+    const h = inbox({ updateResult });
+    h.rows().find(row => row.key === 'quotes:owner-only').props.onClick();
+    nodes(h.render()).find(node => node.props.id === 'lead-status').props.onChange({ currentTarget: { value: 'lost' } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(nodes(h.render()).find(node => node.props.id === 'lead-status').props.value, 'new');
+    assert.equal(h.refreshCalls(), 0);
+    assert.doesNotMatch(text(h.render()), /Lead updated/);
+  });
 }
 
 function pageHarness({ role = { id: 'fixture-admin' }, storedQuotes = [] } = {}) {
