@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { TriangleAlert } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -120,6 +121,7 @@ export function AdminInbox({
   initialType?: TypeFilter;
   initialStage?: string;
 }) {
+  const router = useRouter();
   const [busyKey, setBusyKey] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [selected, setSelected] = React.useState<{ kind: "quotes" | "drivers"; id: string } | null>(null);
@@ -264,12 +266,15 @@ export function AdminInbox({
     try {
       const result = await updateLeadAction(kind, id, payload);
       if (!result.ok) {
+        if (payload.status && selectedItem) setStatusDraft(selectedItem.status as LeadStatus);
         setMessage(result.error ?? "Unable to update lead.");
         return false;
       }
-      setMessage("Lead updated. Reload the page to see changes.");
+      setMessage("Lead updated.");
+      router.refresh();
       return true;
     } catch {
+      if (payload.status && selectedItem) setStatusDraft(selectedItem.status as LeadStatus);
       setMessage("Unable to update lead.");
       return false;
     } finally {
