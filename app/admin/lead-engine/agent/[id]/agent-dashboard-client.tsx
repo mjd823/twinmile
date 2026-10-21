@@ -75,8 +75,8 @@ const AGENT_ACTIONS_MAP: Record<string, { label: string; description: string; ap
     icon: <Search className="h-4 w-4" />,
   },
   sales: {
-    label: "Process Quote Leads",
-    description: "Marcus researches companies, builds quotes, and sends proposals",
+    label: "Review Quote Requests",
+    description: "Operator review required",
     apiAction: "find_customers",
     icon: <Users className="h-4 w-4" />,
   },
@@ -207,11 +207,11 @@ export function AgentDashboardClient({ agentId, name, role, department, color, r
 
   const handleWorkflowAdvance = async () => {
     if (workflowStep >= workflowSteps.length - 1) return;
-    setWorkflowStep(w => w + 1);
     setActionLoading(true);
     try {
       const result = await clientAIActivityEngine.handleDashboardAction(agentAction?.apiAction || "");
       setActionResult(result);
+      if (result.success) setWorkflowStep(w => w + 1);
     } catch (error) { setActionResult({ success: false, message: String(error) }); }
     finally { setActionLoading(false); }
   };
@@ -311,6 +311,11 @@ export function AgentDashboardClient({ agentId, name, role, department, color, r
                         )}
                         <div className="flex-1">
                           <p className="text-sm font-medium text-foreground">{actionResult.message}</p>
+                          {agentId === "sales" && actionResult.requiresOperator && (
+                            <Link href="/admin/lead-engine?tab=manual" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-primary underline underline-offset-4">
+                              Open Quote Inbox <ArrowRight className="h-4 w-4" />
+                            </Link>
+                          )}
                           {actionResult.details && (
                             <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                               {Object.entries(actionResult.details).map(([key, value]) => (
@@ -425,7 +430,7 @@ export function AgentDashboardClient({ agentId, name, role, department, color, r
               </CardContent>
             </Card>
 
-            {actionResult && workflowStep < workflowSteps.length && (
+            {actionResult?.success && workflowStep < workflowSteps.length && (
               <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4 flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
                 <div className="text-sm">
