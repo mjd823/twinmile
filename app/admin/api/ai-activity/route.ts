@@ -314,33 +314,17 @@ export async function POST(request: NextRequest) {
     }
     
     else if (action === 'find_customers') {
-      // Marcus - Sales
-      const pendingQuotes = await db.collection('leads_quotes').find({ 
-        status: { $in: ['new', 'qualified'] } 
-      }).limit(10).toArray()
-      
-      let quotesBuilt = 0
-      for (const quote of pendingQuotes) {
-        if (quote.status === 'new') {
-          await db.collection('leads_quotes').updateOne(
-            { _id: quote._id },
-            { $set: { status: 'quoted', quotedAt: new Date(), updatedAt: new Date() } }
-          )
-          
-          await db.collection('agent_activity').insertOne({
-            timestamp: new Date(),
-            agent: { name: 'Marcus Chen', role: 'Sales Director' },
-            activity: `Built quote for ${quote.companyName || quote.name} - ${quote.serviceType} (${quote.origin} to ${quote.destination})`,
-            type: 'find_customers',
-            agentId: 'sales',
-            details: { quoteId: quote._id.toString(), company: quote.companyName, lanes: `${quote.origin} → ${quote.destination}` },
-          })
-          quotesBuilt++
-        }
-      }
-      
-      result.message = `📊 Marcus built ${quotesBuilt} quotes from pending leads (${pendingQuotes.length} pending total)`
-      result.details = { quotesBuilt, pendingTotal: pendingQuotes.length }
+      // Counting requests is not evidence that a priced response was prepared or sent.
+      const pendingTotal = await db.collection('leads_quotes').countDocuments({
+        status: { $in: ['new', 'contacted', 'qualified'] },
+        isArchived: { $ne: true },
+      })
+      result.success = false
+      result.requiresOperator = true
+      result.message = pendingTotal
+        ? `${pendingTotal} active quote request(s) need operator review. Review shipment details, prepare a priced response or record the missing information, and record the next action in the quote notes. No quote was built or sent.`
+        : 'No active quote requests await operator review. No quote was built or sent.'
+      result.details = { quotesBuilt: 0, pendingTotal }
     }
     
     else if (action === 'strategic_review') {
