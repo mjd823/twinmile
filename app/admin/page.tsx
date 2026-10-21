@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
@@ -43,6 +44,23 @@ export default async function AdminDashboardPage() {
     console.error("[admin] recruiting coverage unavailable:", error);
   }
 
+  let quoteAttention: number | null = null;
+  try {
+    if (clientPromise) {
+      const db = (await clientPromise).db();
+      // Match the inbox's unarchived owner/GVAI warnings; count quotes, not destinations.
+      quoteAttention = await db.collection("leads_quotes").countDocuments({
+        isArchived: { $ne: true },
+        $or: [
+          { "quoteDelivery.owner.status": "attention" },
+          { "quoteDelivery.gvai.status": "attention" },
+        ],
+      });
+    }
+  } catch {
+    console.error("[admin] quote handoff status unavailable");
+  }
+
   return (
     <main>
       <section className="border-b border-border/60">
@@ -62,6 +80,21 @@ export default async function AdminDashboardPage() {
           </div>
         </div>
       </section>
+
+      {(quoteAttention === null || quoteAttention > 0) && (
+        <section aria-label="Quote handoff attention" className="border-b border-border/60 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
+            <p role="status">
+              {quoteAttention === null
+                ? "Quote handoff status unavailable"
+                : `${quoteAttention.toLocaleString()} quote handoff${quoteAttention === 1 ? " needs" : "s need"} review`}
+            </p>
+            <Link href="/admin/lead-engine?tab=manual" className="font-medium underline underline-offset-4">
+              Review quotes
+            </Link>
+          </div>
+        </section>
+      )}
 
       <section>
         <div className="w-full py-6">
