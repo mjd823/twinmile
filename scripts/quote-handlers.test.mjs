@@ -19,6 +19,41 @@ function load(path, mocks = {}) {
   return module.exports;
 }
 const valid = { submissionId: 'ea5aac22-43fa-4845-b121-2da0c50743d9', name: 'Fixture', email: 'fixture@example.com', phone: '+12025550101', pickupLocation: 'Pickup', dropoffLocation: 'Destination', serviceType: 'Truckload', notes: 'Keep upright' };
+
+test('owner quote email replies to customer while confirmation routing and retry payload stay unchanged', async () => {
+  const calls = [];
+  const originalKey = process.env.RESEND_API_KEY;
+  let email;
+  try {
+    process.env.RESEND_API_KEY = 'fixture-not-a-real-key';
+    email = load('lib/email.ts', {
+      resend: { Resend: class {
+        emails = { send: async (...args) => { calls.push(args); return { data: { id: 'fixture-receipt' } }; } };
+      } },
+      '@/lib/email-layout': { renderEmailLayout: () => '<p>Fixture</p>', esc: value => value },
+      '@/lib/site-config': { SITE_CONFIG: { fromEmail: 'dispatch@example.com', phone: '+12025550101' } },
+      '@/lib/sending-policy': { humanizeSender: value => value },
+      '@/lib/lease-terms': {},
+    });
+  } finally {
+    if (originalKey === undefined) delete process.env.RESEND_API_KEY;
+    else process.env.RESEND_API_KEY = originalKey;
+  }
+  const payload = email.buildQuoteOwnerEmail(valid);
+  assert.equal(payload.replyTo, valid.email);
+  const frozen = Object.freeze({ ...payload });
+  const key = 'quote:fixture-id:owner:v1';
+  await email.sendQuoteOwnerEmail(frozen, key);
+  await email.sendQuoteOwnerEmail(frozen, key);
+  assert.strictEqual(calls[0][0], frozen);
+  assert.strictEqual(calls[1][0], frozen);
+  assert.equal(calls[0][1].idempotencyKey, key);
+  assert.equal(calls[1][1].idempotencyKey, key);
+  assert.equal(await email.sendQuoteLeadConfirmation(valid), true);
+  assert.equal(calls[2][0].to, valid.email);
+  assert.equal(calls[2][0].replyTo, 'admin@twinmile.com');
+});
+
 function harness({ rate = true, failDrain = false, created = true } = {}) {
   const calls = [];
   const db = { collection: () => ({ updateOne: async (...args) => { calls.push(['update', ...args]); } }) };

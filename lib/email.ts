@@ -112,7 +112,7 @@ export function buildQuoteOwnerEmail(lead: {
 
   return {
     from: FROM,
-    replyTo: REPLY_TO,
+    replyTo: lead.email,
     to: NOTIFY_TO,
     subject: `New Quote Lead: ${lead.name}`,
     text:
