@@ -3,7 +3,7 @@
 import crypto from "crypto";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
-import { ConvertQuoteLeadSchema } from "@/lib/quote-conversion";
+import { convertQuoteOnce, ConvertQuoteLeadSchema, QuoteConversionConflict } from "@/lib/quote-conversion";
 
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
@@ -1886,99 +1886,18 @@ export async function convertQuoteLeadAction(
 ): Promise<{ ok: true; customerId: string; contractId: string; loadId: string | null } | { ok: false; error: string }> {
   const sameOrigin = await isSameOriginFromHeaders();
   if (!sameOrigin) return { ok: false, error: "Forbidden." };
-
   const auth = await requireAdminOrError();
   if (!auth.ok) return auth;
-  const admin = auth.admin;
-
   if (!clientPromise) return { ok: false, error: "Database not configured." };
   if (!/^[0-9a-fA-F]{24}$/.test(leadId)) return { ok: false, error: "Invalid lead id." };
-
   const parsed = ConvertQuoteLeadSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Select a rate type and confirm a positive agreed rate." };
-
-  const client = await clientPromise;
-  const db = client.db();
-
-  const leadObjectId = new ObjectId(leadId);
-  const lead = await db.collection("leads_quotes").findOne({ _id: leadObjectId });
-  if (!lead) return { ok: false, error: "Lead not found." };
-
-  if ((lead as any).convertedAt) return { ok: false, error: "Lead already converted." };
-
-  const company = String((lead as any).company ?? "").trim();
-  const contactName = String((lead as any).name ?? "").trim();
-  const customerName = company.length > 0 ? company : contactName.length > 0 ? contactName : "Web Lead";
-
-  const email = (lead as any).email ? String((lead as any).email) : undefined;
-  const phone = (lead as any).phone ? String((lead as any).phone) : undefined;
-  const pickup = String((lead as any).pickupLocation ?? "").trim();
-  const dropoff = String((lead as any).dropoffLocation ?? "").trim();
-
-  const customerDoc = {
-    name: customerName,
-    contactEmail: email,
-    contactPhone: phone,
-    notes: "Created from quote lead.",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const customerResult = await db.collection("customers").insertOne(customerDoc);
-  const customerId = String(customerResult.insertedId);
-
-  const contractDoc = {
-    customerId,
-    name: parsed.data.contractName ?? (pickup && dropoff ? `Quote: ${pickup} → ${dropoff}` : `Quote Lead ${leadId}`),
-    rateType: parsed.data.rateType,
-    rateUsd: parsed.data.rateUsd,
-    notes: "Created from quote lead.",
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-
-  const contractResult = await db.collection("contracts").insertOne(contractDoc);
-  const contractId = String(contractResult.insertedId);
-
-  let loadId: string | null = null;
-  if (parsed.data.createLoad) {
-    const loadDoc = {
-      status: "planned",
-      pickup,
-      dropoff,
-      etaHours: 0,
-      revenueUsd: parsed.data.rateUsd,
-      truckId: null,
-      customerId,
-      contractId,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    const loadResult = await db.collection("loads").insertOne(loadDoc);
-    loadId = String(loadResult.insertedId);
+  try {
+    const client = await clientPromise;
+    return { ok: true, ...await convertQuoteOnce(client.db(), leadId, parsed.data, String(auth.admin._id)) };
+  } catch (error) {
+    return { ok: false, error: error instanceof QuoteConversionConflict ? error.message : "Conversion outcome unavailable; retry the same reviewed terms." };
   }
-
-  await db.collection("leads_quotes").updateOne(
-    { _id: leadObjectId },
-    ({
-      $set: {
-        status: "converted",
-        convertedAt: new Date(),
-        conversion: { customerId, contractId, loadId },
-        ownerUserId: String((admin as any)._id),
-      },
-      $push: {
-        notes: {
-          at: new Date(),
-          actorUserId: String((admin as any)._id),
-          message: "Converted to customer/contract" + (loadId ? " + load" : ""),
-        },
-      },
-    } as any)
-  );
-
-  return { ok: true, customerId, contractId, loadId };
 }
 
 const ConvertDriverLeadSchema = z.object({

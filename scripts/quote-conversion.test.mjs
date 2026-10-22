@@ -5,6 +5,7 @@ import { createRequire } from 'node:module';
 import vm from 'node:vm';
 import ts from 'typescript';
 import React from 'react';
+import { conversionFixture } from './quote-conversion-fixture.mjs';
 
 const require = createRequire(import.meta.url);
 function load(source, mocks = {}) {
@@ -14,7 +15,7 @@ function load(source, mocks = {}) {
   const module = { exports: {} };
   vm.runInNewContext(`(function(require,module,exports){${code}\n})`, {})(id => {
     if (Object.hasOwn(mocks, id)) return mocks[id];
-    if (['zod', 'mongodb', 'react/jsx-runtime'].includes(id)) return require(id);
+    if (['zod', 'mongodb', 'react/jsx-runtime', 'node:crypto'].includes(id)) return require(id);
     throw Error(`Unmocked dependency: ${id}`);
   }, module, module.exports);
   return module.exports;
@@ -22,12 +23,7 @@ function load(source, mocks = {}) {
 const schema = load(readFileSync('lib/quote-conversion.ts', 'utf8'));
 const valid = { rateType: 'per_mile', rateUsd: 3.25, agreedRateReviewed: true, createLoad: true };
 function server() {
-  const writes = [], reads = [];
-  const db = { collection(name) { return {
-    findOne: async () => { reads.push(name); return { name: 'Fixture', pickupLocation: 'A', dropoffLocation: 'B' }; },
-    insertOne: async doc => { writes.push({ name, doc }); return { insertedId: `${name}-fixture` }; },
-    updateOne: async (query, update) => { writes.push({ name, update }); return { matchedCount: 1 }; },
-  }; } };
+  const { writes, reads, db, tables } = conversionFixture();
   const mocks = {
     '@/lib/quote-conversion': schema,
     '@/lib/mongodb': { __esModule: true, default: Promise.resolve({ db: () => db }) },
@@ -40,15 +36,27 @@ function server() {
   const ast = ts.createSourceFile('admin.ts', source, ts.ScriptTarget.Latest, true);
   const fn = ast.statements.find(node => ts.isFunctionDeclaration(node) && node.name?.text === 'convertQuoteLeadAction');
   // Execute the actual action body with only authenticated fixture dependencies.
-  const action = load(`import { ConvertQuoteLeadSchema } from '@/lib/quote-conversion';
+  const action = load(`import { convertQuoteOnce, ConvertQuoteLeadSchema, QuoteConversionConflict } from '@/lib/quote-conversion';
     import { ObjectId } from 'mongodb'; import clientPromise from '@/lib/mongodb';
     const isSameOriginFromHeaders = async () => true;
     const requireAdminOrError = async () => ({ok:true,admin:{_id:'offline-owner'}});
     ${fn.getText(ast)}`, mocks).convertQuoteLeadAction;
   const id = 'a'.repeat(24);
-  return { writes, reads, action: input => action(id, input),
+  return { writes, reads, tables, action: input => action(id, input),
     api: input => route({ json: async () => input }, { params: Promise.resolve({ id }) }) };
 }
+test('API and server action share the same durable conversion during concurrent retries', async () => {
+  const h = server();
+  const [action, api] = await Promise.all([h.action(valid), h.api(valid)]);
+  assert.equal(action.ok, true);
+  assert.equal(api.status, 200);
+  assert.equal(action.customerId, api.body.customerId);
+  assert.equal(action.contractId, api.body.contractId);
+  assert.equal(action.loadId, api.body.loadId);
+  for (const name of ['customers', 'contracts', 'loads']) assert.equal(h.tables.get(name).size, 1);
+  assert.equal((await h.action({ ...valid, rateUsd: 999 })).ok, false);
+  assert.equal((await h.api({ ...valid, rateUsd: 999 })).status, 409);
+});
 for (const mode of ['action', 'api']) {
   test(`${mode} rejects missing/nonpositive/nonfinite/unreviewed agreed rates before DB access`, async () => {
     for (const input of [{}, { ...valid, rateUsd: undefined }, { ...valid, rateType: undefined },
