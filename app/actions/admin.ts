@@ -3,6 +3,7 @@
 import crypto from "crypto";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
+import { ConvertQuoteLeadSchema } from "@/lib/quote-conversion";
 
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
@@ -1879,13 +1880,6 @@ export async function restoreLeadAction(
   return { ok: true };
 }
 
-const ConvertQuoteLeadSchema = z.object({
-  createLoad: z.boolean().default(true),
-  contractName: z.string().min(1).max(140).optional(),
-  rateType: z.enum(["flat", "per_mile", "hourly"]).default("flat"),
-  rateUsd: z.coerce.number().min(0).max(100000000).default(0),
-});
-
 export async function convertQuoteLeadAction(
   leadId: string,
   input: unknown
@@ -1901,7 +1895,7 @@ export async function convertQuoteLeadAction(
   if (!/^[0-9a-fA-F]{24}$/.test(leadId)) return { ok: false, error: "Invalid lead id." };
 
   const parsed = ConvertQuoteLeadSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Invalid request." };
+  if (!parsed.success) return { ok: false, error: "Select a rate type and confirm a positive agreed rate." };
 
   const client = await clientPromise;
   const db = client.db();

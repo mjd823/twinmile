@@ -133,6 +133,10 @@ export function AdminInbox({
   const [sortMode, setSortMode] = React.useState<SortMode>("newest");
   const [searchQuery, setSearchQuery] = React.useState("");
   const [attentionOnly, setAttentionOnly] = React.useState(false);
+  const [conversionOpen, setConversionOpen] = React.useState(false);
+  const [rateType, setRateType] = React.useState<"" | "flat" | "per_mile" | "hourly">("");
+  const [agreedRate, setAgreedRate] = React.useState("");
+  const [rateReviewed, setRateReviewed] = React.useState(false);
 
   const rows = React.useMemo<InboxItem[]>(() => {
     const q: InboxItem[] = quoteLeads.map((l: QuoteLeadRow) => ({
@@ -254,6 +258,10 @@ export function AdminInbox({
     if (!selectedItem || !selected) return;
     setNoteDraft("");
     setStatusDraft(selectedItem.status as LeadStatus);
+    setConversionOpen(false);
+    setRateType("");
+    setAgreedRate("");
+    setRateReviewed(false);
   }, [selectedItem, selected]);
 
   async function updateLead(
@@ -309,9 +317,14 @@ export function AdminInbox({
 
   async function convertQuote(id: string) {
     setMessage(null);
+    const amount = Number(agreedRate);
+    if (!rateType || !rateReviewed || !agreedRate.trim() || !Number.isFinite(amount) || amount <= 0 || amount > 100000000) {
+      setMessage("Select a rate type and confirm a positive agreed rate.");
+      return;
+    }
     setBusyKey(`quotes:${id}`);
     try {
-      const data = await convertQuoteLeadAction(id, { createLoad: true, rateType: "flat", rateUsd: 0 });
+      const data = await convertQuoteLeadAction(id, { createLoad: true, rateType, rateUsd: amount, agreedRateReviewed: true });
       if (!data.ok) {
         setMessage(data.error ?? "Unable to convert lead.");
         return;
@@ -319,6 +332,8 @@ export function AdminInbox({
       setMessage(
         `Converted. Customer ${data.customerId}, Contract ${data.contractId}${data.loadId ? `, Load ${data.loadId}` : ""}. Reload.`
       );
+      setConversionOpen(false);
+      router.refresh();
     } catch {
       setMessage("Unable to convert lead.");
     } finally {
@@ -633,12 +648,41 @@ export function AdminInbox({
                   />
                 </div>
 
+                {selected.kind === "quotes" && conversionOpen ? (
+                  <form className="grid gap-3 border-t pt-3" onSubmit={(event) => {
+                    event.preventDefault();
+                    if (!selectedBusy) void convertQuote(selectedItem.id);
+                  }}>
+                    <p className="text-sm font-medium">Convert to customer, contract and planned load</p>
+                    <label className="grid gap-1 text-sm">Agreed rate type
+                      <select required disabled={selectedBusy} value={rateType}
+                        onChange={(event) => { setRateType(event.target.value as typeof rateType); setRateReviewed(false); }}
+                        className="h-10 rounded-md border bg-background px-3">
+                        <option value="" disabled>Select rate type</option>
+                        <option value="flat">Flat total</option><option value="per_mile">Per mile</option><option value="hourly">Hourly</option>
+                      </select>
+                    </label>
+                    <label className="grid gap-1 text-sm">Agreed rate (USD)
+                      <Input required type="number" min="0.01" max="100000000" step="0.01" value={agreedRate} disabled={selectedBusy}
+                        onChange={(event) => { setAgreedRate(event.target.value); setRateReviewed(false); }} />
+                    </label>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" required checked={rateReviewed} disabled={selectedBusy}
+                        onChange={(event) => setRateReviewed(event.target.checked)} />
+                      I reviewed this rate and type as agreed with the customer.
+                    </label>
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={selectedBusy || !rateType || !rateReviewed || !agreedRate.trim() || !Number.isFinite(Number(agreedRate)) || Number(agreedRate) <= 0}>Confirm conversion</Button>
+                      <Button type="button" variant="outline" disabled={selectedBusy} onClick={() => setConversionOpen(false)}>Cancel</Button>
+                    </div>
+                  </form>
+                ) : null}
                 <div className="flex flex-wrap gap-2">
                   <Button
                     type="button"
                     className="flex-1 min-w-40"
                     disabled={selectedBusy || statusDraft === "converted"}
-                    onClick={() => (selected.kind === "quotes" ? convertQuote(selectedItem.id) : convertDriver(selectedItem.id))}
+                    onClick={() => (selected.kind === "quotes" ? setConversionOpen(true) : convertDriver(selectedItem.id))}
                   >
                     Convert
                   </Button>
