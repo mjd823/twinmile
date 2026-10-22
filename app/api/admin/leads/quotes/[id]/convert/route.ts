@@ -1,17 +1,10 @@
 import { NextResponse } from "next/server";
 import { ObjectId } from "mongodb";
-import { z } from "zod";
+import { ConvertQuoteLeadSchema } from "@/lib/quote-conversion";
 
 import clientPromise from "@/lib/mongodb";
 import { requireRole } from "@/lib/auth/session";
 import { isSameOrigin } from "@/lib/security/csrf";
-
-const ConvertQuoteLeadSchema = z.object({
-  createLoad: z.boolean().default(true),
-  contractName: z.string().min(1).max(140).optional(),
-  rateType: z.enum(["flat", "per_mile", "hourly"]).default("flat"),
-  rateUsd: z.coerce.number().min(0).max(100000000).default(0),
-});
 
 export async function POST(req: Request, ctx: { params: Promise<{ id: string }> }) {
   if (!isSameOrigin(req)) {
